@@ -1,0 +1,9 @@
+# IDE Bits
+**/.idea/
+**/.vs/
+
+# Zig Stuff
+zig-cache/
+zig-out/
+
+!**/.keep
