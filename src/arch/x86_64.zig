@@ -1,0 +1,1 @@
+pub const cpuid = @import("x86_64/cpuid.zig");
