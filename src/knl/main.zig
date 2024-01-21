@@ -2,8 +2,13 @@ const std = @import("std");
 
 const bootboot_utils = @import("bootboot.zig");
 const BootBoot = bootboot_utils.BootBoot;
-const arch = @import("arch.zig");
+
+const hal = @import("hal");
+
+const arch = hal.arch;
 const cpuid = arch.x86_64.cpuid;
+
+const acpi = hal.acpi;
 
 extern var mmio: u0;
 
