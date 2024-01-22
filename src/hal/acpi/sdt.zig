@@ -45,7 +45,7 @@ pub fn compute_checksum(self: anytype) u8 {
     const bytes: []const u8 = @as([*]const u8, @ptrCast(self))[0..len];
     var sum: u8 = 0;
     for (bytes) |b| {
-        sum = @addWithOverflow(sum, b)[0];
+        sum +%= b;
     }
     return sum;
 }
