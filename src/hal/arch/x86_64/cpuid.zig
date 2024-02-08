@@ -24,7 +24,69 @@ pub const BrandFlushCountId = packed struct(u32) {
 
 pub const CpuFeatures = packed struct(u64) {
     fpu: bool,
-    _: u63,
+    vme: bool,
+    dbg: bool,
+    pse: bool,
+    tsc: bool,
+    msr: bool,
+    pae: bool,
+    mce: bool,
+    cx8: bool,
+    apic: bool,
+    _reserved1: u1,
+    sep: bool,
+    mtrr: bool,
+    pge: bool,
+    mca: bool,
+    cmov: bool,
+    pat: bool,
+    pse36: bool,
+    psn: bool,
+    cflush: bool,
+    _reserved2: u1,
+    dtes: bool,
+    acpi: bool,
+    mmx: bool,
+    fxsr: bool,
+    sse: bool,
+    sse2: bool,
+    ss: bool,
+    htt: bool,
+    tm1: bool,
+    ia64: bool,
+    pbe: bool,
+    sse3: bool,
+    pclmul: bool,
+    dtes64: bool,
+    mon: bool,
+    dscpl: bool,
+    vmx: bool,
+    smx: bool,
+    est: bool,
+    tm2: bool,
+    ssse3: bool,
+    cid: bool,
+    sdbg: bool,
+    fma: bool,
+    cx16: bool,
+    etprd: bool,
+    pdcm: bool,
+    _reserved3: u1,
+    pcid: bool,
+    dca: bool,
+    sse41: bool,
+    sse42: bool,
+    x2apic: bool,
+    movbe: bool,
+    popcnt: bool,
+    tscd: bool,
+    aes: bool,
+    xsave: bool,
+    osxsave: bool,
+    avx: bool,
+    f16c: bool,
+    rdrand: bool,
+    hv: bool,
 };
 
 pub inline fn CpuidOutputType(comptime leaf: Leaf) type {
@@ -46,13 +108,39 @@ pub inline fn CpuidOutputType(comptime leaf: Leaf) type {
     };
 }
 
-pub fn cpuid(comptime leaf: Leaf, comptime subleaf: u32) CpuidOutputType(leaf) {
+pub fn check_cpuid_supported() bool {
+    cpuid_supported = asm volatile (
+        \\ pushfq
+        \\ movl %eax, %ecx
+        \\ popq %rax
+        \\ xorl $0x00200000, %eax
+        \\ pushq %rax
+        \\ popfq
+        \\ pushfq
+        \\ popq %rax
+        \\ pushq %rcx
+        \\ popfq
+        \\ xorl %ecx, %eax
+        : [supported] "={eax}" (-> bool),
+        :
+        : "flags", "memory", "ecx"
+    );
+    return cpuid_supported.?;
+}
+
+var cpuid_supported: ?bool = null;
+
+pub const CpuidError = error{cpuid_not_supported};
+
+pub fn cpuid(comptime leaf: Leaf, comptime subleaf: u32) !CpuidOutputType(leaf) {
+    if (!(cpuid_supported orelse check_cpuid_supported()))
+        return error.cpuid_not_supported;
+
     var eax: u32 = undefined;
     var ebx: u32 = undefined;
     var edx: u32 = undefined;
     var ecx: u32 = undefined;
-    asm volatile (
-        \\cpuid
+    asm volatile ("cpuid"
         : [eax] "={eax}" (eax),
           [ebx] "={ebx}" (ebx),
           [edx] "={edx}" (edx),
@@ -61,8 +149,8 @@ pub fn cpuid(comptime leaf: Leaf, comptime subleaf: u32) CpuidOutputType(leaf) {
           [subleaf] "{ecx}" (subleaf),
         : "memory"
     );
-    var arr = [4]u32{ eax, ebx, ecx, edx };
-    return @as(*CpuidOutputType(leaf), @ptrCast(&arr)).*;
+    const arr = [4]u32{ eax, ebx, ecx, edx };
+    return @bitCast(arr);
 }
 
 test "cpuid vendor str" {

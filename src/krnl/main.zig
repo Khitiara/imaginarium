@@ -26,7 +26,7 @@ export fn _start() callconv(.C) noreturn {
 fn main() !void {
     std.debug.assert(std.mem.eql(u8, &bootboot.magic, bootboot_utils.bootboot_magic));
 
-    current_apic_id = cpuid.cpuid(.type_fam_model_stepping_features, 0).brand_flush_count_id.apic_id;
+    current_apic_id = (try cpuid.cpuid(.type_fam_model_stepping_features, 0)).brand_flush_count_id.apic_id;
 
     if (current_apic_id != bootboot.bspid) {
         try main_secondary_cpu();

@@ -7,3 +7,7 @@ pub usingnamespace switch (@import("builtin").cpu.arch) {
     },
     else => |arch| @compileError("Unsupported architecture " ++ @tagName(arch)),
 };
+
+test {
+    @import("std").testing.refAllDecls(@This());
+}
