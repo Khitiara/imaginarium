@@ -54,7 +54,9 @@ pub fn build(b: *std.Build) void {
     exe.setLinkerScriptPath(.{ .path = "src/krnl/link.ld" });
 
     const krnlstep = b.step("kernel", "imaginarium kernel");
-    krnlstep.dependOn(&b.addInstallArtifact(exe, .{ .dest_dir = .{ .override = .prefix }, .dest_sub_path = b.pathJoin(&.{ "krnl", exe.out_filename }) }).step);
+    krnlstep.dependOn(&b.addInstallArtifact(exe, .{
+        .dest_dir = .{ .override = .{ .custom = "krnl" } },
+    }).step);
     b.getInstallStep().dependOn(krnlstep);
 
     const lib_name = switch (arch) {
@@ -90,7 +92,9 @@ pub fn build(b: *std.Build) void {
     b.modules.put("usr", &usr_imports.root_module) catch @panic("OOM");
 
     const usrstep = b.step("usr", "usermode kernel services");
-    usrstep.dependOn(&b.addInstallArtifact(usr, .{ .dest_dir = .{ .override = .prefix }, .dest_sub_path = b.pathJoin(&.{ "usr", usr.out_lib_filename }) }).step);
+    usrstep.dependOn(&b.addInstallArtifact(usr, .{
+        .dest_dir = .{ .override = .{ .custom = "usr" } },
+    }).step);
     usrstep.dependOn(&b.addInstallFile(.{ .path = "src/usr/usr.zig" }, "usr/include/usr.zig").step);
     usrstep.dependOn(&b.addInstallFile(.{ .path = "src/usr/usr.h" }, "usr/include/usr.h").step);
     usrstep.dependOn(&usr_imports.step);
