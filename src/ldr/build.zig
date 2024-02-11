@@ -1,4 +1,5 @@
 const std = @import("std");
+const join = std.fs.path.join;
 
 pub fn add(b: *std.Build, arch: std.Target.Cpu.Arch, optimize: std.builtin.OptimizeMode, options: *std.Build.Module, util: *std.Build.Module, hal: *std.Build.Module) void {
     const target = b.resolveTargetQuery(.{
@@ -19,5 +20,7 @@ pub fn add(b: *std.Build, arch: std.Target.Cpu.Arch, optimize: std.builtin.Optim
     ldr_efi.root_module.addImport("util", util);
     ldr_efi.root_module.addImport("config", options);
 
-    b.installArtifact(ldr_efi);
+    const step = b.step("ldr", "bootloader");
+    step.dependOn(&b.addInstallArtifact(ldr_efi, .{ .dest_dir = .{ .override = .prefix }, .dest_sub_path = b.pathJoin(&.{"ldr", ldr_efi.out_filename}) }).step);
+    b.getInstallStep().dependOn(step);
 }
