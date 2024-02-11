@@ -1,0 +1,8 @@
+- bottom 4 pages identity-mapped
+- proc-local state in gs
+- kernel-mode pages global?
+- higher half kernel
+
+- kernel and usermode kernel services always mapped
+- per-process page tables, maybe use PCID?
+- both direct-page and a managed heap allocator exposed to user processes through usermode kernel services

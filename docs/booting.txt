@@ -1,0 +1,49 @@
+the imaginarium boot service consists of an EFI executable binary which must perform the following tasks
+  - verify system compatibility
+  - load configuration data from the EFI partition
+  - locate the root device from configuration info
+  - locate and memory-map the file `/./imaginarium/bin/krnl.b` at a higher-half virtual address
+  - allocate memory for boot information structures and populate them
+  - allocate all processor stacks
+  - perform symbol relocation on the kernel to resolve the boot structures
+  - obtain the EFI memory map
+  - create the initial page table
+  - start up additional processors
+      - if the MP_SERVICES efi protocol is available, then locate it and use it for setting up additional processors
+          and running the main init routine on them
+      - otherwise, set up the INIT interrupt handler on all processors to point to a trampoline routine in ASM
+      - the trampoline routine sets up long mode directly and then jumps back into the main init routine
+      - the main init routine sets up the appropriate stack for the processor it runs on and then jumps into the
+          start_ap symbol in the loaded kernel.
+      - the bootstrap processor sets up its stack and jumps into the start_bsp symbol in the loaded kernel
+      - the stack will always have the coprocessor local apic id pushed when control flow is transferred to the kernel
+
+the start_bsp routine in the kernel performs the following basic init steps:
+  - initializes the memory and object manager subsystems and creates their synchronization primitives
+  - sets up the initial page- and descriptor- tables
+  - allocates the kernel work-item queue
+  - signals the exec-start spinlock with the address of the page/descriptor table array
+  - load processor-local page- and descriptor- tables
+  - calls the phase2 execution routine
+  - creates a process to execute `/./imaginarium/bin/init.e`
+  - enters the main loop
+
+the start_ap routine in the kernel performs the following basic init steps:
+  - waits on the exec-start spinlock
+  - loads processor-local page- and descriptor- tables from the main array the bootstrap processor created
+  - calls the phase2 execution routine
+  - enters the main loop
+
+the phase2 execution routine drains the kernel work item queue operating as a quasi-thread-pool until the following
+    conditions are met and then returns.
+  - the scheduling subsystem must be initialized
+  - the storage device for the root filesystem must be initialized and its device object created
+  - the filesystem driver and object for the root filesystem must be initialized
+  - the usermode kernel services in file `/./imaginarium/bin/usr.l` are mapped and a section object created
+
+the main loop does the following:
+  - unmasks itself for the scheduling subsystem and lowers the TPR accordingly
+  - enters an infinite pause loop which will be interrupted by the scheduling subsystem as needed
+
+the usermode init executable routine:
+  - idk, fuckin whatever
