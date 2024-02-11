@@ -3,6 +3,7 @@ pub const ControlRegister = enum {
     cr2,
     cr3,
     cr4,
+    cr8,
 };
 
 fn ControlRegisterValueType(comptime cr: ControlRegister) type {
@@ -64,6 +65,10 @@ fn ControlRegisterValueType(comptime cr: ControlRegister) type {
             cet: bool,
             pks: bool,
             _reserved4: u39 = 0,
+        },
+        .cr8 => packed struct(u64) {
+            tpr: u4,
+            _reserved: u60 = 0,
         },
     }
 }
