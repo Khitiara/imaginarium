@@ -19,16 +19,16 @@ const msr_readable = std.EnumArray(Msr, bool).initDefault(false, .{
 fn MsrValueType(comptime msr: Msr) type {
     switch (msr) {
         .apic_base => return packed struct(u64) {
-            _reserved1: u8,
+            _reserved1: u8 = 0,
             bsp: bool,
-            _reserved2: u1,
+            _reserved2: u1 = 0,
             x2apic_enable: bool,
             apic_global_enable: bool,
             lapic_base: u52, // may need truncated to maxphyaddr
         },
         .efer => return packed struct(u64) {
             syscall_extensions: bool,
-            _reserved1: u7,
+            _reserved1: u7 = 0,
             lme: bool,
             lma: bool,
             nxe: bool,
@@ -36,7 +36,7 @@ fn MsrValueType(comptime msr: Msr) type {
             lmsle: bool,
             ffxsr: bool,
             tce: bool,
-            _reserved2: u48,
+            _reserved2: u48 = 0,
         },
         .pat => @import("paging/pat.zig").PAT,
     }

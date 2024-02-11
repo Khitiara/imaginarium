@@ -5,6 +5,12 @@ pub const Leaf = enum(u32) {
     type_fam_model_stepping_features = 1,
 };
 
+pub fn Subleaf(comptime leaf: Leaf) type {
+    switch (leaf) {
+        else => return u0,
+    }
+}
+
 pub const TypeFamModelStepping = packed struct(u32) {
     stepping: u4,
     model: u4,
@@ -12,7 +18,7 @@ pub const TypeFamModelStepping = packed struct(u32) {
     type: u2,
     ext_model: u4,
     ext_family: u8,
-    _: u6,
+    _: u6 = 0,
 };
 
 pub const BrandFlushCountId = packed struct(u32) {
@@ -33,7 +39,7 @@ pub const CpuFeatures = packed struct(u64) {
     mce: bool,
     cx8: bool,
     apic: bool,
-    _reserved1: u1,
+    _reserved1: u1 = 0,
     sep: bool,
     mtrr: bool,
     pge: bool,
@@ -43,7 +49,7 @@ pub const CpuFeatures = packed struct(u64) {
     pse36: bool,
     psn: bool,
     cflush: bool,
-    _reserved2: u1,
+    _reserved2: u1 = 0,
     dtes: bool,
     acpi: bool,
     mmx: bool,
@@ -71,7 +77,7 @@ pub const CpuFeatures = packed struct(u64) {
     cx16: bool,
     etprd: bool,
     pdcm: bool,
-    _reserved3: u1,
+    _reserved3: u1 = 0,
     pcid: bool,
     dca: bool,
     sse41: bool,
@@ -89,7 +95,8 @@ pub const CpuFeatures = packed struct(u64) {
     hv: bool,
 };
 
-pub inline fn CpuidOutputType(comptime leaf: Leaf) type {
+pub inline fn CpuidOutputType(comptime leaf: Leaf, comptime subleaf: Subleaf(leaf)) type {
+    _ = subleaf; // not used by any leaf yet implemented
     return switch (leaf) {
         .max_level_and_vendor => extern struct {
             max_level: u32,
@@ -123,7 +130,7 @@ pub fn check_cpuid_supported() bool {
         \\ xorl %ecx, %eax
         : [supported] "={eax}" (-> bool),
         :
-        : "flags", "memory", "ecx"
+        : "flags", "ecx"
     );
     return cpuid_supported.?;
 }
@@ -132,7 +139,7 @@ var cpuid_supported: ?bool = null;
 
 pub const CpuidError = error{cpuid_not_supported};
 
-pub fn cpuid(comptime leaf: Leaf, comptime subleaf: u32) !CpuidOutputType(leaf) {
+pub fn cpuid(comptime leaf: Leaf, comptime subleaf: Subleaf(leaf)) !CpuidOutputType(leaf, subleaf) {
     if (!(cpuid_supported orelse check_cpuid_supported()))
         return error.cpuid_not_supported;
 
@@ -147,7 +154,6 @@ pub fn cpuid(comptime leaf: Leaf, comptime subleaf: u32) !CpuidOutputType(leaf) 
           [ecx] "={ecx}" (ecx),
         : [leaf] "{eax}" (leaf),
           [subleaf] "{ecx}" (subleaf),
-        : "memory"
     );
     const arr = [4]u32{ eax, ebx, ecx, edx };
     return @bitCast(arr);

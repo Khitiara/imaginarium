@@ -31,7 +31,7 @@ fn ControlRegisterValueType(comptime cr: ControlRegister) type {
                     _reserved1: u3 = 0,
                     pwt: bool,
                     pcd: bool,
-                    _reserved2: u7,
+                    _reserved2: u7 = 0,
                 },
                 pcid: u11,
             },
