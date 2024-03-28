@@ -16,7 +16,7 @@ var current_apic_id: u8 = undefined;
 
 export fn _start(ldr_info: *bootelf.BootelfData) callconv(.SysV) noreturn {
     // const ldr_info = asm("" : [ldr_info]"={rdi}"(-> *bootelf.BootelfData) ::);
-    for (std.mem.toBytes(@intFromPtr(&ldr_info))) |b| {
+    for (std.mem.toBytes(@intFromPtr(ldr_info))) |b| {
         arch.x86_64.serial.outb(0xE9, .data, b);
     }
     main(ldr_info) catch {
