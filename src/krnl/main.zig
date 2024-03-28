@@ -16,24 +16,28 @@ var current_apic_id: u8 = undefined;
 
 export fn _start(ldr_info: *bootelf.BootelfData) callconv(.SysV) noreturn {
     // const ldr_info = asm("" : [ldr_info]"={rdi}"(-> *bootelf.BootelfData) ::);
-    for (std.mem.toBytes(@intFromPtr(ldr_info))) |b| {
-        arch.x86_64.serial.outb(0xE9, .data, b);
-    }
+    // for (std.mem.toBytes(@intFromPtr(ldr_info))) |b| {
+    //     arch.x86_64.serial.outb(0xE9, .data, b);
+    // }
     main(ldr_info) catch {
         @trap();
     };
     while (true) {}
 }
 
-fn main(ldr_info: *bootelf.BootelfData) !void {
-    std.debug.assert(ldr_info.magic == bootelf.magic);
+var printBuf: [64]u8 = undefined;
 
+noinline fn main(ldr_info: *bootelf.BootelfData) !void {
+    const bootelf_magic_check = ldr_info.magic == bootelf.magic;
+    std.debug.assert(bootelf_magic_check);
+
+    if (!cpuid.check_cpuid_supported())
+        return error.cpuid_not_supported;
     current_apic_id = (try cpuid.cpuid(.type_fam_model_stepping_features, 0)).brand_flush_count_id.apic_id;
 
-    var buf = [1]u8{0} ** 64;
-    const slice = try std.fmt.bufPrintZ(&buf, "{x}", .{current_apic_id});
-    try arch.x86_64.serial.init_serial(0x3F8);
+    const slice = try std.fmt.bufPrintZ(&printBuf, "{x}", .{current_apic_id});
+    try arch.x86_64.serial.init_serial(0xE9);
     for (slice) |value| {
-        arch.x86_64.serial.writeout(0x3F8, value);
+        arch.x86_64.serial.writeout(0xE9, value);
     }
 }

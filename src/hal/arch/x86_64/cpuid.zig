@@ -116,26 +116,21 @@ pub inline fn CpuidOutputType(comptime leaf: Leaf, comptime subleaf: Subleaf(lea
 }
 
 pub fn check_cpuid_supported() bool {
-    cpuid_supported = asm volatile (
+    return asm volatile (
         \\ pushfq
-        \\ movl %eax, %ecx
         \\ popq %rax
-        \\ xorl $0x00200000, %eax
+        \\ movq %rbx, %rax
+        \\ xorq $0x0000000000200000, %rax
         \\ pushq %rax
         \\ popfq
         \\ pushfq
         \\ popq %rax
-        \\ pushq %rcx
-        \\ popfq
-        \\ xorl %ecx, %eax
-        : [supported] "={eax}" (-> bool),
+        \\ xorq %rbx, %rax
+        : [supported] "={rax}" (-> u64),
         :
-        : "flags", "ecx"
-    );
-    return cpuid_supported.?;
+        : "flags", "rbx"
+    ) != 0;
 }
-
-var cpuid_supported: ?bool = null;
 
 pub const CpuidError = error{cpuid_not_supported};
 
@@ -148,9 +143,6 @@ inline fn normalize_subleaf(comptime leaf: Leaf, comptime subleaf: Subleaf(leaf)
 }
 
 pub fn cpuid(comptime leaf: Leaf, comptime subleaf: Subleaf(leaf)) !CpuidOutputType(leaf, subleaf) {
-    if (!(cpuid_supported orelse check_cpuid_supported()))
-        return error.cpuid_not_supported;
-
     var eax: u32 = undefined;
     var ebx: u32 = undefined;
     var edx: u32 = undefined;

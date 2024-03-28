@@ -43,4 +43,4 @@ pub const BootelfData = extern struct {
     }
 };
 
-pub const magic = 0xB00731F;
+pub const magic: u64 = 0xB007E1F;
