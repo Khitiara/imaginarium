@@ -18,6 +18,7 @@ pub fn build(b: *std.Build) void {
 
     const options = b.addOptions();
     options.addOption(u32, "max_ioapics", max_ioapics);
+    options.addOption(bool, "use_signed_physaddr", true);
 
     const optsModule = options.createModule();
 
@@ -45,6 +46,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .code_model = .kernel,
+        .pic = false,
     });
 
     exe.root_module.addImport("hal", hal);

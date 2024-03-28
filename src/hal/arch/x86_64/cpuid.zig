@@ -139,6 +139,14 @@ var cpuid_supported: ?bool = null;
 
 pub const CpuidError = error{cpuid_not_supported};
 
+inline fn normalize_subleaf(comptime leaf: Leaf, comptime subleaf: Subleaf(leaf)) u32 {
+    switch (@typeInfo(Subleaf(leaf))) {
+        .Int => return @intCast(subleaf),
+        .Enum => return @intFromEnum(subleaf),
+        else => unreachable,
+    }
+}
+
 pub fn cpuid(comptime leaf: Leaf, comptime subleaf: Subleaf(leaf)) !CpuidOutputType(leaf, subleaf) {
     if (!(cpuid_supported orelse check_cpuid_supported()))
         return error.cpuid_not_supported;
@@ -153,7 +161,7 @@ pub fn cpuid(comptime leaf: Leaf, comptime subleaf: Subleaf(leaf)) !CpuidOutputT
           [edx] "={edx}" (edx),
           [ecx] "={ecx}" (ecx),
         : [leaf] "{eax}" (leaf),
-          [subleaf] "{ecx}" (subleaf),
+          [subleaf] "{ecx}" (normalize_subleaf(leaf, subleaf)),
     );
     const arr = [4]u32{ eax, ebx, ecx, edx };
     return @bitCast(arr);

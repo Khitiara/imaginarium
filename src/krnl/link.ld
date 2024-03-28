@@ -1,9 +1,6 @@
 ENTRY(_start)
 
-mmio        = 0xfffffffff8000000;              /* these are configurable for level 2 loaders */
-fb          = 0xfffffffffc000000;
-bootboot    = 0xffffffffffe00000;
-environment = 0xffffffffffe01000;
+fb          = 0xffffffff800B8000;
 
 /* initstack = 1024; */
 PHDRS
@@ -12,7 +9,7 @@ PHDRS
 }
 SECTIONS
 {
-    . = 0xffffffffffe02000;
+    . = 0xffffffff80100000;
 
     .text : {
         KEEP(*(.text.boot)) *(.text .text.*)   /* code */

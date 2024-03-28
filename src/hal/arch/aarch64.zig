@@ -1,0 +1,1 @@
+pub const cc: @import("std").builtin.CallingConvention = .AAPCS;

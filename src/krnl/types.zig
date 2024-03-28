@@ -1,0 +1,1 @@
+pub const PhysicalAddress = if(@import("config").use_signed_physaddr) isize else usize;

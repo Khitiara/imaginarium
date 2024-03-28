@@ -3,6 +3,9 @@ pub const msr = @import("x86_64/msr.zig");
 pub const segmentation = @import("x86_64/segmentation.zig");
 pub const paging = @import("x86_64/paging.zig");
 pub const control_registers = @import("x86_64/ctrl_registers.zig");
+pub const serial = @import("x86_64/serial.zig");
+
+pub const cc: @import("std").builtin.CallingConvention = .SysV;
 
 pub const Flags = packed struct(u64) {
     carry: bool,
