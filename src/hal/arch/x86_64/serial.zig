@@ -107,7 +107,7 @@ pub inline fn RegisterContentsWrite(comptime reg: Register) type {
 
 const comptimePrint = @import("std").fmt.comptimePrint;
 
-pub fn outb(port: u16, comptime reg: Register, value: RegisterContentsWrite(reg)) void {
+pub inline fn outb(port: u16, comptime reg: Register, value: RegisterContentsWrite(reg)) void {
     asm volatile (
         \\ outb %[value], %[port]
         :
@@ -117,7 +117,7 @@ pub fn outb(port: u16, comptime reg: Register, value: RegisterContentsWrite(reg)
     );
 }
 
-pub fn inb(port: u16, comptime reg: Register) RegisterContentsRead(reg) {
+pub inline fn inb(port: u16, comptime reg: Register) RegisterContentsRead(reg) {
     return asm volatile (
         \\ inb %[port], %[result]
         : [result] "=r" (-> RegisterContentsRead(reg)),
