@@ -25,11 +25,11 @@ fn target_features(query: *Target.Query) !void {
     }
 }
 
-fn installFrom(b: *std.Build, dep: *std.Build.Step, file: std.Build.LazyPath, dir: []const u8, rel: []const u8) *std.Build.Step.InstallFile {
+fn installFrom(b: *std.Build, dep: *std.Build.Step, group_step: *std.Build.Step, file: std.Build.LazyPath, dir: []const u8, rel: []const u8) void {
     defer b.allocator.free(rel);
     const s = b.addInstallFileWithDir(file, .{ .custom = dir }, rel);
     s.step.dependOn(dep);
-    return s;
+    group_step.dependOn(&s.step);
 }
 
 fn addImportFromTable(module: *std.Build.Module, name: []const u8) void {
@@ -68,18 +68,12 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
         .extract_to_separate_file = true,
     });
 
-    var krnlfiles = std.ArrayList(*std.Build.Step.InstallFile).init(b.allocator);
-
     const krnloutdir = b.fmt("{s}/krnl/", .{@tagName(arch)});
-    // defer b.allocator.free(krnloutdir);
-    try krnlfiles.append(installFrom(b, &objcopy.step, objcopy.getOutput(), krnloutdir, b.dupe(exe_name)));
+    installFrom(b, &objcopy.step, krnlstep, objcopy.getOutput(), krnloutdir, b.dupe(exe_name));
     if (objcopy.getOutputSeparatedDebug()) |dbg| {
-        try krnlfiles.append(installFrom(b, &objcopy.step, dbg, krnloutdir, try std.mem.concat(b.allocator, u8, &.{ exe_name, ".debug" })));
+        installFrom(b, &objcopy.step, krnlstep, dbg, krnloutdir, try std.mem.concat(b.allocator, u8, &.{ exe_name, ".debug" }));
     }
 
-    for (krnlfiles.items) |f| {
-        krnlstep.dependOn(&f.step);
-    }
     b.getInstallStep().dependOn(krnlstep);
 
     return .{
