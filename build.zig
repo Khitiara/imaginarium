@@ -1,16 +1,171 @@
 const std = @import("std");
 const log = std.log;
 const Target = std.Target;
+const DiskImage = @import("build/disk_image.zig");
 
-const ldr = @import("src/ldr/build.zig");
+fn target_features(query: *Target.Query) !void {
+    query.cpu_model = .{ .explicit = std.Target.Cpu.Model.generic(query.cpu_arch.?) };
+    switch (query.cpu_arch.?) {
+        .x86_64 => {
+            const Features = std.Target.x86.Feature;
+            // zig needs floats of some sort, but we dont want to use simd in kernel
+            query.cpu_features_add.addFeature(@intFromEnum(Features.soft_float));
 
-pub fn build(b: *std.Build) void {
+            query.cpu_features_sub.addFeature(@intFromEnum(Features.mmx));
+            query.cpu_features_sub.addFeature(@intFromEnum(Features.sse));
+            query.cpu_features_sub.addFeature(@intFromEnum(Features.sse2));
+            query.cpu_features_sub.addFeature(@intFromEnum(Features.avx));
+            query.cpu_features_sub.addFeature(@intFromEnum(Features.avx2));
+            query.cpu_features_add.addFeature(@intFromEnum(Features.soft_float));
+        },
+        .aarch64 => {
+            // for now nothing, idk what needs tweaking here
+        },
+        else => return error.invalid_imaginarium_arch,
+    }
+}
+
+fn installFrom(b: *std.Build, dep: *std.Build.Step, file: std.Build.LazyPath, dir: []const u8, rel: []const u8) *std.Build.Step.InstallFile {
+    defer b.allocator.free(rel);
+    const s = b.addInstallFileWithDir(file, .{ .custom = dir }, rel);
+    s.step.dependOn(dep);
+    return s;
+}
+
+fn addImportFromTable(module: *std.Build.Module, name: []const u8) void {
+    if (module.owner.modules.get(name)) |d| {
+        module.addImport(name, d);
+    }
+}
+
+fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) !struct {
+    *std.Build.Step,
+    std.Build.LazyPath,
+    ?std.Build.LazyPath,
+} {
+    const exe_name = "imaginarium.krnl.b";
+    const exe = b.addExecutable(.{
+        .name = exe_name,
+        .root_source_file = .{ .path = "src/krnl/main.zig" },
+        .target = target,
+        .optimize = optimize,
+        .code_model = .kernel,
+        .pic = false,
+    });
+
+    addImportFromTable(&exe.root_module, "hal");
+    addImportFromTable(&exe.root_module, "util");
+    addImportFromTable(&exe.root_module, "config");
+
+    exe.setLinkerScript(.{ .path = "src/krnl/link.ld" });
+
+    const krnlstep = b.step("kernel", "imaginarium kernel");
+    const objcopy = b.addObjCopy(exe.getEmittedBin(), .{
+        .strip = .debug_and_symbols,
+        .extract_to_separate_file = true,
+    });
+
+    var krnlfiles = std.ArrayList(*std.Build.Step.InstallFile).init(b.allocator);
+
+    const krnloutdir = b.fmt("{s}/krnl/", .{@tagName(arch)});
+    // defer b.allocator.free(krnloutdir);
+    try krnlfiles.append(installFrom(b, &objcopy.step, objcopy.getOutput(), krnloutdir, b.dupe(exe_name)));
+    if (objcopy.getOutputSeparatedDebug()) |dbg| {
+        try krnlfiles.append(installFrom(b, &objcopy.step, dbg, krnloutdir, try std.mem.concat(b.allocator, u8, &.{ exe_name, ".debug" })));
+    }
+
+    for (krnlfiles.items) |f| {
+        krnlstep.dependOn(&f.step);
+    }
+    b.getInstallStep().dependOn(krnlstep);
+
+    return .{
+        krnlstep,
+        objcopy.getOutput(),
+        objcopy.getOutputSeparatedDebug(),
+    };
+}
+
+fn usr(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) !void {
+    // const lib_name = switch (arch) {
+    //     inline else => |a| "imaginarium." ++ @tagName(a) ++ ".usr.l",
+    // };
+    const lib_name = "imaginarium.usr.l";
+    // defer b.allocator.free(lib_name);
+    const dynlib_name = "imaginarium.usr.dyn";
+    // defer b.allocator.free(dynlib_name);
+
+    const usrlib = b.addStaticLibrary(.{
+        .name = lib_name,
+        .root_source_file = .{ .path = "src/usr/usr_lib.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+
+    usrlib.out_lib_filename = b.dupe(usrlib.name);
+
+    // cant create from existing module so invert that and create the object first
+    const usr_imports = b.addObject(.{
+        .name = dynlib_name,
+        .root_source_file = .{ .path = "src/usr/usr_lib.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
+
+    addImportFromTable(&usr_imports.root_module, "hal");
+    addImportFromTable(&usr_imports.root_module, "util");
+    addImportFromTable(&usr_imports.root_module, "config");
+
+    // cant create an object compile step from an existing module so get the root module of the object step
+    // and add that manually to the modules map
+    b.modules.put("usr", &usr_imports.root_module) catch @panic("OOM");
+
+    const usrstep = b.step("usr", "usermode kernel services");
+
+    const usroutdir = b.fmt("{s}/usr", .{@tagName(arch)});
+    // defer b.allocator.free(usroutdir);
+
+    usrstep.dependOn(&b.addInstallArtifact(usrlib, .{
+        .dest_dir = .{ .override = .{ .custom = usroutdir } },
+    }).step);
+    usrstep.dependOn(&b.addInstallFile(.{ .path = "src/usr/usr.zig" }, try std.mem.concat(b.allocator, u8, &.{ usroutdir, "/include/usr.zig" })).step);
+    usrstep.dependOn(&b.addInstallFile(.{ .path = "src/usr/usr.h" }, try std.mem.concat(b.allocator, u8, &.{ usroutdir, "/include/usr.h" })).step);
+    usrstep.dependOn(&usr_imports.step);
+
+    b.getInstallStep().dependOn(usrstep);
+}
+
+const QemuGdbOption = union(enum) {
+    none: void,
+    default: void,
+    port: u32,
+};
+
+fn parseQemuGdbOption(v: ?[]const u8) QemuGdbOption {
+    if (v) |value| {
+        if (std.mem.eql(u8, value, "none")) {
+            return .none;
+        }
+        if (value.len == 0 or std.mem.eql(u8, value, "default")) {
+            return .default;
+        }
+        if (std.fmt.parseInt(u32, value, 0)) |i| {
+            return .{ .port = i };
+        } else |_| {}
+        @panic("Invalid qemu gdb option");
+    } else {
+        return .none;
+    }
+}
+
+pub fn build(b: *std.Build) !void {
     const arch = b.option(Target.Cpu.Arch, "arch", "The CPU architecture to build for") orelse .x86_64;
-    const selected_target: Target.Query = .{
+    var selected_target: Target.Query = .{
         .abi = .none,
         .os_tag = .freestanding,
         .cpu_arch = arch,
     };
+    try target_features(&selected_target);
     const target = b.resolveTargetQuery(selected_target);
     const optimize = b.standardOptimizeOption(.{});
 
@@ -21,85 +176,59 @@ pub fn build(b: *std.Build) void {
     options.addOption(bool, "use_signed_physaddr", true);
 
     const optsModule = options.createModule();
+    b.modules.put("config", optsModule) catch @panic("OOM");
 
-    const util = b.createModule(.{
+    const util = b.addModule("util", .{
         .root_source_file = .{ .path = "src/util/util.zig" },
     });
+    addImportFromTable(util, "config");
 
-    util.addImport("config", optsModule);
-
-    const hal = b.createModule(.{
+    const hal = b.addModule("hal", .{
         .root_source_file = .{ .path = "src/hal/hal.zig" },
     });
-    hal.addImport("util", util);
-    hal.addImport("config", optsModule);
+    addImportFromTable(hal, "config");
+    addImportFromTable(hal, "util");
 
-    ldr.add(b, arch, optimize, optsModule, util, hal);
-
-    const name = switch (arch) {
-        inline else => |a| "imaginarium." ++ @tagName(a) ++ ".krnl.b",
-    };
-
-    const exe = b.addExecutable(.{
-        .name = name,
-        .root_source_file = .{ .path = "src/krnl/main.zig" },
-        .target = target,
-        .optimize = optimize,
-        .code_model = .kernel,
-        .pic = false,
+    const krnlstep, const elf, const debug = try krnl(b, arch, target, optimize);
+    const img = DiskImage.create(b, .{
+        .basename = "drive.bin",
     });
+    img.append(.{ .path = "test/bootelf" });
+    img.append(elf);
+    img.step.dependOn(krnlstep);
 
-    exe.root_module.addImport("hal", hal);
-    exe.root_module.addImport("util", util);
-    exe.root_module.addImport("config", optsModule);
+    const copyToTestDir = b.addNamedWriteFiles("copy_to_test_dir");
+    // copyToTestDir.step.dependOn(&img.step);
+    copyToTestDir.step.dependOn(krnlstep);
+    // copyToTestDir.addCopyFileToSource(img.getOutput(), "test/drive.bin");
+    if (debug) |d| {
+        copyToTestDir.addCopyFileToSource(d, "test/krnl.debug");
+    }
 
-    exe.setLinkerScriptPath(.{ .path = "src/krnl/link.ld" });
-
-    const krnlstep = b.step("kernel", "imaginarium kernel");
-    krnlstep.dependOn(&b.addInstallArtifact(exe, .{
-        .dest_dir = .{ .override = .{ .custom = "krnl" } },
-    }).step);
-    b.getInstallStep().dependOn(krnlstep);
-
-    const lib_name = switch (arch) {
-        inline else => |a| "imaginarium." ++ @tagName(a) ++ ".usr.l",
-    };
-    const dynlib_name = switch (arch) {
-        inline else => |a| "imaginarium." ++ @tagName(a) ++ ".usr.dyn",
-    };
-
-    const usr = b.addStaticLibrary(.{
-        .name = lib_name,
-        .root_source_file = .{ .path = "src/usr/usr_lib.zig" },
-        .target = target,
-        .optimize = optimize,
+    const qemu = b.addSystemCommand(&.{
+        b.fmt("qemu-system-{s}", .{@tagName(arch)}),
+        "-drive",
     });
+    qemu.addPrefixedFileArg("format=raw,file=", img.getOutput());
+    qemu.addArgs(&.{ "-d", "int", "--no-reboot", "--no-shutdown" });
 
-    usr.out_lib_filename = b.dupe(usr.name);
+    if (b.option(bool, "debugcon", "output ports to stdio") orelse true) {
+        qemu.addArgs(&.{ "-debugcon", "stdio" });
+    }
+    switch (parseQemuGdbOption(b.option([]const u8, "gdb", "use gdb with qemu"))) {
+        .none => {},
+        .default => {
+            qemu.addArgs(&.{ "-s", "-S" });
+        },
+        .port => |p| {
+            qemu.addArgs(&.{ "-gdb", b.fmt("tcp:{d}", .{p}), "-S" });
+        },
+    }
 
-    // cant create from existing module so invert that and create the object first
-    const usr_imports = b.addObject(.{
-        .name = dynlib_name,
-        .root_source_file = .{ .path = "src/usr/usr_lib.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
+    qemu.step.dependOn(&copyToTestDir.step);
 
-    usr_imports.root_module.addImport("hal", hal);
-    usr_imports.root_module.addImport("util", util);
-    usr_imports.root_module.addImport("config", optsModule);
+    const run = b.step("qemu", "Run the OS in qemu");
+    run.dependOn(&qemu.step);
 
-    // cant create an object compile step from an existing module so get the root module of the object step
-    // and add that manually to the modules map
-    b.modules.put("usr", &usr_imports.root_module) catch @panic("OOM");
-
-    const usrstep = b.step("usr", "usermode kernel services");
-    usrstep.dependOn(&b.addInstallArtifact(usr, .{
-        .dest_dir = .{ .override = .{ .custom = "usr" } },
-    }).step);
-    usrstep.dependOn(&b.addInstallFile(.{ .path = "src/usr/usr.zig" }, "usr/include/usr.zig").step);
-    usrstep.dependOn(&b.addInstallFile(.{ .path = "src/usr/usr.h" }, "usr/include/usr.h").step);
-    usrstep.dependOn(&usr_imports.step);
-
-    b.getInstallStep().dependOn(usrstep);
+    try usr(b, arch, target, optimize);
 }
