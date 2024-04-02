@@ -12,6 +12,11 @@ const acpi = hal.acpi;
 
 // extern var fb: u0;
 
+extern const _bootstrap_stack: [*]u8;
+extern const _bootstrap_stack_length: usize;
+
+const bootstrap_stack: []u8 = _bootstrap_stack[0.._bootstrap_stack_length];
+
 var current_apic_id: u8 = undefined;
 
 export fn _start(ldr_info: *bootelf.BootelfData) callconv(.SysV) noreturn {

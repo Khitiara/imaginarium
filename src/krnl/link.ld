@@ -23,5 +23,14 @@ SECTIONS
         *(COMMON)
     } :boot
 
+    . = ALIGN(4K);                         /* bootstrap stack alloc */
+    . += 4K;
+
+    .bss.stack (NOLOAD) : {
+        _bootstrap_stack = .;
+        . += 8M;
+        _bootstrap_stack_length = . - _bootstrap_stack;
+    } :boot
+
     /DISCARD/ : { *(.eh_frame) *(.comment) }
 }
