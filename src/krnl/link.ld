@@ -5,32 +5,46 @@ fb          = 0xffffffff800B8000;
 /* initstack = 1024; */
 PHDRS
 {
-  boot PT_LOAD;                                /* one single loadable segment */
+  none   PT_NULL FLAGS(0);
+  text   PT_LOAD FLAGS((1 << 2) | (1 << 0) /* Readable | Executable */);
+  stk    PT_LOAD FLAGS((1 << 2) | (1 << 1) /* Readable | Writeable  */);
+  data   PT_LOAD FLAGS((1 << 2) | (1 << 1) /* Readable | Writeable  */);
+  rodata PT_LOAD FLAGS((1 << 2)            /* Readable */);
 }
 SECTIONS
 {
     . = 0xffffffff80100000;
 
-    .text : {
-        KEEP(*(.text.boot)) *(.text .text.*)   /* code */
-        *(.rodata .rodata.*)                   /* data */
-        *(.data .data.*)
-    } :boot
-    
-    .bss (NOLOAD) : {                          /* bss */
-        . = ALIGN(16);
-        *(.bss .bss.*)
-        *(COMMON)
-    } :boot
+    __kernel_begin = .;
+    __kernel_text_begin = .;
+    .text . : {
+        *(.text*)
+    }:text
+    __kernel_text_end = .;
 
-    . = ALIGN(4K);                         /* bootstrap stack alloc */
-    . += 4K;
+    . = ALIGN(64K);                         /* bootstrap stack alloc */
+    . += 64K;
 
     .bss.stack (NOLOAD) : {
-        _bootstrap_stack = .;
+        . = ALIGN(64K);
+        _bootstrap_stack_bottom = .;
         . += 8M;
-        _bootstrap_stack_length = . - _bootstrap_stack;
-    } :boot
+        . = ALIGN(8);
+        _bootstrap_stack_top = .;
+    } :stk
+
+    . += 64K;
+    .rodata . : {
+        *(.rodata*)
+    } :rodata
+
+    .data . : {
+        *(.data*)
+    } :data
+
+    .bss (NOLOAD) : {
+        *(.bss*)
+    }
 
     /DISCARD/ : { *(.eh_frame) *(.comment) }
 }

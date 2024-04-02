@@ -10,40 +10,60 @@ const cpuid = arch.x86_64.cpuid;
 
 const acpi = hal.acpi;
 
+const SerialWriter = struct {
+    const WriteError = error{};
+    pub const Writer = std.io.GenericWriter(*const anyopaque, error{}, typeErasedWriteFn);
+
+    fn typeErasedWriteFn(context: *const anyopaque, bytes: []const u8) error{}!usize {
+        _ = context;
+        for (bytes) |b| {
+            arch.x86_64.serial.writeout(0xE9, b);
+        }
+        return bytes.len;
+    }
+
+    pub fn writer() Writer {
+        return .{ .context = undefined };
+    }
+};
+
 // extern var fb: u0;
 
-extern const _bootstrap_stack: [*]u8;
-extern const _bootstrap_stack_length: usize;
+// extern const _bootstrap_stack: [*]u8;
+// extern const _bootstrap_stack_length: usize;
+//
+// const bootstrap_stack: []u8 = _bootstrap_stack[0.._bootstrap_stack_length];
 
-const bootstrap_stack: []u8 = _bootstrap_stack[0.._bootstrap_stack_length];
-
-var current_apic_id: u8 = undefined;
+const _bootstrap_stack_top = @extern(*anyopaque, .{ .name = "_bootstrap_stack_top" });
+const _bootstrap_stack_bottom = @extern(*anyopaque, .{ .name = "_bootstrap_stack_bottom" });
 
 export fn _kstart() callconv(.Naked) noreturn {
     asm volatile (
+        \\ movq %[_stack], %rsp
         \\ pushq $0
         \\ pushq $0
         \\ xorq %rbp, %rbp
-        \\ jmp *%[_kstart2]
+        \\ call *%[_kstart2]
         :
         : [_kstart2] "r" (&_kstart2),
+          [_stack] "N{dx}" (&_bootstrap_stack_top),
+        : "rdi"
     );
-    // const ldr_info = asm("" : [ldr_info]"={rdi}"(-> *bootelf.BootelfData) ::);
-    // for (std.mem.toBytes(@intFromPtr(ldr_info))) |b| {
-    //     arch.x86_64.serial.outb(0xE9, .data, b);
-    // }
 }
 
 fn _kstart2(ldr_info: *bootelf.BootelfData) callconv(.SysV) noreturn {
     main(ldr_info) catch |e| {
-        for (@errorName(e)) |c| {
-            arch.x86_64.serial.writeout(0xE9, c);
+        switch (e) {
+            inline else => |e2| {
+                const ename = @errorName(e2);
+                for (ename) |c| {
+                    arch.x86_64.serial.writeout(0xE9, c);
+                }
+            },
         }
     };
     while (true) {}
 }
-
-var printBuf: [64]u8 = undefined;
 
 noinline fn main(ldr_info: *bootelf.BootelfData) !void {
     const bootelf_magic_check = ldr_info.magic == bootelf.magic;
@@ -51,11 +71,9 @@ noinline fn main(ldr_info: *bootelf.BootelfData) !void {
 
     if (!cpuid.check_cpuid_supported())
         return error.cpuid_not_supported;
-    current_apic_id = (try cpuid.cpuid(.type_fam_model_stepping_features, 0)).brand_flush_count_id.apic_id;
+    const current_apic_id = (try cpuid.cpuid(.type_fam_model_stepping_features, 0)).brand_flush_count_id.apic_id;
 
-    const slice = try std.fmt.bufPrintZ(&printBuf, "{x}", .{current_apic_id});
-    // try arch.x86_64.serial.init_serial(0xE9);
-    for (slice) |value| {
-        arch.x86_64.serial.writeout(0xE9, value);
-    }
+    const writer = SerialWriter.writer();
+    _ = try writer.print("local apic id {x}", .{current_apic_id});
+    try writer.writeByte(0);
 }

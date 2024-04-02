@@ -183,13 +183,13 @@ pub fn init_serial(port: u16) !void {
     });
 }
 
-pub fn writeout(comptime port: u16, value: u8) void {
+pub inline fn writeout(port: u16, value: u8) void {
     while (!inb(port, .line_status).transmitted_empty)
         asm volatile ("pause");
     outb(port, .data, value);
 }
 
-pub fn read(comptime port: u16) ?u8 {
+pub inline fn read(port: u16) ?u8 {
     if (inb(port, .line_status).data_ready)
         return inb(port, .data);
     return null;

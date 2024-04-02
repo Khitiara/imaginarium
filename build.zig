@@ -212,7 +212,7 @@ pub fn build(b: *std.Build) !void {
         "-d",
         "int",
         "--no-reboot",
-        "--no-shutdown",
+        // "--no-shutdown",
     });
 
     if (b.option(bool, "debugcon", "output ports to stdio") orelse true) {
