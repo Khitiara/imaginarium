@@ -1,4 +1,4 @@
-ENTRY(_start)
+ENTRY(_kstart)
 
 fb          = 0xffffffff800B8000;
 

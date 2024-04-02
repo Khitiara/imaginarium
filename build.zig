@@ -45,13 +45,15 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
 } {
     const exe_name = "imaginarium.krnl.b";
     const exe = b.addExecutable(.{
-        .name = exe_name,
+        .name = "imaginarium.elf",
         .root_source_file = .{ .path = "src/krnl/main.zig" },
         .target = target,
         .optimize = optimize,
         .code_model = .kernel,
         .pic = false,
+        .use_lld = true,
     });
+    exe.entry = .disabled;
 
     addImportFromTable(&exe.root_module, "hal");
     addImportFromTable(&exe.root_module, "util");
@@ -59,9 +61,10 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
 
     exe.setLinkerScript(.{ .path = "src/krnl/link.ld" });
 
-    const krnlstep = b.step("kernel", "imaginarium kernel");
+    const krnlstep = b.step("krnl", "imaginarium kernel");
     const objcopy = b.addObjCopy(exe.getEmittedBin(), .{
         .strip = .debug_and_symbols,
+        .basename = exe_name,
         .extract_to_separate_file = true,
     });
 
@@ -209,11 +212,18 @@ pub fn build(b: *std.Build) !void {
         b.fmt("qemu-system-{s}", .{@tagName(arch)}),
         "-drive",
     });
+    qemu.stdio = .inherit;
     qemu.addPrefixedFileArg("format=raw,file=", img.getOutput());
-    qemu.addArgs(&.{ "-d", "int", "--no-reboot", "--no-shutdown" });
+    qemu.addArgs(&.{
+        "-d",
+        "int",
+        "--no-reboot",
+        "--no-shutdown",
+    });
 
     if (b.option(bool, "debugcon", "output ports to stdio") orelse true) {
-        qemu.addArgs(&.{ "-debugcon", "stdio" });
+        qemu.addArg("-debugcon");
+        qemu.addArg(b.fmt("file:{s}", .{b.pathFromRoot("test/aaa.bin")}));
     }
     switch (parseQemuGdbOption(b.option([]const u8, "gdb", "use gdb with qemu"))) {
         .none => {},
