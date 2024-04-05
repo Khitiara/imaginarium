@@ -7,6 +7,10 @@ pub const serial = @import("x86_64/serial.zig");
 
 pub const cc: @import("std").builtin.CallingConvention = .SysV;
 
+comptime {
+    _ = @import("x86_64/init.zig");
+}
+
 pub const Flags = packed struct(u64) {
     carry: bool,
     _reserved1: u1 = 1,
