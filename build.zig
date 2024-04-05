@@ -2,6 +2,7 @@ const std = @import("std");
 const log = std.log;
 const Target = std.Target;
 const DiskImage = @import("build/disk_image.zig");
+const LazyPath = std.Build.LazyPath;
 
 fn target_features(query: *Target.Query) !void {
     query.cpu_model = .{ .explicit = std.Target.Cpu.Model.generic(query.cpu_arch.?) };
@@ -25,7 +26,7 @@ fn target_features(query: *Target.Query) !void {
     }
 }
 
-fn installFrom(b: *std.Build, dep: *std.Build.Step, group_step: *std.Build.Step, file: std.Build.LazyPath, dir: []const u8, rel: []const u8) void {
+fn installFrom(b: *std.Build, dep: *std.Build.Step, group_step: *std.Build.Step, file: LazyPath, dir: []const u8, rel: []const u8) void {
     defer b.allocator.free(rel);
     const s = b.addInstallFileWithDir(file, .{ .custom = dir }, rel);
     s.step.dependOn(dep);
@@ -40,8 +41,8 @@ fn addImportFromTable(module: *std.Build.Module, name: []const u8) void {
 
 fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) !struct {
     *std.Build.Step,
-    std.Build.LazyPath,
-    ?std.Build.LazyPath,
+    LazyPath,
+    ?LazyPath,
 } {
     const exe_name = "imaginarium.krnl.b";
     const exe = b.addExecutable(.{
@@ -170,7 +171,8 @@ pub fn build(b: *std.Build) !void {
 
     const options = b.addOptions();
     options.addOption(u32, "max_ioapics", max_ioapics);
-    options.addOption(bool, "use_signed_physaddr", true);
+    options.addOption(bool, "use_signed_physaddr", false);
+    options.addOption(bool, "rsdp_search_bios", true);
 
     const optsModule = options.createModule();
     b.modules.put("config", optsModule) catch @panic("OOM");
@@ -195,9 +197,9 @@ pub fn build(b: *std.Build) !void {
     img.step.dependOn(krnlstep);
 
     const copyToTestDir = b.addNamedWriteFiles("copy_to_test_dir");
-    // copyToTestDir.step.dependOn(&img.step);
+    copyToTestDir.step.dependOn(&img.step);
     copyToTestDir.step.dependOn(krnlstep);
-    // copyToTestDir.addCopyFileToSource(img.getOutput(), "test/drive.bin");
+    copyToTestDir.addCopyFileToSource(img.getOutput(), "test/drive.bin");
     if (debug) |d| {
         copyToTestDir.addCopyFileToSource(d, "test/krnl.debug");
     }
@@ -206,18 +208,21 @@ pub fn build(b: *std.Build) !void {
         b.fmt("qemu-system-{s}", .{@tagName(arch)}),
         "-drive",
     });
+    qemu.setCwd(LazyPath.relative("test"));
     qemu.stdio = .inherit;
     qemu.addPrefixedFileArg("format=raw,file=", img.getOutput());
     qemu.addArgs(&.{
         "-d",
-        "int",
+        "int,cpu_reset",
         "--no-reboot",
         // "--no-shutdown",
+        "-M",
+        "type=q35,smm=off",
     });
 
     if (b.option(bool, "debugcon", "output ports to stdio") orelse true) {
         qemu.addArg("-debugcon");
-        qemu.addArg(b.fmt("file:{s}", .{b.pathFromRoot("test/aaa.bin")}));
+        qemu.addArg("file:aaa.bin");
     }
     switch (parseQemuGdbOption(b.option([]const u8, "gdb", "use gdb with qemu"))) {
         .none => {},

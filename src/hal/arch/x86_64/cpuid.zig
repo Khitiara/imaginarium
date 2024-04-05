@@ -142,7 +142,7 @@ inline fn normalize_subleaf(comptime leaf: Leaf, comptime subleaf: Subleaf(leaf)
     }
 }
 
-pub fn cpuid(comptime leaf: Leaf, comptime subleaf: Subleaf(leaf)) !CpuidOutputType(leaf, subleaf) {
+pub inline fn cpuid(comptime leaf: Leaf, comptime subleaf: Subleaf(leaf)) !CpuidOutputType(leaf, subleaf) {
     var eax: u32 = undefined;
     var ebx: u32 = undefined;
     var edx: u32 = undefined;

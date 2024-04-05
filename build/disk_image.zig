@@ -50,14 +50,14 @@ pub fn getOutput(self: *const DiskImage) std.Build.LazyPath {
 
 fn make(step: *Step, prog_node: *std.Progress.Node) !void {
     const b = step.owner;
-    const self = @fieldParentPtr(DiskImage, "step", step);
+    const self: *DiskImage = @fieldParentPtr("step", step);
 
     var man = b.graph.cache.obtain();
     defer man.deinit();
 
     // Random bytes to make ObjCopy unique. Refresh this with new random
     // bytes when ObjCopy implementation is modified incompatibly.
-    man.hash.add(@as(u32, 0xE890CDA0));
+    man.hash.add(@as(u32, 0xE890CDA2));
     for (self.sources.items) |f| {
         const full_src_path = f.getPath2(b, step);
         _ = try man.addFile(full_src_path, null);
@@ -87,6 +87,8 @@ fn make(step: *Step, prog_node: *std.Progress.Node) !void {
     });
     const write = try dir.createFile(self.basename, .{});
     defer write.close();
+
+    try write.setEndPos(515585);
 
     for (self.sources.items) |f| {
         const full_src_path = f.getPath2(b, step);

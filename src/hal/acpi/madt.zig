@@ -62,7 +62,7 @@ fn MadtEntryPayload(comptime t: MadtEntryType) type {
             ioapic_addr: u32 align(4),
             gsi_base: u32 align(4),
         },
-    else => void,
+        else => void,
     }
 }
 

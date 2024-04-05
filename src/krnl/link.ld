@@ -1,4 +1,4 @@
-ENTRY(_kstart)
+ENTRY(__kstart)
 
 fb          = 0xffffffff800B8000;
 
@@ -27,10 +27,10 @@ SECTIONS
 
     .bss.stack (NOLOAD) : {
         . = ALIGN(64K);
-        _bootstrap_stack_bottom = .;
+        __bootstrap_stack_bottom = .;
         . += 8M;
         . = ALIGN(8);
-        _bootstrap_stack_top = .;
+        __bootstrap_stack_top = .;
     } :stk
 
     . += 64K;

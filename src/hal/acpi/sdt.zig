@@ -41,7 +41,7 @@ pub const SystemDescriptorTableHeader = extern struct {
     creator_id: u32,
     creator_revision: u32,
 
-    pub usingnamespace util.checksum.add_checksum(@This(), true);
+    pub usingnamespace util.checksum.add_checksum(@This(), *const SystemDescriptorTableHeader, true);
 };
 
 test "basic header checksum" {

@@ -27,31 +27,32 @@ const SerialWriter = struct {
     }
 };
 
-// extern var fb: u0;
-
-// extern const _bootstrap_stack: [*]u8;
-// extern const _bootstrap_stack_length: usize;
+// // extern var fb: u0;
 //
-// const bootstrap_stack: []u8 = _bootstrap_stack[0.._bootstrap_stack_length];
+// // extern const _bootstrap_stack: [*]u8;
+// // extern const _bootstrap_stack_length: usize;
+// //
+// // const bootstrap_stack: []u8 = _bootstrap_stack[0.._bootstrap_stack_length];
+//
+// const _bootstrap_stack_top = @extern(*anyopaque, .{ .name = "_bootstrap_stack_top" });
+// const _bootstrap_stack_bottom = @extern(*anyopaque, .{ .name = "_bootstrap_stack_bottom" });
 
-const _bootstrap_stack_top = @extern(*anyopaque, .{ .name = "_bootstrap_stack_top" });
-const _bootstrap_stack_bottom = @extern(*anyopaque, .{ .name = "_bootstrap_stack_bottom" });
-
-export fn _kstart() callconv(.Naked) noreturn {
-    asm volatile (
-        \\ movq %[_stack], %rsp
-        \\ pushq $0
-        \\ pushq $0
-        \\ xorq %rbp, %rbp
-        \\ call *%[_kstart2]
-        :
-        : [_kstart2] "r" (&_kstart2),
-          [_stack] "N{dx}" (&_bootstrap_stack_top),
-        : "rdi"
+comptime {
+    asm (
+        \\ .extern __bootstrap_stack_top;
+        \\ .extern __kstart2;
+        \\ .global __kstart;
+        \\ .type __kstart, @function;
+        \\ __kstart:
+        \\    leaq __bootstrap_stack_top, %rsp
+        \\    pushq $0
+        \\    pushq $0
+        \\    xorq %rbp, %rbp
+        \\    jmp __kstart2
     );
 }
 
-fn _kstart2(ldr_info: *bootelf.BootelfData) callconv(.SysV) noreturn {
+export fn __kstart2(ldr_info: *bootelf.BootelfData) callconv(.SysV) noreturn {
     main(ldr_info) catch |e| {
         switch (e) {
             inline else => |e2| {
@@ -62,7 +63,9 @@ fn _kstart2(ldr_info: *bootelf.BootelfData) callconv(.SysV) noreturn {
             },
         }
     };
-    while (true) {}
+    while (true) {
+        arch.x86_64.serial.writeout(0xE9, '.');
+    }
 }
 
 noinline fn main(ldr_info: *bootelf.BootelfData) !void {
@@ -75,5 +78,10 @@ noinline fn main(ldr_info: *bootelf.BootelfData) !void {
 
     const writer = SerialWriter.writer();
     _ = try writer.print("local apic id {x}", .{current_apic_id});
+    try writer.writeByte(0);
+
+    var oem_id: [6]u8 = undefined;
+    try acpi.load_sdt(&oem_id);
+    _ = try writer.print("acpi oem id {s}", .{&oem_id});
     try writer.writeByte(0);
 }
