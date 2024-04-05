@@ -36,6 +36,10 @@ const SerialWriter = struct {
 // const _bootstrap_stack_top = @extern(*anyopaque, .{ .name = "_bootstrap_stack_top" });
 // const _bootstrap_stack_bottom = @extern(*anyopaque, .{ .name = "_bootstrap_stack_bottom" });
 
+/// the true entry point is __kstart and is exported by global asm in `hal/arch/{arch}/init.zig`
+/// __kstart is responsible for stack setup and jumps unconditionally into __kstart2
+/// __kstart2 is responsible for calling main and handling any zig errors returned from there
+/// as well as entering the final infinite loop if everything worked successfully
 export fn __kstart2(ldr_info: *bootelf.BootelfData) callconv(.SysV) noreturn {
     main(ldr_info) catch |e| {
         switch (e) {
@@ -48,6 +52,7 @@ export fn __kstart2(ldr_info: *bootelf.BootelfData) callconv(.SysV) noreturn {
         }
     };
     while (true) {
+        // print a bunch of .s so i can tell if we made it into the loop
         arch.x86_64.serial.writeout(0xE9, '.');
     }
 }

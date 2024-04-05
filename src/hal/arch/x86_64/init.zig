@@ -1,3 +1,5 @@
+// this file exports __kstart, which must setup the stack and then jump into __kstart2
+
 comptime {
     asm (
         \\ .extern __bootstrap_stack_top;
