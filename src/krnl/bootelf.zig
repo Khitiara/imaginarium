@@ -1,4 +1,4 @@
-const types = @import("types.zig");
+const memory = @import("memory.zig");
 
 pub const RegionType = enum(u32) {
     normal = 1,
@@ -19,14 +19,14 @@ pub const ExtendedAddressRangeAttributes = packed struct(u32) {
 };
 
 pub const MemoryMapEntry = extern struct {
-    base: types.PhysicalAddress,
+    base: memory.PhysicalAddress,
     size: usize,
     type: RegionType,
     attributes: ExtendedAddressRangeAttributes,
 };
 
 pub const FramebufferInfo = extern struct {
-    base: types.PhysicalAddress,
+    base: memory.PhysicalAddress,
     pitch: u32,
     width: u32,
     height: u32,

@@ -1,7 +1,6 @@
 const std = @import("std");
 
 const bootelf = @import("bootelf.zig");
-const types = @import("types.zig");
 
 const hal = @import("hal");
 

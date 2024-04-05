@@ -12,3 +12,5 @@ pub const VirtualAddress = packed struct(isize) {
     address: VirtualSubAddress,
     region: VirtualRegion,
 };
+
+pub const PhysicalAddress = if(@import("config").use_signed_physaddr) isize else usize;
