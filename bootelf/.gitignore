@@ -1,0 +1,4 @@
+../test/bootelf
+*.elf
+*.o
+*.bin
