@@ -3,6 +3,9 @@ const std = @import("std");
 pub const Leaf = enum(u32) {
     max_level_and_vendor = 0,
     type_fam_model_stepping_features = 1,
+    feature_flags = 7,
+    extended_fam_model_stepping_features = 0x80000001,
+    extended_address_info = 0x80000008,
 };
 
 pub fn Subleaf(comptime leaf: Leaf) type {
@@ -95,6 +98,150 @@ pub const CpuFeatures = packed struct(u64) {
     hv: bool,
 };
 
+pub const ExtendedFeatures = packed struct(u64) {
+    fpu: bool,
+    vme: bool,
+    de: bool,
+    pse: bool,
+    tsc: bool,
+    msr: bool,
+    pae: bool,
+    mce: bool,
+    cx8: bool,
+    apic: bool,
+    _reserved1: u1 = 0,
+    sep: bool,
+    mtrr: bool,
+    pge: bool,
+    mca: bool,
+    cmov: bool,
+    pat: bool,
+    pse36: bool,
+    _reserved2: u1 = 0,
+    mp: bool,
+    nx: bool,
+    _reserved3: u1 = 0,
+    mmx_plus: bool,
+    mmx: bool,
+    fxsr: bool,
+    ffxsr: bool,
+    pg1g: bool,
+    tscp: bool,
+    _reserved4: u1 = 0,
+    lm: bool,
+    _3dnow_plus: bool,
+    _3dnow: bool,
+    ahf64: bool,
+    cmp: bool,
+    svm: bool,
+    eas: bool,
+    cr8d: bool,
+    lzcnt: bool,
+    sse4a: bool,
+    msse: bool,
+    _3dnow_p: bool,
+    osvw: bool,
+    ibs: bool,
+    xop: bool,
+    skinit: bool,
+    wdt: bool,
+    _reserved5: u1 = 0,
+    lwp: bool,
+    fma4: bool,
+    tce: bool,
+    _reserved6: u1 = 0,
+    nodeid: bool,
+    _reserved7: u1 = 0,
+    tbm: bool,
+    topx: bool,
+    pcx_core: bool,
+    pcx_nb: bool,
+    _reserved8: u1 = 0,
+    dbx: bool,
+    perftsc: bool,
+    pcx_l1i_l3: bool,
+    monx: bool,
+    _reserved9: u2 = 0,
+};
+
+pub const ExtendedBrandPackage = packed struct(u32) {
+    brand: u16,
+    _: u12,
+    package_type: u4,
+};
+
+pub const Flags1 = packed struct(u32) {
+    _reserved1: u2 = 0,
+    avx512qvnniw: bool,
+    avx512qfma: bool,
+    _reserved2: u14,
+    pconfig: bool,
+    _reserved3: u7 = 0,
+    ibrs_ibpb: bool,
+    stibp: bool,
+    _reserved4: u4 = 0,
+};
+
+pub const Flags2 = packed struct(u32) {
+    prefetchwt1: bool,
+    avx512vbmi: bool,
+    umip: bool,
+    pku: bool,
+    ospke: bool,
+    _reserved5: u1 = 0,
+    avx512vbmi2: bool,
+    cet: bool,
+    gfni: bool,
+    vaes: bool,
+    vpcl: bool,
+    avx512vnni: bool,
+    avx512bitalg: bool,
+    tme: bool,
+    avx512vp_dq: bool,
+    _reserved6: u1 = 0,
+    la57: bool,
+    mawau: u5,
+    rdpid: bool,
+    _reserved7: u7 = 0,
+    sgx_lc: bool,
+    _reserved8: u1 = 0,
+};
+
+pub const Flags3 = packed struct(u32) {
+    fsgsbase: bool,
+    tsc_adjust: bool,
+    sgx: bool,
+    bmi1: bool,
+    hle: bool,
+    avx2: bool,
+    ffdp: bool,
+    smep: bool,
+    bmi2: bool,
+    erms: bool,
+    invpcid: bool,
+    rtm: bool,
+    pqm: bool,
+    fpcsds: bool,
+    mpx: bool,
+    pqe: bool,
+    avx512f: bool,
+    avx512dq: bool,
+    rdseed: bool,
+    adx: bool,
+    smap: bool,
+    avx512ifma: bool,
+    pcommit: bool,
+    clflushopt: bool,
+    clwb: bool,
+    pt: bool,
+    avx512pf: bool,
+    avx512er: bool,
+    avx512cd: bool,
+    sha: bool,
+    avx512bw: bool,
+    avx512vl: bool,
+};
+
 pub inline fn CpuidOutputType(comptime leaf: Leaf, comptime subleaf: Subleaf(leaf)) type {
     _ = subleaf; // not used by any leaf yet implemented
     return switch (leaf) {
@@ -111,6 +258,26 @@ pub inline fn CpuidOutputType(comptime leaf: Leaf, comptime subleaf: Subleaf(lea
             type_fam_model_stepping: TypeFamModelStepping,
             brand_flush_count_id: BrandFlushCountId,
             features: CpuFeatures align(4),
+        },
+        .extended_address_info => extern struct {
+            address_size_info: packed struct(u32) {
+                physical_address_bits: u8,
+                virtual_address_bits: u8,
+                guest_physical_address_bits: u8,
+                _: u8 = 0,
+            },
+            _: [3]u8,
+        },
+        .extended_fam_model_stepping_features => extern struct {
+            type_fam_model_stepping: TypeFamModelStepping,
+            brand_package: ExtendedBrandPackage,
+            features: ExtendedFeatures align(4),
+        },
+        .feature_flags => extern struct {
+            _: u32 = 0,
+            flags1: Flags1,
+            flags2: Flags2,
+            flags3: Flags3,
         },
     };
 }
@@ -138,11 +305,12 @@ inline fn normalize_subleaf(comptime leaf: Leaf, comptime subleaf: Subleaf(leaf)
     switch (@typeInfo(Subleaf(leaf))) {
         .Int => return @intCast(subleaf),
         .Enum => return @intFromEnum(subleaf),
+        .Void => return 0,
         else => unreachable,
     }
 }
 
-pub inline fn cpuid(comptime leaf: Leaf, comptime subleaf: Subleaf(leaf)) !CpuidOutputType(leaf, subleaf) {
+pub inline fn cpuid(comptime leaf: Leaf, comptime subleaf: Subleaf(leaf)) CpuidOutputType(leaf, subleaf) {
     var eax: u32 = undefined;
     var ebx: u32 = undefined;
     var edx: u32 = undefined;

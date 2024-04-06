@@ -40,7 +40,7 @@ const SerialWriter = struct {
 /// __kstart is responsible for stack setup and jumps unconditionally into __kstart2
 /// __kstart2 is responsible for calling main and handling any zig errors returned from there
 /// as well as entering the final infinite loop if everything worked successfully
-export fn __kstart2(ldr_info: *bootelf.BootelfData) callconv(.SysV) noreturn {
+export fn __kstart2(ldr_info: *bootelf.BootelfData) callconv(arch.cc) noreturn {
     main(ldr_info) catch |e| {
         switch (e) {
             inline else => |e2| {
@@ -63,7 +63,10 @@ noinline fn main(ldr_info: *bootelf.BootelfData) !void {
 
     if (!cpuid.check_cpuid_supported())
         return error.cpuid_not_supported;
-    const current_apic_id = (try cpuid.cpuid(.type_fam_model_stepping_features, 0)).brand_flush_count_id.apic_id;
+
+    // const paging_feats = arch.x86_64.paging.enumerate_paging_features();
+
+    const current_apic_id = (cpuid.cpuid(.type_fam_model_stepping_features, 0)).brand_flush_count_id.apic_id;
 
     const writer = SerialWriter.writer();
     _ = try writer.print("local apic id {x}", .{current_apic_id});
