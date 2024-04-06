@@ -73,14 +73,14 @@ fn ControlRegisterValueType(comptime cr: ControlRegister) type {
     }
 }
 
-pub fn read(comptime cr: ControlRegister) ControlRegisterValueType(cr) {
-    return asm volatile ("mov %%" ++ @tagName(cr) ++ ", %[out]"
+pub inline fn read(comptime cr: ControlRegister) ControlRegisterValueType(cr) {
+    return asm volatile ("movq %%" ++ @tagName(cr) ++ ", %[out]"
         : [out] "=r" (-> ControlRegisterValueType(cr)),
     );
 }
 
-pub fn write(comptime cr: ControlRegister, val: ControlRegisterValueType(cr)) void {
-    asm volatile ("mov %[in], %%" ++ @tagName(cr)
+pub inline fn write(comptime cr: ControlRegister, val: ControlRegisterValueType(cr)) void {
+    asm volatile ("movq %[in], %%" ++ @tagName(cr)
         :
         : [in] "r" (val),
     );

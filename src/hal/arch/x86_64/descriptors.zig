@@ -3,12 +3,12 @@ const seg = @import("segmentation.zig");
 const util = @import("util");
 const masking = util.masking;
 
-const DescriptorType = enum(u1) {
-    normal = 0,
-    system = 1,
+pub const DescriptorType = enum(u1) {
+system = 0,
+    normal = 1,
 };
 
-const SystemDescriptorType = enum(u4) {
+pub const SystemDescriptorType = enum(u4) {
     ldt = 0x2,
     tss_avail = 0x9,
     tss_busy = 0xB,
@@ -16,9 +16,9 @@ const SystemDescriptorType = enum(u4) {
     interrupt_gate = 0xE,
 };
 
-const SegmentDescriptor = packed struct(u64) {
-    limit_low: u16,
-    base_low: u24,
+pub const SegmentDescriptor = packed struct(u64) {
+    limit_low: u16 = 0,
+    base_low: u24 = 0,
     subtype: packed union {
         normal: seg.SegmentTypeField,
         system: SystemDescriptorType,
@@ -26,7 +26,7 @@ const SegmentDescriptor = packed struct(u64) {
     type: DescriptorType,
     dpl: u2,
     present: bool,
-    limit_high: u4,
+    limit_high: u4 = 0,
     unused: u1 = 0,
     long_mode_code: bool,
     operation_size: bool,
@@ -34,44 +34,59 @@ const SegmentDescriptor = packed struct(u64) {
         byte_units = 0,
         page_units = 1,
     },
-    base_mid: u8,
+    base_mid: u8 = 0,
+
+    pub fn set_base(self: *SegmentDescriptor, base: u32) void {
+        self.base_low = @truncate(base);
+        self.base_mid = @truncate(base >> 24);
+    }
+
+    pub fn set_limit(self: *SegmentDescriptor, limit: u20) void {
+        self.limit_low = @truncate(limit);
+        self.limit_high = @truncate(limit >> 16);
+    }
 };
 
-const TssLdtUpperHalf = packed struct(u64) {
-    base_upper: u32,
+pub const TssLdtUpperHalf = packed struct(u64) {
+    base_upper: u32 = 0,
     _reserved: u32 = 0,
 };
 
-const GdtEntry = packed union {
-    segment: SegmentDescriptor,
-    upper: TssLdtUpperHalf,
+pub const TssLdt = extern struct {
+    lower: SegmentDescriptor,
+    upper: TssLdtUpperHalf = .{},
+
+    pub fn set_base(self: *TssLdt, base: u64) void {
+        self.lower.set_base(@truncate(base));
+        self.upper.base_upper = @truncate(base >> 32);
+    }
+
+    pub fn set_limit(self: *TssLdt, limit: u20) void {
+        self.lower.set_limit(limit);
+    }
 };
 
-const Gdtr = extern struct {
+pub const TableRegister = extern struct {
     _unused1: u32 = 0,
     _unused2: u16 = 0,
     limit: u16,
     base: u64,
 };
 
-const Selector = packed struct(u16) {
+pub const Selector = packed struct(u16) {
     rpl: u2,
     ti: enum(u1) {
         gdt = 0,
         ldt = 1,
     } = .gdt,
-    index_upper: u12,
+    index: u13 = 0,
 
-    pub fn get_index(self: Selector) u16 {
-        return @as(u16, @bitCast(self)) & masking.makeTruncMask(Selector, .index_upper);
-    }
-
-    pub fn set_index(self: *Selector, index: u16) void {
-        self.index_upper = @truncate(index >> 3);
+    pub fn get_relative_addr(self: Selector) u16 {
+        return @as(u16, @bitCast(self)) & masking.makeTruncMask(Selector, .index);
     }
 };
 
-const InterruptGateDescriptor = packed struct(u128) {
+pub const InterruptGateDescriptor = packed struct(u128) {
     offset_low: u16,
     segment_selector: Selector,
     ist: u3,

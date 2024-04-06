@@ -98,7 +98,7 @@ pub const CpuFeatures = packed struct(u64) {
     hv: bool,
 };
 
-pub const ExtendedFeatures = packed struct(u64) {
+pub const ExtendedFeatures2 = packed struct(u32) {
     fpu: bool,
     vme: bool,
     de: bool,
@@ -131,6 +131,9 @@ pub const ExtendedFeatures = packed struct(u64) {
     lm: bool,
     _3dnow_plus: bool,
     _3dnow: bool,
+};
+
+pub const ExtendedFeatures1 = packed struct(u32) {
     ahf64: bool,
     cmp: bool,
     svm: bool,
@@ -266,12 +269,13 @@ pub inline fn CpuidOutputType(comptime leaf: Leaf, comptime subleaf: Subleaf(lea
                 guest_physical_address_bits: u8,
                 _: u8 = 0,
             },
-            _: [3]u8,
+            _: [3]u32,
         },
         .extended_fam_model_stepping_features => extern struct {
             type_fam_model_stepping: TypeFamModelStepping,
             brand_package: ExtendedBrandPackage,
-            features: ExtendedFeatures align(4),
+            features1: ExtendedFeatures1,
+            features2: ExtendedFeatures2,
         },
         .feature_flags => extern struct {
             _: u32 = 0,
@@ -281,25 +285,6 @@ pub inline fn CpuidOutputType(comptime leaf: Leaf, comptime subleaf: Subleaf(lea
         },
     };
 }
-
-pub fn check_cpuid_supported() bool {
-    return asm volatile (
-        \\ pushfq
-        \\ popq %rax
-        \\ movq %rbx, %rax
-        \\ xorq $0x0000000000200000, %rax
-        \\ pushq %rax
-        \\ popfq
-        \\ pushfq
-        \\ popq %rax
-        \\ xorq %rbx, %rax
-        : [supported] "={rax}" (-> u64),
-        :
-        : "flags", "rbx"
-    ) != 0;
-}
-
-pub const CpuidError = error{cpuid_not_supported};
 
 inline fn normalize_subleaf(comptime leaf: Leaf, comptime subleaf: Subleaf(leaf)) u32 {
     switch (@typeInfo(Subleaf(leaf))) {

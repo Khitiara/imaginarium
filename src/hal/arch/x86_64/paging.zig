@@ -20,7 +20,7 @@ pub fn enumerate_paging_features() PagingFeatures {
         .maxphyaddr = addresses.physical_address_bits,
         .linear_address_width = addresses.virtual_address_bits,
         .five_level_paging = flags.flags2.la57,
-        .gigabyte_pages = feats_ext.features.pg1g,
+        .gigabyte_pages = feats_ext.features2.pg1g,
         .global_page_support = feats_base.features.pge,
     };
 }

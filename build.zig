@@ -63,6 +63,14 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
     exe.setLinkerScript(.{ .path = "src/krnl/link.ld" });
 
     const krnlstep = b.step("krnl", "imaginarium kernel");
+
+    krnlstep.dependOn(&b.addInstallArtifact(exe, .{
+        .dest_dir = .{
+            .override = .{
+                .custom = "agony",
+            },
+        },
+    }).step);
     const objcopy = b.addObjCopy(exe.getEmittedBin(), .{
         .strip = .debug_and_symbols,
         .basename = exe_name,
@@ -222,7 +230,7 @@ pub fn build(b: *std.Build) !void {
 
     if (b.option(bool, "debugcon", "output ports to stdio") orelse true) {
         qemu.addArg("-debugcon");
-        qemu.addArg("file:aaa.bin");
+        qemu.addArg("file:aaa.txt");
     }
     switch (parseQemuGdbOption(b.option([]const u8, "gdb", "use gdb with qemu"))) {
         .none => {},
