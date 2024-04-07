@@ -44,5 +44,4 @@ next_phdr:
   mov edi, bootelf
   mov dword[rdi], 0xb007e1f ; Bootelf version 0
 
-  cli
   jmp [rbx + elf_entry]

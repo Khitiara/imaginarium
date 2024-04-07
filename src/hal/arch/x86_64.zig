@@ -6,6 +6,7 @@ pub const control_registers = @import("x86_64/ctrl_registers.zig");
 pub const serial = @import("x86_64/serial.zig");
 pub const descriptors = @import("x86_64/descriptors.zig");
 pub const gdt = @import("x86_64/gdt.zig");
+pub const pmm = @import("x86_64/pmm.zig");
 
 pub const cc: @import("std").builtin.CallingConvention = .SysV;
 

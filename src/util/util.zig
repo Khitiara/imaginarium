@@ -3,6 +3,7 @@ pub const WindowStructIndexer = @import("window_struct_indexer.zig").WindowStruc
 pub const masking = @import("masking.zig");
 pub const trie = @import("trie.zig");
 pub const sentinel_bit_set = @import("sentinel_bit_set.zig");
+pub const extern_address = @import("externs.zig").extern_address;
 
 const std = @import("std");
 const lower_string = std.ascii.lowerString;

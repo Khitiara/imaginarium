@@ -39,15 +39,18 @@ pub const PDPTE = packed struct(u64) {
     /// prefer using getPhysAddr to access the actual physical address.
     /// union will be gb_page if and only if page_size is true
     physaddr: packed union {
-        gb_page: packed struct(u40) {
+        gb_page: packed struct(u51) {
             pat: bool,
             _ignored: u17 = 0,
             physaddr: u22, // must be left shifted 30 to get true addr
+            _ignored3: u7 = 0,
+            protection_key: u4, // ignored if pointing to page directory
         },
-        pd_ptr: u40, // must be left shifted 12 to get true addr
+        pd_ptr: packed struct(u51) {
+            addr: u40, // must be left shifted 12 to get true addr
+            _ignored3: u11 = 0,
+        },
     },
-    _ignored3: u7 = 0,
-    protection_key: u4, // ignored if pointing to page directory
     xd: bool,
 
     pub fn getPhysAddr(self: PDPTE) u52 {
@@ -88,15 +91,18 @@ pub const PDE = packed struct(u64) {
     global: bool,
     _ignored1: u3 = 0,
     physaddr: packed union {
-        gb_page: packed struct(u40) {
+        gb_page: packed struct(u51) {
             pat: bool,
             _ignored: u8 = 0,
             physaddr: u31, // must be left shifted 21 to get true addr
+            _ignored2: u7 = 0,
+            protection_key: u4, // ignored if pointing to page table
         },
-        pd_ptr: u40, // must be left shifted 12 to get true addr
+        pd_ptr: packed struct(u51) {
+            addr: u40, // must be left shifted 12 to get true addr
+            _ignored: u11 = 0,
+        },
     },
-    _ignored3: u7 = 0,
-    protection_key: u4, // ignored if pointing to page table
     xd: bool,
 
     pub fn getPhysAddr(self: PDE) u52 {
@@ -139,7 +145,7 @@ pub const PTE = packed struct(u64) {
     /// prefer using get/setPhysAddr as it handles the masking in a single operation
     physaddr: u40, // must be left shifted 12 to get true addr
     _ignored3: u7 = 0,
-    protection_key: u4, // ignored if pointing to page directory
+    protection_key: u4, // may be ignored if disabled
     xd: bool,
 
     const physaddr_mask = makeTruncMask(PTE, .physaddr);

@@ -179,7 +179,6 @@ pub fn build(b: *std.Build) !void {
 
     const options = b.addOptions();
     options.addOption(u32, "max_ioapics", max_ioapics);
-    options.addOption(bool, "use_signed_physaddr", false);
     options.addOption(bool, "rsdp_search_bios", true);
 
     const optsModule = options.createModule();
@@ -226,6 +225,8 @@ pub fn build(b: *std.Build) !void {
         "--no-shutdown",
         "-M",
         "type=q35,smm=off",
+        "-m",
+        "4G",
     });
 
     if (b.option(bool, "debugcon", "output ports to stdio") orelse true) {

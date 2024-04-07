@@ -32,7 +32,7 @@ pub const TssBlock = extern struct {
     iomap: IoMapType = IoMapType.initEmpty(),
 };
 
-export var tss: TssBlock linksection(".bss") = undefined;
+export var tss: TssBlock = undefined;
 
 // pub const selectors = struct {
 //     pub const nul: desc.Selector = @bitCast(0);
@@ -83,11 +83,6 @@ pub const selectors = std.enums.EnumFieldStruct(std.meta.FieldEnum(Gdt), desc.Se
 pub fn setup_gdt() void {
     tss = .{};
     tss.tss.iomap_offset = @offsetOf(TssBlock, "iomap") - @offsetOf(TssBlock, "tss");
-
-    const gdtr: desc.TableRegister = .{
-        .base = @intFromPtr(&gdt),
-        .limit = @sizeOf(Gdt) - 1,
-    };
 
     gdt.null_desc = 0;
 
@@ -174,19 +169,13 @@ pub fn setup_gdt() void {
     gdt.task_state.set_base(@intFromPtr(&tss));
     gdt.task_state.set_limit(@sizeOf(TssBlock) - 1);
 
+    const gdtr: desc.TableRegister = .{
+        .base = @intFromPtr(&gdt),
+        .limit = @sizeOf(Gdt) - 1,
+    };
     asm volatile ("lgdt %[p]"
         :
         : [p] "*p" (&gdtr.limit),
-    );
-
-    asm volatile (
-        \\ mov %[dsel], %%ds
-        \\ mov %[dsel], %%fs
-        \\ mov %[dsel], %%gs
-        \\ mov %[dsel], %%es
-        \\ mov %[dsel], %%ss
-        :
-        : [dsel] "rm" (@as(u16, @bitCast(selectors.kernel_data))),
     );
 
     asm volatile (
@@ -198,5 +187,15 @@ pub fn setup_gdt() void {
         :
         : [csel] "i" (@as(u16, @bitCast(selectors.kernel_code))),
         : "rax"
+    );
+
+    asm volatile (
+        \\ mov %[dsel], %%ds
+        \\ mov %[dsel], %%fs
+        \\ mov %[dsel], %%gs
+        \\ mov %[dsel], %%es
+        \\ mov %[dsel], %%ss
+        :
+        : [dsel] "rm" (@as(u16, @bitCast(selectors.kernel_data))),
     );
 }

@@ -40,7 +40,6 @@ stopread:
 
   ; We have now abused the BIOS as much as we need/want to.
   ; Time to go to 64 bits.
-  cli
   lgdt [gdtr]
 
   %include "paging.asm"
@@ -57,7 +56,6 @@ stopread:
   mov eax, 0x80000011
   mov cr0, eax
 
-  cli
   jmp 0x08:bits64
 
 dap:

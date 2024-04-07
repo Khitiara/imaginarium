@@ -9,32 +9,24 @@ const cpuid = arch.x86_64.cpuid;
 
 const acpi = hal.acpi;
 
+pub fn puts(bytes: []const u8) void {
+    for (bytes) |b| {
+        arch.x86_64.serial.writeout(0xE9, b);
+    }
+}
+
 const SerialWriter = struct {
     const WriteError = error{};
     pub const Writer = std.io.GenericWriter(*const anyopaque, error{}, typeErasedWriteFn);
 
-    var written: u5 = 0;
-
     fn typeErasedWriteFn(context: *const anyopaque, bytes: []const u8) error{}!usize {
         _ = context;
-        for (bytes) |b| {
-            arch.x86_64.serial.writeout(0xE9, b);
-            written +%= 1;
-        }
+        puts(bytes);
         return bytes.len;
     }
 
     pub fn writer() Writer {
         return .{ .context = undefined };
-    }
-
-    pub fn write_null_and_pad() void {
-        while (written != 31) {
-            arch.x86_64.serial.writeout(0xE9, ' ');
-            written +%= 1;
-        }
-        arch.x86_64.serial.writeout(0xE9, '\n');
-        written +%= 1;
     }
 };
 
@@ -64,12 +56,28 @@ export fn __kstart2(ldr_info: *bootelf.BootelfData) callconv(arch.cc) noreturn {
             },
         }
     };
-    for (0..32) |_| {
-        arch.x86_64.serial.writeout(0xE9, '.');
-        // print a bunch of .s so i can tell if we made it into the loop
-    }
+    puts("STOP");
+    arch.x86_64.serial.writeout(0xE9, 0);
     while (true) {
         asm volatile ("hlt");
+    }
+}
+
+const hexblob: *const [16:0]u8 = "0123456789ABCDEF";
+
+fn print_hex(num: u64) void {
+    puts("0x");
+    var i = num;
+    for (0..3) |_| {
+        for (0..4) |_| {
+            arch.x86_64.serial.writeout(0xE9, hexblob[i & 0xF]);
+            i /= 16;
+        }
+        arch.x86_64.serial.writeout(0xE9, '_');
+    }
+    for (0..4) |_| {
+        arch.x86_64.serial.writeout(0xE9, hexblob[i & 0xF]);
+        i /= 16;
     }
 }
 
@@ -80,19 +88,30 @@ noinline fn main(ldr_info: *bootelf.BootelfData) !void {
     const current_apic_id = (cpuid.cpuid(.type_fam_model_stepping_features, 0)).brand_flush_count_id.apic_id;
 
     const writer = SerialWriter.writer();
-    _ = try writer.print("local apic id {x}", .{current_apic_id});
-    SerialWriter.write_null_and_pad();
+    _ = try writer.print("local apic id {d}\n", .{current_apic_id});
 
     var oem_id: [6]u8 = undefined;
     try acpi.load_sdt(&oem_id);
-    _ = try writer.print("acpi oem id {s}", .{&oem_id});
-    SerialWriter.write_null_and_pad();
+
+    _ = try writer.print("acpi oem id {s}\n", .{&oem_id});
 
     const paging_feats = arch.x86_64.paging.enumerate_paging_features();
-    try writer.print("physical addr width {d}", .{paging_feats.maxphyaddr});
-    SerialWriter.write_null_and_pad();
-    try writer.print("linear addr width {d}", .{paging_feats.linear_address_width});
-    SerialWriter.write_null_and_pad();
-    try writer.print("1g pages: {}; global pages: {}; lvl5 paging: {}", .{ paging_feats.gigabyte_pages, paging_feats.global_page_support, paging_feats.five_level_paging });
-    SerialWriter.write_null_and_pad();
+    _ = try writer.print("physical addr width: {d} (0x{x} pages)\n", .{ paging_feats.maxphyaddr, @as(u64, 1) << @truncate(paging_feats.maxphyaddr - 12) });
+    _ = try writer.print("linear addr width: {d}\n", .{paging_feats.linear_address_width});
+    _ = try writer.print("1g pages: {}; global pages: {}; lvl5 paging: {}\n", .{ paging_feats.gigabyte_pages, paging_feats.global_page_support, paging_feats.five_level_paging });
+
+    var max_usable_physaddr: usize = 0;
+    for (ldr_info.memory_map()) |entry| {
+        const end = entry.base + entry.size;
+        _ = try writer.print("memmap 0x{X:0>12}..0x{X:0>12} (0x{X:0>10}) is {s: <10} ({x})\n", .{ entry.base, end, entry.size, @tagName(entry.type), @intFromEnum(entry.type) });
+        if (entry.type == .normal and max_usable_physaddr < end) {
+            max_usable_physaddr = end;
+        }
+    }
+    _ = try writer.print("max usable physaddr: 0x{X:0>12}\n", .{max_usable_physaddr});
+    const max_usable_phys_page = max_usable_physaddr / 4096;
+    _ = try writer.print("max usable physical page: 0x{X:0>8}\n", .{max_usable_phys_page});
+    const pagecntbytes = max_usable_phys_page / 8;
+    const physpage_bitmap_len_pages = pagecntbytes / 4096;
+    _ = try writer.print("page bitmap length: 0x{X:0>8} bytes, 0x{X:0>4} pages\n", .{ pagecntbytes, physpage_bitmap_len_pages });
 }
