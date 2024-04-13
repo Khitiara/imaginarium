@@ -4,6 +4,7 @@
 // https://github.com/FlorenceOS/Florence/blob/aaa5a9e568197ad24780ec9adb421217530d4466/subprojects/flork/src/memory/pmm.zig
 //
 //
+// this is effectively a buddy list allocation system implemented via a singly linked list stored in the free blocks
 //
 // the PMM uses a set of singly linked lists (used as LIFO stacks) of free blocks, one list for each power-of-two block
 // size between 4096 and the maximum block size supported by the physical address width of the system
@@ -21,14 +22,12 @@
 // this implementation deviates from the original implementation as of 2024-04-12 (in addition to the above-mentioned
 // optimization) insofar as it:
 //
-// 1. frees leftover sub-blocks when allocating e.g. an allocation of 12K will allocate one 16K block and free the
-//      last 4K page within that 16K block.
-// 2. (WIP) provides a routine for defragmenting allocations, merging consecutive free blocks into one larger block
-// 3. permits changing the sequential-mapping base address after initialization to permit switching from the initial
+// 1. (WIP) provides a routine for defragmenting allocations, merging consecutive free blocks into one larger block
+// 2. permits changing the sequential-mapping base address after initialization to permit switching from the initial
 //      bootloader-provided memory layout to a virtual memory layout managed by the kernel
-// 4. only initializes the first 2G of physical memory at first (minus the portion in which the bootloader and kernel
+// 3. only initializes the first 2G of physical memory at first (minus the portion in which the bootloader and kernel
 //      structures are located)
-// 5. permits adding the rest of physical memory later once the appropriate kernel structures are available to use
+// 4. permits adding the rest of physical memory later once the appropriate kernel structures are available to use
 //      higher physical memory (general paging, a page fault handler, etc)
 
 const ext = @import("util").extern_address;
@@ -98,13 +97,14 @@ pub fn init(paddrwidth: u8, memmap: []memory.MemoryMapEntry) void {
             if (end > phys_mapping_limit) {
                 continue;
             }
-            // if the block covers the boundary of the kernel then free the portion after the kernel
+            // if the block covers the boundary of the kernel then only free the portion after the kernel
             if (base < kernel_phys_end) {
                 const diff = kernel_phys_end - base;
                 base = kernel_phys_end;
                 size -= diff;
             }
-            free(base, size);
+            // any alignment and other nonsense the bios throws at us gets handled in mark_free
+            mark_free(base, size);
         }
     }
 }
@@ -117,15 +117,27 @@ pub fn enlarge_mapped_physical(memmap: []memory.MemoryMapEntry, new_base: isize)
     const old_limit = phys_mapping_limit;
     phys_mapping_limit = 1 << phys_addr_width;
     for (memmap) |entry| {
+        // we already mapped entries which are wholly within our old limits
         if (entry.type == .normal and entry.base + entry.size >= old_limit) {
-            free(entry.base, entry.size);
+            // all the alignment and other nonsense is handled by mark_free
+            mark_free(entry.base, entry.size);
         }
     }
 }
 
+// turns a physical address into a pointer by way of the identity mapped region
+// before enlarge_mapped_physical is called the returend pointers should not be saved
 pub fn ptr_from_physaddr(Ptr: type, paddr: usize) Ptr {
-    if (paddr == 0) return null;
+    // if the phys addr is 0 and the pointer is optional then its null. used mainly in the pmm to mark the end of the
+    // free block lists
+    if (paddr == 0 and @typeInfo(Ptr).Optional) {
+        return null;
+    }
     return @ptrFromInt(paddr + phys_mapping_base);
+}
+
+pub fn physaddr_from_ptr(ptr: anytype) usize {
+    return @intFromPtr(ptr) - phys_mapping_base;
 }
 
 // allocate a block from physical memory by index
@@ -182,56 +194,50 @@ fn free_impl(phys_addr: usize, index: usize) void {
 
 // allocate a block of at least len bytes
 pub fn alloc(len: usize) !usize {
-    // check that we're allocating page aligned. we dont do anything that isnt page-aligned in the pmm
-    if (!std.mem.isAligned(len, pmm_sizes[0])) {
-        return error.physical_allocation_misaligned;
-    }
-
-    // loop through from smallest to biggest sizes we can allocate
-    // log2_floor of the length. start at this index and work upward to short circuit some useless iterations
-    const i = @clz(len);
-    if (i >= pmm_sizes.len) {
+    // log2_ceil of the length - 12 indexes into pmm_sizes the smallest block size strictly larger than len
+    const idx = std.math.log2_int_ceil(usize, len) - 12;
+    if (idx >= pmm_sizes.len) {
         return error.physical_allocation_too_large;
     }
-    for (pmm_sizes[i..], i..) |sz, idx| {
-        // take the smallest size that can completely contain the requested allocation
-        if (sz >= len) {
-            // forward the actual allocation to alloc_impl
-            const a = alloc_impl(idx);
-            // TODO: this part contributes to fragmentation without defrag implemented in free
-            // grab the end of the actual allocation and free any blocks after it within what we allocated
-            const e = a + len;
-            const l = pmm_sizes[idx] - len;
-            if (l > 0) {
-                free(e, l);
-            }
-            return a;
-        }
-    }
-
-    // if we got here then the allocation was too big for the pmm
-    return error.physical_allocation_too_large;
+    // forward the actual allocation to alloc_impl
+    return alloc_impl(idx);
 }
 
+// free an allocated block which was at least len bytes
 pub fn free(phys_addr: usize, len: usize) void {
     // the physical addresses we return should always be page-aligned
     // and ideally so will whatever the memmap gives us to free here
     if (!std.mem.isAligned(phys_addr, pmm_sizes[0])) {
         @panic("unaligned address to free");
     }
-    // length ought to be page aligned at least
-    if (!std.mem.isAligned(len, pmm_sizes[0])) {
-        @panic("unaligned length to free");
-    }
-    var sz = len;
-    var a = phys_addr;
+
+    // log2_ceil of the length - 12 indexes into pmm_sizes the smallest block size strictly larger than len.
+    // this is the same computation as in alloc so should match the size we actually gave
+    const idx = std.math.log2_int_ceil(usize, len) - 12;
+    free_impl(phys_addr, idx);
+}
+
+// mark a new memory block as free. generally called with entries from the bios or uefi memory map
+fn mark_free(phys_addr: usize, len: usize) void {
+    var sz: isize = @intCast(len);
+
+    // the bios sucks i give up so for this we align the start of the block forward to match our smallest block size
+    var a = std.mem.alignForward(phys_addr, pmm_sizes[0]);
+    // if we aligned forward then shrink the size accordingly so we dont reach into reserved ranges
+    sz -= (a - phys_addr);
+    // and align the size backward to a multiple of our smallest block size because the bios still sucks
+    sz = std.mem.alignBackward(isize, sz, @intCast(pmm_sizes[0]));
+
     // loop to progressively shrink the block to be freed.
     // each free must be page-aligned in both size and address
     outer: while (sz > 0) {
-        var it = std.mem.reverseIterator(pmm_sizes);
-        var idx = pmm_sizes.len - 1;
-        while (it.next()) |s| : (idx -= 1) {
+        // we obviously cant free a block bigger than sz and the log2 ought to trim out extra bits
+        var idx = @min(pmm_sizes.len - 1, std.math.log2_int(usize, sz) - 12) + 1;
+        while (idx > 0) {
+            idx -= 1;
+            const s = pmm_sizes[idx];
             // find the largest size that is no greater than the amount to free and which is aligned
+            // the sz >= s case should be covered by the log2 bit above but leave it in for now just in case
             if (sz >= s and std.mem.isAligned(phys_addr, s)) {
                 // free the biggest block we can fit aligned in the newly freed region
                 free_impl(phys_addr, idx);
@@ -268,6 +274,8 @@ fn merge_blocks(root: *usize, index: usize) void {
     }
 }
 
+// https://www.chiark.greenend.org.uk/~sgtatham/algorithms/listsort.html
+// no i dont really understand this that well
 fn sort_free_root(root: *usize) void {
     var k: usize = 1;
     var l: usize = 0;

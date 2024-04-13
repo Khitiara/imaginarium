@@ -11,17 +11,17 @@ pub const PML45E = packed struct(u64) {
     pcd: bool,
     accessed: bool,
     _ignored1: u6 = 0,
-    /// prefer using get/setPhysAddr to access the physical address
+    /// prefer using get/set_phys_addr to access the physical address
     physaddr: u40,
     _ignored2: u11 = 0,
     xd: bool,
 
     const physaddr_mask = makeTruncMask(PML45E, .physaddr);
-    pub fn getPhysAddr(self: PML45E) u64 {
+    pub fn get_phys_addr(self: PML45E) u64 {
         return @as(u64, @bitCast(self)) & physaddr_mask;
     }
-    pub fn setPhysAddr(self: *PML45E, addr: u64) void {
-        @as(*u64, @ptrCast(self)).* |= (addr & physaddr_mask);
+    pub fn set_phys_addr(self: *PML45E, addr: u64) void {
+        self.physaddr = addr >> 12;
     }
 };
 
@@ -36,7 +36,7 @@ pub const PDPTE = packed struct(u64) {
     page_size: bool,
     global: bool,
     _ignored1: u3 = 0,
-    /// prefer using getPhysAddr to access the actual physical address.
+    /// prefer using get_phys_addr to access the actual physical address.
     /// union will be gb_page if and only if page_size is true
     physaddr: packed union {
         gb_page: packed struct(u51) {
@@ -53,7 +53,7 @@ pub const PDPTE = packed struct(u64) {
     },
     xd: bool,
 
-    pub fn getPhysAddr(self: PDPTE) u52 {
+    pub fn get_phys_addr(self: PDPTE) u52 {
         if (self.page_size) {
             // 1gb page
             const offset = @bitOffsetOf(PDPTE, "physaddr") + @bitOffsetOf(TagPayloadByName(@TypeOf(self.physaddr), "gb_page"), "physaddr");
@@ -65,16 +65,12 @@ pub const PDPTE = packed struct(u64) {
             return @as(u64, @bitCast(self)) & mask;
         }
     }
-    pub fn setPhysAddr(self: *PDPTE, addr: u64) void {
+    pub fn set_phys_addr(self: *PDPTE, addr: u64) void {
         if (self.page_size) {
-            // 2mb page
-            const offset = @bitOffsetOf(PDPTE, "physaddr") + @bitOffsetOf(TagPayloadByName(@TypeOf(self.physaddr), "gb_page"), "physaddr");
-            comptime assert(offset == 21);
-            const mask = ((1 << 31) - 1) << offset;
-            @as(*u64, @ptrCast(self)).* |= addr & mask;
+            // 1gb page
+            self.physaddr.gb_page.physaddr = @truncate(addr >> 30);
         } else {
-            const mask = ((1 << 40) - 1) << @bitOffsetOf(PDPTE, "physaddr");
-            @as(*u64, @ptrCast(self)).* |= addr & mask;
+            self.physaddr.pd_ptr.addr = @truncate(addr >> 12);
         }
     }
 };
@@ -105,7 +101,7 @@ pub const PDE = packed struct(u64) {
     },
     xd: bool,
 
-    pub fn getPhysAddr(self: PDE) u52 {
+    pub fn get_phys_addr(self: PDE) u52 {
         if (self.page_size) {
             // 2mb page
             const offset = @bitOffsetOf(PDE, "physaddr") + @bitOffsetOf(TagPayloadByName(@TypeOf(self.physaddr), "gb_page"), "physaddr");
@@ -117,16 +113,12 @@ pub const PDE = packed struct(u64) {
             return @as(u64, @bitCast(self)) & mask;
         }
     }
-    pub fn setPhysAddr(self: *PDE, addr: u64) void {
+    pub fn set_phys_addr(self: *PDE, addr: u64) void {
         if (self.page_size) {
             // 2mb page
-            const offset = @bitOffsetOf(PDE, "physaddr") + @bitOffsetOf(TagPayloadByName(@TypeOf(self.physaddr), "gb_page"), "physaddr");
-            comptime assert(offset == 21);
-            const mask = ((1 << 31) - 1) << offset;
-            @as(*u64, @ptrCast(self)).* |= addr & mask;
+            self.physaddr.gb_page.physaddr = @truncate(addr >> 21);
         } else {
-            const mask = ((1 << 40) - 1) << @bitOffsetOf(PDE, "physaddr");
-            @as(*u64, @ptrCast(self)).* |= addr & mask;
+            self.physaddr.pd_ptr.addr = @truncate(addr >> 12);
         }
     }
 };
@@ -142,18 +134,18 @@ pub const PTE = packed struct(u64) {
     pat: bool,
     global: bool,
     _ignored1: u3 = 0,
-    /// prefer using get/setPhysAddr as it handles the masking in a single operation
+    /// prefer using get/set_phys_addr as it handles the masking in a single operation
     physaddr: u40, // must be left shifted 12 to get true addr
     _ignored3: u7 = 0,
     protection_key: u4, // may be ignored if disabled
     xd: bool,
 
     const physaddr_mask = makeTruncMask(PTE, .physaddr);
-    pub fn getPhysAddr(self: PTE) u64 {
+    pub fn get_phys_addr(self: PTE) u64 {
         return @as(u64, @bitCast(self)) & physaddr_mask;
     }
-    pub fn setPhysAddr(self: *PTE, addr: u64) void {
-        @as(*u64, @ptrCast(self)).* |= (addr & physaddr_mask);
+    pub fn set_phys_addr(self: *PTE, addr: u64) void {
+        self.physaddr = @truncate(addr >> 12);
     }
 };
 
@@ -163,13 +155,13 @@ test {
     _ = @as(PDE, @bitCast(@as(u64, 0)));
     _ = @as(PTE, @bitCast(@as(u64, 0)));
 
-    _ = PML45E.getPhysAddr;
-    _ = PDPTE.getPhysAddr;
-    _ = PDE.getPhysAddr;
-    _ = PTE.getPhysAddr;
+    _ = PML45E.get_phys_addr;
+    _ = PDPTE.get_phys_addr;
+    _ = PDE.get_phys_addr;
+    _ = PTE.get_phys_addr;
 
-    _ = PML45E.setPhysAddr;
-    _ = PDPTE.setPhysAddr;
-    _ = PDE.setPhysAddr;
-    _ = PTE.setPhysAddr;
+    _ = PML45E.set_phys_addr;
+    _ = PDPTE.set_phys_addr;
+    _ = PDE.set_phys_addr;
+    _ = PTE.set_phys_addr;
 }

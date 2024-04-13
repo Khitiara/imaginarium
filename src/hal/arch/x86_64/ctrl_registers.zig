@@ -6,7 +6,7 @@ pub const ControlRegister = enum {
     cr8,
 };
 
-fn ControlRegisterValueType(comptime cr: ControlRegister) type {
+pub fn ControlRegisterValueType(comptime cr: ControlRegister) type {
     switch (cr) {
         .cr0 => return packed struct(u64) {
             pe: bool,
@@ -37,6 +37,14 @@ fn ControlRegisterValueType(comptime cr: ControlRegister) type {
                 pcid: u11,
             },
             pml45_base_addr: u52,
+
+            // paging support functions
+            pub fn get_phys_addr(self: @This()) u64 {
+                return @as(u64, self.pml45_base_addr) << 12;
+            }
+            pub fn set_phys_addr(self: *@This(), addr: u64) void {
+                self.pml45_base_addr = @truncate(addr >> 12);
+            }
         },
         .cr4 => packed struct(u64) {
             vme: bool,
