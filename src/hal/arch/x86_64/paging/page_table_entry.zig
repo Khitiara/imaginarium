@@ -3,6 +3,15 @@ const makeTruncMask = @import("util").masking.makeTruncMask;
 const TagPayloadByName = std.meta.TagPayloadByName;
 const assert = std.debug.assert;
 
+pub const PageMeta = packed struct(u7) {
+    /// if present is false and reserved is true then a page fault to this page should lazily obtain and zero a physical
+    /// page. if both present and reserved is false, and the physical address of the page is nonzero then the page is
+    /// currently paged out to disk somewhere identified by that address. if the address is zero and both reserved and
+    /// present are false then a page fault to this page is always an illegal access to unallocated memory
+    reserved: bool,
+    _: u6,
+};
+
 pub const PML45E = packed struct(u64) {
     present: bool,
     writable: bool,
@@ -13,7 +22,8 @@ pub const PML45E = packed struct(u64) {
     _ignored1: u6 = 0,
     /// prefer using get/set_phys_addr to access the physical address
     physaddr: u40,
-    _ignored2: u11 = 0,
+    meta: PageMeta,
+    _ignored2: u4 = 0,
     xd: bool,
 
     const physaddr_mask = makeTruncMask(PML45E, .physaddr);
@@ -43,12 +53,13 @@ pub const PDPTE = packed struct(u64) {
             pat: bool,
             _ignored: u17 = 0,
             physaddr: u22, // must be left shifted 30 to get true addr
-            _ignored3: u7 = 0,
+            meta: PageMeta,
             protection_key: u4, // ignored if pointing to page directory
         },
         pd_ptr: packed struct(u51) {
             addr: u40, // must be left shifted 12 to get true addr
-            _ignored3: u11 = 0,
+            meta: PageMeta,
+            _ignored2: u4 = 0,
         },
     },
     xd: bool,
@@ -91,12 +102,13 @@ pub const PDE = packed struct(u64) {
             pat: bool,
             _ignored: u8 = 0,
             physaddr: u31, // must be left shifted 21 to get true addr
-            _ignored2: u7 = 0,
+            meta: PageMeta,
             protection_key: u4, // ignored if pointing to page table
         },
         pd_ptr: packed struct(u51) {
             addr: u40, // must be left shifted 12 to get true addr
-            _ignored: u11 = 0,
+            meta: PageMeta,
+            _ignored2: u4 = 0,
         },
     },
     xd: bool,
@@ -136,7 +148,7 @@ pub const PTE = packed struct(u64) {
     _ignored1: u3 = 0,
     /// prefer using get/set_phys_addr as it handles the masking in a single operation
     physaddr: u40, // must be left shifted 12 to get true addr
-    _ignored3: u7 = 0,
+    meta: PageMeta,
     protection_key: u4, // may be ignored if disabled
     xd: bool,
 

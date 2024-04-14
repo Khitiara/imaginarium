@@ -19,13 +19,14 @@ pub fn enumerate_paging_features() PagingFeatures {
     const feats_base = cpuid.cpuid(.type_fam_model_stepping_features, 0);
     const feats_ext = cpuid.cpuid(.extended_fam_model_stepping_features, 0);
     const flags = cpuid.cpuid(.feature_flags, 0);
-    return PagingFeatures{
+    features = PagingFeatures{
         .maxphyaddr = addresses.physical_address_bits,
         .linear_address_width = addresses.virtual_address_bits,
         .five_level_paging = flags.flags2.la57,
         .gigabyte_pages = feats_ext.features2.pg1g,
         .global_page_support = feats_base.features.pge,
     };
+    return features;
 }
 
 pub inline fn Table(Entry: type) type {
@@ -38,15 +39,6 @@ var pgtbl: ?Table(entries.PML45E) = null;
 var root_physaddr: usize = undefined;
 var using_5_level_paging: bool = false;
 var features: PagingFeatures = undefined;
-
-const PageMeta = packed struct(u7) {
-    _: u7,
-};
-
-const PageMetaNoProtectionKey = packed struct(u11) {
-    meta: PageMeta,
-    _: u4,
-};
 
 const PageFaultErrorCode = packed struct(usize) {
     p: enum(u1) {
@@ -230,20 +222,20 @@ pub fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSize) !void
     }
 }
 
+var cr3_new: ctrl_registers.ControlRegisterValueType(.cr3) = undefined;
+
 fn get_or_create_root_table() !Table(entries.PML45E) {
     if (pgtbl) |tbl| {
         return tbl;
     }
     @setCold(true);
-    const Cr3 = ctrl_registers.ControlRegisterValueType(.cr3);
-    var cr3: Cr3 = ctrl_registers.read(.cr3);
-    pgtbl = try create_page_table(entries.PML45E, &cr3);
-    ctrl_registers.write(.cr3, cr3);
-    return pgtbl.?;
+    cr3_new = ctrl_registers.read(.cr3);
+    return try create_page_table(entries.PML45E, &cr3_new).?;
 }
 
-fn fix_root_ptr() void {
+pub fn finalize_and_fix_root() void {
     pgtbl = pmm.ptr_from_physaddr(Table(entries.PML45E), root_physaddr);
+    ctrl_registers.write(.cr3, cr3_new);
 }
 
 // given an entry in a high level page table and the type of entries in the table to allocate,
