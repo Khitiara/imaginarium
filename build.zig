@@ -53,8 +53,10 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
         .code_model = .kernel,
         .pic = false,
         .use_lld = true,
+        .strip = false,
     });
     exe.entry = .disabled;
+    exe.root_module.dwarf_format = .@"64";
 
     addImportFromTable(&exe.root_module, "hal");
     addImportFromTable(&exe.root_module, "util");
@@ -164,6 +166,30 @@ fn parseQemuGdbOption(v: ?[]const u8) QemuGdbOption {
     }
 }
 
+const bootelf = @import("bootelf");
+fn img(b: *std.Build, arch: Target.Cpu.Arch, krnlstep: *std.Build.Step, elf: LazyPath, symbols: ?LazyPath) !struct { *std.Build.Step, LazyPath } {
+    const ldr_img = try bootelf.make_bootelf(b);
+    const disk_image = DiskImage.create(b, .{
+        .basename = "drive.bin",
+    });
+    disk_image.append(ldr_img);
+    disk_image.append(elf);
+    disk_image.step.dependOn(krnlstep);
+
+    const step = b.step("img", "create bootable disk image for the given target");
+    installFrom(b, &disk_image.step, step, disk_image.getOutput(), b.fmt("{s}/img", .{@tagName(arch)}), disk_image.basename);
+
+    const copyToTestDir = b.addNamedWriteFiles("copy_to_test_dir");
+    copyToTestDir.step.dependOn(&disk_image.step);
+    copyToTestDir.step.dependOn(krnlstep);
+    copyToTestDir.addCopyFileToSource(disk_image.getOutput(), "test/drive.bin");
+    if (symbols) |d| {
+        copyToTestDir.addCopyFileToSource(d, "test/krnl.debug");
+    }
+    step.dependOn(&copyToTestDir.step);
+    return .{ step, disk_image.getOutput() };
+}
+
 pub fn build(b: *std.Build) !void {
     const arch = b.option(Target.Cpu.Arch, "arch", "The CPU architecture to build for") orelse .x86_64;
     var selected_target: Target.Query = .{
@@ -196,28 +222,15 @@ pub fn build(b: *std.Build) !void {
     addImportFromTable(hal, "util");
 
     const krnlstep, const elf, const debug = try krnl(b, arch, target, optimize);
-    const img = DiskImage.create(b, .{
-        .basename = "drive.bin",
-    });
-    img.append(.{ .path = "test/bootelf" });
-    img.append(elf);
-    img.step.dependOn(krnlstep);
-
-    const copyToTestDir = b.addNamedWriteFiles("copy_to_test_dir");
-    copyToTestDir.step.dependOn(&img.step);
-    copyToTestDir.step.dependOn(krnlstep);
-    copyToTestDir.addCopyFileToSource(img.getOutput(), "test/drive.bin");
-    if (debug) |d| {
-        copyToTestDir.addCopyFileToSource(d, "test/krnl.debug");
-    }
+    const imgstep, const imgFile = try img(b, arch, krnlstep, elf, debug);
 
     const qemu = b.addSystemCommand(&.{
         b.fmt("qemu-system-{s}", .{@tagName(arch)}),
         "-drive",
     });
-    qemu.setCwd(LazyPath.relative("test"));
+    qemu.setCwd(b.path("test"));
     qemu.stdio = .inherit;
-    qemu.addPrefixedFileArg("format=raw,file=", img.getOutput());
+    qemu.addPrefixedFileArg("format=raw,file=", imgFile);
     qemu.addArgs(&.{
         "-d",
         "int,cpu_reset",
@@ -243,7 +256,7 @@ pub fn build(b: *std.Build) !void {
         },
     }
 
-    qemu.step.dependOn(&copyToTestDir.step);
+    qemu.step.dependOn(imgstep);
 
     const run = b.step("qemu", "Run the OS in qemu");
     run.dependOn(&qemu.step);

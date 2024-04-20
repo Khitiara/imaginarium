@@ -34,23 +34,6 @@ pub const TssBlock = extern struct {
 
 export var tss: TssBlock = undefined;
 
-// pub const selectors = struct {
-//     pub const nul: desc.Selector = @bitCast(0);
-//     pub const kcode: desc.Selector = .{
-//         .rpl = 0,
-//         .ti = .gdt,
-//         .index = 1,
-//     };
-//     pub const kdata: desc.Selector = .{
-//         .rpl = 0,
-//         .ti = .gdt,
-//         .index = 2,
-//     };
-// pub const ucode: desc.Selector = .{
-//
-// };
-// };
-
 pub const selectors = std.enums.EnumFieldStruct(std.meta.FieldEnum(Gdt), desc.Selector, null){
     .null_desc = @bitCast(@as(u16, 0)),
     .kernel_code = .{

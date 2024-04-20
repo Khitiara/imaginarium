@@ -32,7 +32,7 @@ pub const ExtendedAddressRangeAttributes = packed struct(u32) {
 };
 
 pub const MemoryMapEntry = extern struct {
-    base: PhysicalAddress,
+    base: usize,
     size: usize,
     type: RegionType,
     attributes: ExtendedAddressRangeAttributes,

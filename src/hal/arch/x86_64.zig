@@ -7,6 +7,7 @@ pub const serial = @import("x86_64/serial.zig");
 pub const descriptors = @import("x86_64/descriptors.zig");
 pub const gdt = @import("x86_64/gdt.zig");
 pub const pmm = @import("x86_64/pmm.zig");
+pub const idt = @import("x86_64/idt.zig");
 
 pub const cc: @import("std").builtin.CallingConvention = .SysV;
 
@@ -16,6 +17,7 @@ pub fn platform_init() void {
 
 comptime {
     _ = @import("x86_64/init.zig");
+    _ = idt;
 }
 
 pub const Flags = packed struct(u64) {

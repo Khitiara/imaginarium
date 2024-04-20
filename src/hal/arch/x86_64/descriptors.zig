@@ -4,7 +4,7 @@ const util = @import("util");
 const masking = util.masking;
 
 pub const DescriptorType = enum(u1) {
-system = 0,
+    system = 0,
     normal = 1,
 };
 
@@ -84,23 +84,6 @@ pub const Selector = packed struct(u16) {
     pub fn get_relative_addr(self: Selector) u16 {
         return @as(u16, @bitCast(self)) & masking.makeTruncMask(Selector, .index);
     }
-};
-
-pub const InterruptGateDescriptor = packed struct(u128) {
-    offset_low: u16,
-    segment_selector: Selector,
-    ist: u3,
-    _reserved1: u5 = 0,
-    type: enum(u4) {
-        interrupt = 0xE,
-        trap = 0xF,
-        _,
-    },
-    _reserved2: u1 = 0,
-    dpl: u2,
-    present: u1,
-    offset_upper: u48,
-    _reserved3: u32 = 0,
 };
 
 test {
