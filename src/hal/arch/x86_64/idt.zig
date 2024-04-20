@@ -91,7 +91,7 @@ comptime {
     var pop: []const u8 = "\n";
 
     for (@typeInfo(SavedRegisters).Struct.fields) |reg| {
-        push = "    pushq %" ++ reg.name ++ "\n" ++ push;
+        push = "\n    pushq %" ++ reg.name ++ push;
         pop = pop ++ "    popq %" ++ reg.name ++ "\n";
         regscnt += 8;
     }
