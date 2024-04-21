@@ -7,7 +7,7 @@ pub const ControlRegister = enum {
 };
 
 pub fn ControlRegisterValueType(comptime cr: ControlRegister) type {
-    switch (cr) {
+    return switch (cr) {
         .cr0 => return packed struct(u64) {
             pe: bool,
             mp: bool,
@@ -78,7 +78,7 @@ pub fn ControlRegisterValueType(comptime cr: ControlRegister) type {
             tpr: u4,
             _reserved: u60 = 0,
         },
-    }
+    };
 }
 
 pub inline fn read(comptime cr: ControlRegister) ControlRegisterValueType(cr) {

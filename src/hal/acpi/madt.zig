@@ -40,9 +40,14 @@ const MadtEntryType = enum(u8) {
     _,
 };
 
+const MadtEntryHeader = extern struct {
+    type: MadtEntryType,
+    length: u8,
+};
+
 fn MadtEntryPayload(comptime t: MadtEntryType) type {
-    switch (t) {
-        .local_apic => return extern struct {
+    return switch (t) {
+        .local_apic => extern struct {
             header: MadtEntryHeader,
             processor_uid: u8,
             local_apic_id: u8,
@@ -52,18 +57,39 @@ fn MadtEntryPayload(comptime t: MadtEntryType) type {
                 _: u30,
             },
         },
-        .local_apic_addr_override => return extern struct {
+        .local_apic_addr_override => extern struct {
             header: MadtEntryHeader align(4),
             lapic_addr: u64 align(4),
         },
-        .io_apic => return extern struct {
+        .io_apic => extern struct {
             header: MadtEntryHeader,
             ioapic_id: u8,
             ioapic_addr: u32 align(4),
             gsi_base: u32 align(4),
         },
+        .interrupt_source_override => extern struct {
+            header: MadtEntryHeader,
+            bus: u8,
+            source: u8,
+            gsi: u32,
+            flags: packed struct(u8) {
+                polarity: enum(u2) {
+                    default,
+                    active_high,
+                    reserved,
+                    active_low,
+                },
+                trigger: enum(u2) {
+                    default,
+                    edge_triggered,
+                    reserved,
+                    level_triggered,
+                },
+                _: u12 = 0,
+            },
+        },
         else => void,
-    }
+    };
 }
 
 pub fn read_madt(ptr: *const Madt) void {
@@ -95,11 +121,6 @@ pub fn read_madt(ptr: *const Madt) void {
     }
     apic.lapic_ptr = @ptrFromInt(lapic_ptr);
 }
-
-const MadtEntryHeader = extern struct {
-    type: MadtEntryType,
-    length: u8,
-};
 
 test {
     _ = Madt;

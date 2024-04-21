@@ -3,6 +3,7 @@ const std = @import("std");
 const bootelf = @import("bootelf.zig");
 
 const hal = @import("hal");
+const util = @import("util");
 
 const arch = hal.arch;
 const cpuid = arch.x86_64.cpuid;
@@ -45,7 +46,6 @@ const SerialWriter = struct {
 /// __kstart2 is responsible for calling main and handling any zig errors returned from there
 /// as well as entering the final infinite loop if everything worked successfully
 export fn __kstart2(ldr_info: *bootelf.BootelfData) callconv(arch.cc) noreturn {
-    arch.platform_init();
     main(ldr_info) catch |e| {
         switch (e) {
             inline else => |e2| {
@@ -81,37 +81,62 @@ fn print_hex(num: u64) void {
     }
 }
 
+fn logFn(
+    comptime message_level: std.log.Level,
+    comptime scope: @TypeOf(.enum_literal),
+    comptime format: []const u8,
+    args: anytype,
+) void {
+    puts(util.upper_string_comptime(message_level.asText()));
+    if (scope != .default) {
+        puts(" (");
+        puts(util.lower_string_comptime(@tagName(scope)));
+        puts(")");
+    }
+    puts(": ");
+    SerialWriter.writer().print(format, args) catch unreachable;
+    if (format[format.len - 1] != '\n')
+        puts("\n");
+}
+
+pub const std_options: std.Options = .{
+    .logFn = logFn,
+};
+
+const log = std.log.default;
+
 noinline fn main(ldr_info: *bootelf.BootelfData) !void {
     const bootelf_magic_check = ldr_info.magic == bootelf.magic;
     std.debug.assert(bootelf_magic_check);
 
+    try arch.platform_init(ldr_info.memory_map());
+
     const current_apic_id = (cpuid.cpuid(.type_fam_model_stepping_features, 0)).brand_flush_count_id.apic_id;
 
-    const writer = SerialWriter.writer();
-    _ = try writer.print("local apic id {d}\n", .{current_apic_id});
+    log.info("local apic id {d}\n", .{current_apic_id});
 
     var oem_id: [6]u8 = undefined;
     try acpi.load_sdt(&oem_id);
 
-    _ = try writer.print("acpi oem id {s}\n", .{&oem_id});
+    log.info("acpi oem id {s}\n", .{&oem_id});
 
     const paging_feats = arch.x86_64.paging.enumerate_paging_features();
-    _ = try writer.print("physical addr width: {d} (0x{x} pages)\n", .{ paging_feats.maxphyaddr, @as(u64, 1) << @truncate(paging_feats.maxphyaddr - 12) });
-    _ = try writer.print("linear addr width: {d}\n", .{paging_feats.linear_address_width});
-    _ = try writer.print("1g pages: {}; global pages: {}; lvl5 paging: {}\n", .{ paging_feats.gigabyte_pages, paging_feats.global_page_support, paging_feats.five_level_paging });
+    log.info("physical addr width: {d} (0x{x} pages)\n", .{ paging_feats.maxphyaddr, @as(u64, 1) << @truncate(paging_feats.maxphyaddr - 12) });
+    log.info("linear addr width: {d}\n", .{paging_feats.linear_address_width});
+    log.info("1g pages: {}; global pages: {}; lvl5 paging: {}\n", .{ paging_feats.gigabyte_pages, paging_feats.global_page_support, paging_feats.five_level_paging });
 
     var max_usable_physaddr: usize = 0;
     for (ldr_info.memory_map()) |entry| {
         const end = entry.base + entry.size;
-        _ = try writer.print("memmap 0x{X:0>12}..0x{X:0>12} (0x{X:0>10}) is {s: <10} ({x})\n", .{ entry.base, end, entry.size, @tagName(entry.type), @intFromEnum(entry.type) });
+        log.info("memmap 0x{X:0>12}..0x{X:0>12} (0x{X:0>10}) is {s: <10} ({x})\n", .{ entry.base, end, entry.size, @tagName(entry.type), @intFromEnum(entry.type) });
         if (entry.type == .normal and max_usable_physaddr < end) {
             max_usable_physaddr = end;
         }
     }
-    _ = try writer.print("max usable physaddr: 0x{X:0>12}\n", .{max_usable_physaddr});
+    log.info("max usable physaddr: 0x{X:0>12}\n", .{max_usable_physaddr});
     const max_usable_phys_page = max_usable_physaddr / 4096;
-    _ = try writer.print("max usable physical page: 0x{X:0>8}\n", .{max_usable_phys_page});
+    log.info("max usable physical page: 0x{X:0>8}\n", .{max_usable_phys_page});
     const pagecntbytes = max_usable_phys_page / 8;
     const physpage_bitmap_len_pages = pagecntbytes / 4096;
-    _ = try writer.print("page bitmap length: 0x{X:0>8} bytes, 0x{X:0>4} pages\n", .{ pagecntbytes, physpage_bitmap_len_pages });
+    log.info("page bitmap length: 0x{X:0>8} bytes, 0x{X:0>4} pages\n", .{ pagecntbytes, physpage_bitmap_len_pages });
 }

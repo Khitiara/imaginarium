@@ -20,10 +20,10 @@ pub inline fn RegisterContentsRead(comptime reg: Register) type {
     return switch (reg) {
         .data => u8,
         .interrupt_enable => packed struct(u8) {
-            data_available: bool,
-            transmitted_empty: bool,
-            break_error: bool,
-            status_change: bool,
+            data_available: bool = false,
+            transmitted_empty: bool = false,
+            break_error: bool = false,
+            status_change: bool = false,
             _: u4 = 0,
         },
         .line_control => packed struct(u8) {
@@ -105,9 +105,7 @@ pub inline fn RegisterContentsWrite(comptime reg: Register) type {
     };
 }
 
-const comptimePrint = @import("std").fmt.comptimePrint;
-
-pub inline fn outb(port: u16, comptime reg: Register, value: RegisterContentsWrite(reg)) void {
+pub noinline fn outb(port: u16, comptime reg: Register, value: RegisterContentsWrite(reg)) void {
     asm volatile (
         \\ outb %[value], %[port]
         :
@@ -117,7 +115,7 @@ pub inline fn outb(port: u16, comptime reg: Register, value: RegisterContentsWri
     );
 }
 
-pub inline fn inb(port: u16, comptime reg: Register) RegisterContentsRead(reg) {
+pub noinline fn inb(port: u16, comptime reg: Register) RegisterContentsRead(reg) {
     return asm volatile (
         \\ inb %[port], %[result]
         : [result] "=r" (-> RegisterContentsRead(reg)),
@@ -183,14 +181,18 @@ pub fn init_serial(port: u16) !void {
     });
 }
 
-pub inline fn writeout(port: u16, value: u8) void {
+pub fn writeout(port: u16, value: u8) void {
     while (!inb(port, .line_status).transmitted_empty)
         asm volatile ("pause");
     outb(port, .data, value);
 }
 
-pub inline fn read(port: u16) ?u8 {
+pub fn read(port: u16) ?u8 {
     if (inb(port, .line_status).data_ready)
         return inb(port, .data);
     return null;
+}
+
+pub fn io_wait() void {
+    outb(0x80, .data, 0);
 }

@@ -7,6 +7,7 @@ pub const extern_address = @import("externs.zig").extern_address;
 
 const std = @import("std");
 const lower_string = std.ascii.lowerString;
+const upper_string = std.ascii.upperString;
 const assert = std.debug.assert;
 const testing = std.testing;
 
@@ -20,6 +21,14 @@ pub inline fn lower_string_comptime(comptime str: []const u8) *const [str.len:0]
     assert(slice.len == str.len);
     return &newArr;
 }
+// uppercases an ascii string at comptime. does not work for utf8 - this is meant mainly for debug and panic messages
+// i think sentinel-terminated slices coerce to normal ones? in any case this returns a terminated one for convenience
+pub inline fn upper_string_comptime(comptime str: []const u8) *const [str.len:0]u8 {
+    var newArr: [str.len:0]u8 = [_:0]u8{0} ** str.len;
+    const slice = upper_string(&newArr, str);
+    assert(slice.len == str.len);
+    return &newArr;
+    }
 
 // sign extends, assuming i is typed with the correct bitsize to sign-extend from
 pub inline fn signExtend(comptime T: type, i: anytype) T {

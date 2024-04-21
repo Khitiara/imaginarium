@@ -7,12 +7,24 @@ pub const serial = @import("x86_64/serial.zig");
 pub const descriptors = @import("x86_64/descriptors.zig");
 pub const gdt = @import("x86_64/gdt.zig");
 pub const pmm = @import("x86_64/pmm.zig");
+pub const vmm = @import("x86_64/vmm.zig");
 pub const idt = @import("x86_64/idt.zig");
+pub const interrupts = @import("x86_64/interrupts.zig");
+
+const memory = @import("../memory.zig");
+const acpi = @import("../acpi.zig");
 
 pub const cc: @import("std").builtin.CallingConvention = .SysV;
 
-pub fn platform_init() void {
+pub fn platform_init(memmap: []memory.MemoryMapEntry) !void {
     gdt.setup_gdt();
+    const paging_feats = paging.enumerate_paging_features();
+    try acpi.load_sdt(null);
+    pmm.init(paging_feats.maxphyaddr, memmap);
+    interrupts.init();
+    try vmm.init(memmap);
+    idt.load();
+    // idt.enable();
 }
 
 comptime {

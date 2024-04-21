@@ -10,7 +10,6 @@ PHDRS
 }
 
 __base          = -2048M; /* ok, why isnt G an allowed suffix in linkerscript lmao */
-__framebuffer   = __base + 0xB8000;
 
 SECTIONS
 {
@@ -23,18 +22,18 @@ SECTIONS
     }:text
     __kernel_text_end = .;
 
-    . = ALIGN(64K);
-    . += 64K;
+    . = ALIGN(16K);
+    . += 16K;
 
     .bss.stack (NOLOAD) : {
-        . = ALIGN(64K);
+        . = ALIGN(16K);
         __bootstrap_stack_bottom = .;
         . += 8M;
         . = ALIGN(8);
         __bootstrap_stack_top = .;
     } :stk
 
-    . += 64K;
+    . += 16K;
     .rodata . : {
         *(.rodata*)
     } :rodata
@@ -47,6 +46,7 @@ SECTIONS
         *(.bss*)
     }
 
+    . = ALIGN(4K);
     __kernel_end = .;
     __kernel_phys_end = . - __base;
 

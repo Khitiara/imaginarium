@@ -82,7 +82,7 @@ pub const Selector = packed struct(u16) {
     index: u13 = 0,
 
     pub fn get_relative_addr(self: Selector) u16 {
-        return @as(u16, @bitCast(self)) & masking.makeTruncMask(Selector, .index);
+        return @as(u16, @bitCast(self)) & masking.makeTruncMask(Selector, .index) << 1;
     }
 };
 

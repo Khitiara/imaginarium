@@ -10,6 +10,9 @@ pub const Gdt = extern struct {
     user_data: desc.SegmentDescriptor,
     task_state: desc.TssLdt,
 };
+
+pub const Segment = std.meta.FieldEnum(Gdt);
+
 export var gdt: Gdt = undefined;
 
 pub const Tss = extern struct {
@@ -34,7 +37,7 @@ pub const TssBlock = extern struct {
 
 export var tss: TssBlock = undefined;
 
-pub const selectors = std.enums.EnumFieldStruct(std.meta.FieldEnum(Gdt), desc.Selector, null){
+pub const selectors = std.enums.EnumFieldStruct(Segment, desc.Selector, null){
     .null_desc = @bitCast(@as(u16, 0)),
     .kernel_code = .{
         .rpl = 0,

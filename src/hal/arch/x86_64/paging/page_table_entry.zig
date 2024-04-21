@@ -31,7 +31,7 @@ pub const PML45E = packed struct(u64) {
         return @as(u64, @bitCast(self)) & physaddr_mask;
     }
     pub fn set_phys_addr(self: *PML45E, addr: u64) void {
-        self.physaddr = addr >> 12;
+        self.physaddr = @truncate(addr >> 12);
     }
 };
 
@@ -70,10 +70,10 @@ pub const PDPTE = packed struct(u64) {
             const offset = @bitOffsetOf(PDPTE, "physaddr") + @bitOffsetOf(TagPayloadByName(@TypeOf(self.physaddr), "gb_page"), "physaddr");
             comptime assert(offset == 30);
             const mask = ((1 << 31) - 1) << offset;
-            return @as(u64, @bitCast(self)) & mask;
+            return @truncate(@as(u64, @bitCast(self)) & mask);
         } else {
             const mask = ((1 << 40) - 1) << @bitOffsetOf(PDE, "physaddr");
-            return @as(u64, @bitCast(self)) & mask;
+            return @truncate(@as(u64, @bitCast(self)) & mask);
         }
     }
     pub fn set_phys_addr(self: *PDPTE, addr: u64) void {
@@ -119,10 +119,10 @@ pub const PDE = packed struct(u64) {
             const offset = @bitOffsetOf(PDE, "physaddr") + @bitOffsetOf(TagPayloadByName(@TypeOf(self.physaddr), "gb_page"), "physaddr");
             comptime assert(offset == 21);
             const mask = ((1 << 31) - 1) << offset;
-            return @as(u64, @bitCast(self)) & mask;
+            return @truncate(@as(u64, @bitCast(self)) & mask);
         } else {
             const mask = ((1 << 40) - 1) << @bitOffsetOf(PDE, "physaddr");
-            return @as(u64, @bitCast(self)) & mask;
+            return @truncate(@as(u64, @bitCast(self)) & mask);
         }
     }
     pub fn set_phys_addr(self: *PDE, addr: u64) void {

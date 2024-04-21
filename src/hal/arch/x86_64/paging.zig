@@ -38,7 +38,7 @@ pub inline fn Table(Entry: type) type {
 var pgtbl: ?Table(entries.PML45E) = null;
 var root_physaddr: usize = undefined;
 var using_5_level_paging: bool = false;
-var features: PagingFeatures = undefined;
+pub var features: PagingFeatures = undefined;
 
 const PageFaultErrorCode = packed struct(usize) {
     p: enum(u1) {
@@ -89,22 +89,22 @@ pub fn map_range(base_phys: usize, base_linear: isize, length: usize) !void {
     var pa = base_phys;
     var la = base_linear;
     var sz = length;
-    if (!std.mem.isAlignedLog2(pa, 12) or !std.mem.isAlignedLog2(la, 12) or !std.mem.isAlignedLog2(sz, 12)) {
+    if (!std.mem.isAlignedLog2(pa, 12) or !std.mem.isAlignedLog2(@bitCast(la), 12) or !std.mem.isAlignedLog2(sz, 12)) {
         return error.misaligned_mapping_range;
     }
     while (sz > 0) {
-        if (std.mem.isAlignedLog2(pa, 30) and std.mem.isAlignedLog2(la, 30) and std.mem.isAlignedLog2(sz, 30) and sz >= 1 << 30) {
-            map_page(pa, la, .huge);
+        if (std.mem.isAlignedLog2(pa, 30) and std.mem.isAlignedLog2(@bitCast(la), 30) and std.mem.isAlignedLog2(sz, 30) and sz >= 1 << 30) {
+            try map_page(pa, la, .huge);
             sz -= 1 << 30;
             pa += 1 << 30;
             la += 1 << 30;
-        } else if (std.mem.isAlignedLog2(pa, 21) and std.mem.isAlignedLog2(la, 21) and std.mem.isAlignedLog2(sz, 21) and sz >= 1 << 21) {
-            map_page(pa, la, .large);
+        } else if (std.mem.isAlignedLog2(pa, 21) and std.mem.isAlignedLog2(@bitCast(la), 21) and std.mem.isAlignedLog2(sz, 21) and sz >= 1 << 21) {
+            try map_page(pa, la, .large);
             sz -= 1 << 21;
             pa += 1 << 21;
             la += 1 << 21;
         } else if (sz >= 1 << 12) {
-            map_page(pa, la, .normal);
+            try map_page(pa, la, .normal);
             sz -= 1 << 12;
             pa += 1 << 12;
             la += 1 << 12;
@@ -120,19 +120,19 @@ pub fn map_range(base_phys: usize, base_linear: isize, length: usize) !void {
 // though in some cases e.g. the sequentially mapped region at base -1 << 45 this may be acceptable behavior
 pub fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSize) !void {
     // this method takes a physical address meaning the block is already mapped
-    const alignment = switch (page_size) {
+    const alignment: u8 = switch (page_size) {
         .normal => 12,
         .large => 21,
         .huge => 30,
     };
     // double check the alignment of the addresses we got
-    if (!std.mem.isAlignedLog2(linear_addr, alignment) or !std.mem.isAlignedLog2(phys_addr, alignment)) {
+    if (!std.mem.isAlignedLog2(@bitCast(linear_addr), alignment) or !std.mem.isAlignedLog2(phys_addr, alignment)) {
         return error.misaligned_huge_page;
     }
     const split: SplitPagingAddr = @bitCast(linear_addr);
     const pml4: Table(entries.PML45E) = if (using_5_level_paging) b: {
         const pml5 = try get_or_create_root_table();
-        var entry: *entries.PML45E = &pml5[split.pml4];
+        var entry: *entries.PML45E = &pml5[@as(u9, @bitCast(split.pml4))];
         if (entry.present) {
             break :b pmm.ptr_from_physaddr(Table(entries.PML45E), entry.get_phys_addr());
         }
@@ -170,7 +170,7 @@ pub fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSize) !void
     } else if (page_size == .huge) {
         // no 1g page support so recurse and map 512 large pages. the higher level tables should all short-circuit here.
         for (0..512) |directory| {
-            try map_page(phys_addr + directory << 21, linear_addr + directory << 21, .large);
+            try map_page(phys_addr + directory << 21, linear_addr + @as(isize, @intCast(directory << 21)), .large);
         }
         return;
     }
@@ -230,7 +230,7 @@ fn get_or_create_root_table() !Table(entries.PML45E) {
     }
     @setCold(true);
     cr3_new = ctrl_registers.read(.cr3);
-    return try create_page_table(entries.PML45E, &cr3_new).?;
+    return try create_page_table(entries.PML45E, &cr3_new);
 }
 
 pub fn finalize_and_fix_root() void {
@@ -246,7 +246,9 @@ fn create_page_table(Entry: type, entry: anytype) !Table(Entry) {
     const Ret = Table(Entry);
     root_physaddr = try pmm.alloc(@sizeOf(std.meta.Child(Ret)));
     entry.set_phys_addr(root_physaddr);
-    entry.present = true;
+    if (@hasField(@TypeOf(entry.*), "present")) {
+        entry.present = true;
+    }
     const ptr = pmm.ptr_from_physaddr(Ret, root_physaddr);
     @memset(std.mem.asBytes(ptr), 0);
     return ptr;
