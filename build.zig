@@ -235,7 +235,7 @@ pub fn build(b: *std.Build) !void {
         "-d",
         "int,cpu_reset",
         "--no-reboot",
-        "--no-shutdown",
+        // "--no-shutdown",
         "-M",
         "type=q35,smm=off",
         "-m",

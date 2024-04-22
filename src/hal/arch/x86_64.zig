@@ -16,15 +16,38 @@ const acpi = @import("../acpi.zig");
 
 pub const cc: @import("std").builtin.CallingConvention = .SysV;
 
+pub fn puts(bytes: []const u8) void {
+    for (bytes) |b| {
+        serial.writeout(0xE9, b);
+    }
+}
+
+const log = @import("std").log.scoped(.init);
+
+pub const ptr_from_physaddr = pmm.ptr_from_physaddr;
+
+pub var oem_id: [6]u8 = undefined;
+
 pub fn platform_init(memmap: []memory.MemoryMapEntry) !void {
+    log.info("setting up GDT", .{});
     gdt.setup_gdt();
+    log.info("gdt setup and loaded", .{});
     const paging_feats = paging.enumerate_paging_features();
-    try acpi.load_sdt(null);
+    log.info("physical addr width: {d} (0x{x} pages)", .{ paging_feats.maxphyaddr, @as(u64, 1) << @truncate(paging_feats.maxphyaddr - 12) });
+    log.info("linear addr width: {d}", .{paging_feats.linear_address_width});
+    log.info("1g pages: {}; global pages: {}; lvl5 paging: {}", .{ paging_feats.gigabyte_pages, paging_feats.global_page_support, paging_feats.five_level_paging });
+    try acpi.load_sdt(&oem_id);
+    log.info("loaded acpi sdt", .{});
     pmm.init(paging_feats.maxphyaddr, memmap);
+    log.info("initialized lower phys memory", .{});
     interrupts.init();
+    log.info("interrupt table initialized", .{});
     try vmm.init(memmap);
+    log.info("vmm initialized", .{});
     idt.load();
-    // idt.enable();
+    log.info("interrupt table loaded", .{});
+    idt.enable();
+    log.info("early platform init complete", .{});
 }
 
 comptime {

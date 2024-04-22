@@ -12,6 +12,8 @@ pub usingnamespace switch (@import("builtin").cpu.arch) {
         pub const x86_64 = @import("arch/x86_64.zig");
         pub const cc = x86_64.cc;
         pub const platform_init = x86_64.platform_init;
+        pub const puts = x86_64.puts;
+        pub const ptr_from_physaddr = x86_64.ptr_from_physaddr;
 
         pub fn phys_mem_base() isize {
             return x86_64.pmm.phys_mapping_base;

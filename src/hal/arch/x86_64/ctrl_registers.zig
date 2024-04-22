@@ -59,7 +59,7 @@ pub fn ControlRegisterValueType(comptime cr: ControlRegister) type {
             osfxsr: bool,
             osxmmexcpt: bool,
             umip: bool,
-            _reserved1: u1 = 0,
+            la57: bool,
             vmxe: bool,
             smxe: bool,
             _reserved2: u1 = 0,

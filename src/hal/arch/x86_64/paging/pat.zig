@@ -8,9 +8,4 @@ pub const PATMemoryType = enum(u3) {
     _,
 };
 
-pub const PATEntry = packed struct(u8) {
-    memory_type: PATMemoryType,
-    _: u5 = 0,
-};
-
-pub const PAT = [8]PATEntry;
+pub const PAT = [8]PATMemoryType;

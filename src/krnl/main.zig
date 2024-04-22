@@ -9,12 +9,7 @@ const arch = hal.arch;
 const cpuid = arch.x86_64.cpuid;
 
 const acpi = hal.acpi;
-
-pub fn puts(bytes: []const u8) void {
-    for (bytes) |b| {
-        arch.x86_64.serial.writeout(0xE9, b);
-    }
-}
+const puts = arch.puts;
 
 const SerialWriter = struct {
     const WriteError = error{};
@@ -95,7 +90,7 @@ fn logFn(
     }
     puts(": ");
     SerialWriter.writer().print(format, args) catch unreachable;
-    if (format[format.len - 1] != '\n')
+    if (format.len == 0 or format[format.len - 1] != '\n')
         puts("\n");
 }
 
@@ -114,11 +109,7 @@ noinline fn main(ldr_info: *bootelf.BootelfData) !void {
     const current_apic_id = (cpuid.cpuid(.type_fam_model_stepping_features, 0)).brand_flush_count_id.apic_id;
 
     log.info("local apic id {d}\n", .{current_apic_id});
-
-    var oem_id: [6]u8 = undefined;
-    try acpi.load_sdt(&oem_id);
-
-    log.info("acpi oem id {s}\n", .{&oem_id});
+    log.info("acpi oem id {s}\n", .{&arch.x86_64.oem_id});
 
     const paging_feats = arch.x86_64.paging.enumerate_paging_features();
     log.info("physical addr width: {d} (0x{x} pages)\n", .{ paging_feats.maxphyaddr, @as(u64, 1) << @truncate(paging_feats.maxphyaddr - 12) });

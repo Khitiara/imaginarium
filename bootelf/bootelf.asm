@@ -56,6 +56,7 @@ stopread:
   mov eax, 0x80000011
   mov cr0, eax
 
+  cli
   jmp 0x08:bits64
 
 dap:

@@ -64,21 +64,21 @@ const pmm_sizes_global = blk: {
 var pmm_sizes: []const usize = undefined;
 
 // the address of the first free root of a given size (sizes from pmm_sizes)
-var free_roots_global = [_]usize{0} ** pmm_sizes_global.len;
-
-// the list of free roots by size. a slice of free_roots_global up to the actual physical address width, see pmm_sizes
-var free_roots: []usize = undefined;
+export var free_roots = [_]usize{0} ** pmm_sizes_global.len;
 
 pub var max_phys_mem: usize = 0;
+
+const log = std.log.scoped(.pmm);
 
 // initialize the pmm. takes the physical address width and the memory map
 pub fn init(paddrwidth: u8, memmap: []memory.MemoryMapEntry) void {
     phys_mapping_base = @bitCast(@intFromPtr(stage1_base));
+    log.debug("initial physical mapping base 0x{X}", .{@as(usize, @bitCast(phys_mapping_base))});
     kernel_phys_end = @ptrFromInt(@intFromPtr(kernel_phys_end) - @as(usize, @bitCast(phys_mapping_base)));
+    log.debug("kernel physical end 0x{X}", .{@intFromPtr(kernel_phys_end)});
     // set our global physical address width
     phys_addr_width = paddrwidth;
     // slice our arrays
-    free_roots = free_roots_global[0..(phys_addr_width - 12)];
     pmm_sizes = pmm_sizes_global[0..(phys_addr_width - 12)];
 
     // go through the memory map and mark free as appropriate.
@@ -96,19 +96,23 @@ pub fn init(paddrwidth: u8, memmap: []memory.MemoryMapEntry) void {
                 max_phys_mem = end;
             // if the block is wholly within where the kernel is mapped then it should never be free
             if (end < @intFromPtr(kernel_phys_end)) {
+                log.debug("skipping 0x{X}..0x{X} as it is wholly within space already reserved by the kernel", .{ base, end });
                 continue;
             }
             // only accept blocks that can fit wholly in our memory limit. a bit restrictive but its hard to reason
             // about correctness and how to free the rest when we do have the paging set up to accept the rest
             if (end > phys_mapping_limit) {
+                log.debug("skipping 0x{X}..0x{X} as it exceeds the physical mapping limit 0x{X}", .{ base, end, phys_mapping_limit });
                 continue;
             }
             // if the block covers the boundary of the kernel then only free the portion after the kernel
             if (base < @intFromPtr(kernel_phys_end)) {
                 const diff = @intFromPtr(kernel_phys_end) - base;
+                log.debug("adjusting 0x{X}..0x{X} forward 0x{X} bytes to avoid initial kernel block", .{ base, end, diff });
                 base = @intFromPtr(kernel_phys_end);
                 size -= diff;
             }
+            log.debug("marking 0x{X}..0x{X} (0x{X} bytes)", .{ base, end, size });
             // any alignment and other nonsense the bios throws at us gets handled in mark_free
             mark_free(base, size);
         }
@@ -126,6 +130,7 @@ pub fn enlarge_mapped_physical(memmap: []memory.MemoryMapEntry, new_base: isize)
         // we already mapped entries which are wholly within our old limits
         if (entry.type == .normal and entry.base + entry.size >= old_limit) {
             // all the alignment and other nonsense is handled by mark_free
+            log.debug("marking 0x{X}..0x{X} (0x{X} bytes)", .{ entry.base, entry.base + entry.size, entry.size });
             mark_free(entry.base, entry.size);
         }
     }
@@ -139,11 +144,11 @@ pub fn ptr_from_physaddr(Ptr: type, paddr: usize) Ptr {
     if (paddr == 0 and @as(std.builtin.TypeId, @typeInfo(Ptr)) == .Optional) {
         return null;
     }
-    return @ptrFromInt(paddr + @as(usize, @bitCast(phys_mapping_base)));
+    return @ptrFromInt(paddr +% @as(usize, @bitCast(phys_mapping_base)));
 }
 
 pub fn physaddr_from_ptr(ptr: anytype) usize {
-    return @intFromPtr(ptr) - @as(usize, @bitCast(phys_mapping_base));
+    return @intFromPtr(ptr) -% @as(usize, @bitCast(phys_mapping_base));
 }
 
 // allocate a block from physical memory by index
@@ -185,7 +190,7 @@ fn alloc_impl(idx: usize) error{OutOfMemory}!usize {
         // is just memory owned by some other component
         const addr = free_roots[idx];
         // store the next address in the free roots over the one we allocated
-        free_roots[idx] = if (ptr_from_physaddr(?*const usize, addr + @as(usize, @bitCast(phys_mapping_base)))) |p| p.* else 0;
+        free_roots[idx] = ptr_from_physaddr(*const usize, addr).*;
         return addr;
     }
 }
@@ -193,7 +198,7 @@ fn alloc_impl(idx: usize) error{OutOfMemory}!usize {
 // free by index into free_roots rather than by size
 fn free_impl(phys_addr: usize, index: usize) void {
     // TODO: if enough contiguous blocks are free then free a larger block instead
-    ptr_from_physaddr(*usize, phys_addr + @as(usize, @bitCast(phys_mapping_base))).* = free_roots[index];
+    ptr_from_physaddr(*usize, phys_addr).* = free_roots[index];
     free_roots[index] = phys_addr;
 }
 
@@ -243,9 +248,9 @@ fn mark_free(phys_addr: usize, len: usize) void {
             const s = pmm_sizes[idx];
             // find the largest size that is no greater than the amount to free and which is aligned
             // the sz >= s case should be covered by the log2 bit above but leave it in for now just in case
-            if (sz >= s and std.mem.isAligned(phys_addr, s)) {
+            if (sz >= s and std.mem.isAligned(a, s)) {
                 // free the biggest block we can fit aligned in the newly freed region
-                free_impl(phys_addr, idx);
+                free_impl(a, idx);
                 // adjust the address and size to remove the freed chunk and restart
                 sz -= s;
                 a += s;
@@ -257,70 +262,70 @@ fn mark_free(phys_addr: usize, len: usize) void {
     }
 }
 
-fn defrag() void {
-    for (free_roots, 0..) |*root, i| {
-        sort_free_root(root);
-        merge_blocks(root, i);
-    }
-}
-
-fn merge_blocks(root: *usize, index: usize) void {
-    if (index + 1 > pmm_sizes.len)
-        return;
-    var p: ?*usize = root;
-    while (p != null) {
-        const qa = p.*;
-        const q = ptr_from_physaddr(?*usize, qa);
-        if (q != null and q.* != 0 and q.* - qa == pmm_sizes[index]) {
-            free_impl(qa, index + 1);
-            p.* = ptr_from_physaddr(*usize, q.*).*;
-            p = ptr_from_physaddr(?*usize, p.*);
-        }
-    }
-}
-
-// https://www.chiark.greenend.org.uk/~sgtatham/algorithms/listsort.html
-// no i dont really understand this that well
-fn sort_free_root(root: *usize) void {
-    var k: usize = 1;
-    var l: usize = 0;
-    var l_tail = &l;
-    var merges: usize = 0;
-    while (merges != 1) {
-        merges = 0;
-        var psize = 0;
-        var qsize = k;
-        var p: *?usize = ptr_from_physaddr(?*usize, root.head);
-        var q: *?usize = undefined;
-        while (p != null) {
-            merges += 1;
-            q = p;
-            while (psize < k) {
-                q = ptr_from_physaddr(?*usize, q.*);
-                if (q == null) {
-                    break;
-                }
-                psize += 1;
-            }
-            while (psize > 0 or (qsize > 0 and q != null)) {
-                if (q != null and qsize > 0 and (psize == 0 or q.* < p.*)) {
-                    l_tail.* = @intFromPtr(q) - phys_mapping_base;
-                    l_tail = q;
-                    q = ptr_from_physaddr(?*usize, q.*);
-                    qsize -= 1;
-                } else if (psize > 0) {
-                    l_tail.* = @intFromPtr(p) - phys_mapping_base;
-                    l_tail = p;
-                    p = ptr_from_physaddr(?*usize, p.*);
-                    psize -= 1;
-                } else {
-                    break;
-                }
-            }
-
-            p = q;
-            k *= 2;
-        }
-    }
-    root = l;
-}
+// fn defrag() void {
+//     for (free_roots, 0..) |*root, i| {
+//         sort_free_root(root);
+//         merge_blocks(root, i);
+//     }
+// }
+//
+// fn merge_blocks(root: *usize, index: usize) void {
+//     if (index + 1 > pmm_sizes.len)
+//         return;
+//     var p: ?*usize = root;
+//     while (p != null) {
+//         const qa = p.*;
+//         const q = ptr_from_physaddr(?*usize, qa);
+//         if (q != null and q.* != 0 and q.* - qa == pmm_sizes[index]) {
+//             free_impl(qa, index + 1);
+//             p.* = ptr_from_physaddr(*usize, q.*).*;
+//             p = ptr_from_physaddr(?*usize, p.*);
+//         }
+//     }
+// }
+//
+// // https://www.chiark.greenend.org.uk/~sgtatham/algorithms/listsort.html
+// // no i dont really understand this that well
+// fn sort_free_root(root: *usize) void {
+//     var k: usize = 1;
+//     var l: usize = 0;
+//     var l_tail = &l;
+//     var merges: usize = 0;
+//     while (merges != 1) {
+//         merges = 0;
+//         var psize = 0;
+//         var qsize = k;
+//         var p: *?usize = ptr_from_physaddr(?*usize, root.head);
+//         var q: *?usize = undefined;
+//         while (p != null) {
+//             merges += 1;
+//             q = p;
+//             while (psize < k) {
+//                 q = ptr_from_physaddr(?*usize, q.*);
+//                 if (q == null) {
+//                     break;
+//                 }
+//                 psize += 1;
+//             }
+//             while (psize > 0 or (qsize > 0 and q != null)) {
+//                 if (q != null and qsize > 0 and (psize == 0 or q.* < p.*)) {
+//                     l_tail.* = @intFromPtr(q) - phys_mapping_base;
+//                     l_tail = q;
+//                     q = ptr_from_physaddr(?*usize, q.*);
+//                     qsize -= 1;
+//                 } else if (psize > 0) {
+//                     l_tail.* = @intFromPtr(p) - phys_mapping_base;
+//                     l_tail = p;
+//                     p = ptr_from_physaddr(?*usize, p.*);
+//                     psize -= 1;
+//                 } else {
+//                     break;
+//                 }
+//             }
+//
+//             p = q;
+//             k *= 2;
+//         }
+//     }
+//     root = l;
+// }

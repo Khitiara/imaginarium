@@ -4,6 +4,8 @@ const std = @import("std");
 
 pub const rsd_ptr_sig: *const [8]u8 = "RSD PTR ";
 
+const ptr_from_physaddr = @import("../arch.zig").ptr_from_physaddr;
+
 pub const Rsdp1 = extern struct {
     signature: [8]u8,
     checksum: u8,
@@ -92,12 +94,12 @@ inline fn rsdp_search(region: []const u8) !?Rsdp {
 }
 
 pub fn locate_rsdp_bios() !Rsdp {
-    const ebda_addr = @as(*const u16, @ptrFromInt(0x40E)).*;
-    const ebda = @as([*]const u8, @ptrFromInt(ebda_addr << 4))[0..0x400];
+    const ebda_addr = ptr_from_physaddr(*const u16, 0x40E).*;
+    const ebda = ptr_from_physaddr(*const [0x400]u8, ebda_addr << 4);
     if (try rsdp_search(ebda)) |rsdp| {
         return rsdp;
     }
-    if (try rsdp_search(@as([*]const u8, @ptrFromInt(0xE0000))[0..0x20000])) |rsdp| {
+    if (try rsdp_search(ptr_from_physaddr(*const [0x20000]u8, 0xE0000))) |rsdp| {
         return rsdp;
     }
     return error.rsdp_not_found;
