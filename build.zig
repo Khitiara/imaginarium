@@ -27,7 +27,6 @@ fn target_features(query: *Target.Query) !void {
 }
 
 fn installFrom(b: *std.Build, dep: *std.Build.Step, group_step: *std.Build.Step, file: LazyPath, dir: []const u8, rel: []const u8) void {
-    defer b.allocator.free(rel);
     const s = b.addInstallFileWithDir(file, .{ .custom = dir }, rel);
     s.step.dependOn(dep);
     group_step.dependOn(&s.step);
@@ -175,6 +174,8 @@ fn img(b: *std.Build, arch: Target.Cpu.Arch, krnlstep: *std.Build.Step, elf: Laz
     disk_image.append(ldr_img);
     disk_image.append(elf);
     disk_image.step.dependOn(krnlstep);
+
+    b.getInstallStep().dependOn(&disk_image.step);
 
     const step = b.step("img", "create bootable disk image for the given target");
     installFrom(b, &disk_image.step, step, disk_image.getOutput(), b.fmt("{s}/img", .{@tagName(arch)}), disk_image.basename);

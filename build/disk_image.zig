@@ -6,9 +6,9 @@ const fs = std.fs;
 const io = std.io;
 
 step: Step,
-sources: std.ArrayListUnmanaged(LazyPath),
 basename: []const u8,
 output_file: std.Build.GeneratedFile,
+sources: std.ArrayListUnmanaged(LazyPath),
 
 pub const base_id: Step.Id = .custom;
 
@@ -22,10 +22,10 @@ pub fn create(
     options: Options,
 ) *DiskImage {
     const self = owner.allocator.create(DiskImage) catch @panic("OOM");
-    self.* = .{
+    self.* = DiskImage{
         .step = Step.init(.{
             .id = base_id,
-            .name = "diskimage",
+            .name = owner.fmt("diskimage {s}", .{options.basename orelse "disk.bin"}),
             .owner = owner,
             .makeFn = make,
         }),
@@ -55,8 +55,8 @@ fn make(step: *Step, prog_node: *std.Progress.Node) !void {
     var man = b.graph.cache.obtain();
     defer man.deinit();
 
-    // Random bytes to make ObjCopy unique. Refresh this with new random
-    // bytes when ObjCopy implementation is modified incompatibly.
+    // Random bytes to make DiskImage unique. Refresh this with new random
+    // bytes when DiskImage implementation is modified incompatibly.
     man.hash.add(@as(u32, 0xE890CDA2));
     for (self.sources.items) |f| {
         const full_src_path = f.getPath2(b, step);
@@ -85,7 +85,11 @@ fn make(step: *Step, prog_node: *std.Progress.Node) !void {
     self.output_file.path = try b.cache_root.join(b.allocator, &.{
         "o", &digest, self.basename,
     });
-    const write = try dir.createFile(self.basename, .{});
+    const write = dir.createFile(self.basename, .{}) catch |err| {
+        return step.fail("unable to make path '{s}': {s}", .{
+            self.output_file.path.?, @errorName(err),
+        });
+    };
     defer write.close();
 
     // q35 qemu device doesnt boot from raw images less than this many bytes
