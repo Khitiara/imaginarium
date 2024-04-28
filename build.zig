@@ -177,7 +177,7 @@ fn img(b: *std.Build, arch: Target.Cpu.Arch, krnlstep: *std.Build.Step, elf: Laz
 
     b.getInstallStep().dependOn(&disk_image.step);
 
-    const step = b.step("img", "create bootable disk image for the given target");
+    const step = b.step("img", "create bootable disk image for the target");
     installFrom(b, &disk_image.step, step, disk_image.getOutput(), b.fmt("{s}/img", .{@tagName(arch)}), disk_image.basename);
 
     const copyToTestDir = b.addNamedWriteFiles("copy_to_test_dir");
@@ -229,8 +229,6 @@ pub fn build(b: *std.Build) !void {
         b.fmt("qemu-system-{s}", .{@tagName(arch)}),
         "-drive",
     });
-    qemu.setCwd(b.path("test"));
-    qemu.stdio = .inherit;
     qemu.addPrefixedFileArg("format=raw,file=", imgFile);
     qemu.addArgs(&.{
         "-d",
@@ -239,9 +237,13 @@ pub fn build(b: *std.Build) !void {
         // "--no-shutdown",
         "-M",
         "type=q35,smm=off",
+        // "-cpu",
+        // "qemu64,la57",
         "-m",
         "4G",
     });
+    qemu.setCwd(b.path("test"));
+    qemu.stdio = .inherit;
 
     if (b.option(bool, "debugcon", "output ports to stdio") orelse true) {
         qemu.addArg("-debugcon");

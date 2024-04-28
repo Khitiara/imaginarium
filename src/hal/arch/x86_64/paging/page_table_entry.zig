@@ -67,13 +67,9 @@ pub const PDPTE = packed struct(u64) {
     pub fn get_phys_addr(self: PDPTE) u52 {
         if (self.page_size) {
             // 1gb page
-            const offset = @bitOffsetOf(PDPTE, "physaddr") + @bitOffsetOf(TagPayloadByName(@TypeOf(self.physaddr), "gb_page"), "physaddr");
-            comptime assert(offset == 30);
-            const mask = ((1 << 31) - 1) << offset;
-            return @truncate(@as(u64, @bitCast(self)) & mask);
+            return @as(u52, @intCast(self.physaddr.gb_page.physaddr)) << 30;
         } else {
-            const mask = ((1 << 40) - 1) << @bitOffsetOf(PDE, "physaddr");
-            return @truncate(@as(u64, @bitCast(self)) & mask);
+            return @as(u52, @intCast(self.physaddr.pd_ptr.addr)) << 12;
         }
     }
     pub fn set_phys_addr(self: *PDPTE, addr: u64) void {
@@ -98,7 +94,7 @@ pub const PDE = packed struct(u64) {
     global: bool,
     _ignored1: u3 = 0,
     physaddr: packed union {
-        gb_page: packed struct(u51) {
+        mb_page: packed struct(u51) {
             pat: bool,
             _ignored: u8 = 0,
             physaddr: u31, // must be left shifted 21 to get true addr
@@ -116,19 +112,15 @@ pub const PDE = packed struct(u64) {
     pub fn get_phys_addr(self: PDE) u52 {
         if (self.page_size) {
             // 2mb page
-            const offset = @bitOffsetOf(PDE, "physaddr") + @bitOffsetOf(TagPayloadByName(@TypeOf(self.physaddr), "gb_page"), "physaddr");
-            comptime assert(offset == 21);
-            const mask = ((1 << 31) - 1) << offset;
-            return @truncate(@as(u64, @bitCast(self)) & mask);
+            return @as(u52, @intCast(self.physaddr.mb_page.physaddr)) << 21;
         } else {
-            const mask = ((1 << 40) - 1) << @bitOffsetOf(PDE, "physaddr");
-            return @truncate(@as(u64, @bitCast(self)) & mask);
+            return @as(u52, @intCast(self.physaddr.pd_ptr.addr)) << 12;
         }
     }
     pub fn set_phys_addr(self: *PDE, addr: u64) void {
         if (self.page_size) {
             // 2mb page
-            self.physaddr.gb_page.physaddr = @truncate(addr >> 21);
+            self.physaddr.mb_page.physaddr = @truncate(addr >> 21);
         } else {
             self.physaddr.pd_ptr.addr = @truncate(addr >> 12);
         }

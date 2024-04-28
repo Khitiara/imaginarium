@@ -84,7 +84,7 @@ pub const InterruptGateDescriptor = packed struct(u128) {
 };
 
 const RawHandler = *const fn () callconv(.Naked) void;
-const InterruptHandler = *const fn (*RawInterruptFrame) callconv(.SysV) void;
+const InterruptHandler = *const fn (*RawInterruptFrame) callconv(.Win64) void;
 
 pub const SelectorIndexCode = packed struct(u64) {
     pub const Entry = union(enum) {
@@ -150,8 +150,8 @@ const RawInterruptFrame = InterruptFrame(u64);
 
 pub fn InterruptFrame(ErrorCode: type) type {
     return extern struct {
-        es: descriptors.Selector align(8),
-        ds: descriptors.Selector align(8),
+        fs: descriptors.Selector align(8),
+        gs: descriptors.Selector align(8),
         registers: SavedRegisters align(8),
         interrupt_number: Interrupt align(8),
         error_code: ErrorCode,
@@ -162,12 +162,38 @@ pub fn InterruptFrame(ErrorCode: type) type {
         rsp: usize,
 
         pub fn format(self: *const @This(), comptime _: []const u8, _: std.fmt.FormatOptions, fmt: anytype) !void {
-            try fmt.print("  rax={X} rbx={X} rcx={X} rdx={X}\n", .{ self.registers.rax, self.registers.rbx, self.registers.rcx, self.registers.rdx });
-            try fmt.print("  rsi={X} rdi={X} rbp={X} rsp={X}\n", .{ self.registers.rsi, self.registers.rdi, self.registers.rbp, self.rsp });
-            try fmt.print("  r8 ={X} r9 ={X} r10={X} r11={X}\n", .{ self.registers.r8, self.registers.r9, self.registers.r10, self.registers.r11 });
-            try fmt.print("  r12={X} r13={X} r14={X} r15={X}\n", .{ self.registers.r12, self.registers.r13, self.registers.r14, self.registers.r15 });
-            try fmt.print("  rip={X} int={X} ec ={X} cs ={X}\n", .{ self.rip, self.interrupt_number, self.error_code, @as(u16, @bitCast(self.cs)) });
-            try fmt.print("  ds ={X} es ={X} flg={X}", .{ @as(u16, @bitCast(self.ds)), @as(u16, @bitCast(self.es)), @as(u64, @bitCast(self.eflags)) });
+            try fmt.print(
+                \\v={X:0>2} e={X:0>16} cpl={d}
+                \\  rax={X:16} rbx={X:16} rcx={X:16} rdx={X:16}
+                \\  rsi={X:16} rdi={X:16} rbp={X:16} rsp={X:16}
+                \\   r8={X:16}  r9={X:16} r10={X:16} r11={X:16}
+                \\  r12={X:16} r13={X:16} r14={X:16} r15={X:16}
+                \\  rip={X:16}  fs={X:16}  gs={X:16} flg={X:16}
+            , .{
+                self.interrupt_number,
+                self.error_code,
+                self.cs.rpl,
+                self.registers.rax,
+                self.registers.rbx,
+                self.registers.rcx,
+                self.registers.rdx,
+                self.registers.rsi,
+                self.registers.rdi,
+                self.registers.rbp,
+                self.rsp,
+                self.registers.r8,
+                self.registers.r9,
+                self.registers.r10,
+                self.registers.r11,
+                self.registers.r12,
+                self.registers.r13,
+                self.registers.r14,
+                self.registers.r15,
+                self.rip,
+                @as(u16, @bitCast(self.fs)),
+                @as(u16, @bitCast(self.gs)),
+                @as(u64, @bitCast(self.eflags)),
+            });
         }
     };
 }
@@ -183,9 +209,9 @@ comptime {
     for (@typeInfo(SavedRegisters).Struct.fields) |reg| {
         // prepend to push and append to pop - earlier fields in the struct must be pushed later so prepend
         // matches the semantics required due to the stack pushing downward
-        push = "\n    pushq %" ++ reg.name ++ push;
+        push = "\n    pushq    %" ++ reg.name ++ push;
         // and append to pop since it must reverse the push order
-        pop = pop ++ "    popq %" ++ reg.name ++ "\n";
+        pop = pop ++ "    popq     %" ++ reg.name ++ "\n";
         // each register is 8 bytes so we add 8 here
         regscnt += 8;
     }
@@ -195,19 +221,19 @@ comptime {
         \\ .type __isr_common, @function;
         \\ __isr_common:
     ++ push ++ // push all the saved registers
-        \\     mov %ds, %rax # push the ds and es segment selectors
-        \\     pushq %rax
-        \\     mov %es, %rax
-        \\     pushq %rax
+        \\     mov      %gs, %rax # push the fs and gs segment selectors
+        \\     pushq    %rax
+        \\     mov      %fs, %rax
+        \\     pushq    %rax
         // movsbq regscnt(%rsp), %rdx ; all the pushes we made will place rsp regscnt bytes below the intnum
         // which we need in rdx for the indexed callq below
     ++ "\n     movsbq   " ++ std.fmt.comptimePrint("{d}", .{regscnt}) ++ "(%rsp), %rdx\n" ++
-        \\     movq     %rsp, %rdi # rsp points to the bottom of the interrupt frame struct at this point so put that address in rdi
+        \\     movq     %rsp, %rcx # rsp points to the bottom of the interrupt frame struct at this point so put that address in rdi
         \\     callq    *__isrs(, %rdx, 8) # __isrs[intnum](&frame)
-        \\     popq %rax # pop es and ds segment selectors
-        \\     mov %rax, %es
-        \\     popq %rax
-        \\     mov %rax, %ds
+        \\     popq     %rax # pop fs and gs segment selectors
+        \\     mov      %rax, %fs
+        \\     popq     %rax
+        \\     mov      %rax, %gs
     ++ pop ++ // pop all the saved registers
         \\     add      $16, %rsp # pop the interrupt number and error code
         \\     iretq # and return from interrupt

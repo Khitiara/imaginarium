@@ -23,21 +23,29 @@ const offset = @sizeOf(Header) + header.glyph_count * @sizeOf(Glyph);
 
 const unicode_entries = blk: {
     const unicode_table_raw = psf_data[offset..];
-    @setEvalBranchQuota(8192);
+    @setEvalBranchQuota(32768);
+    const T = struct { []const u8, GlyphRangeInt };
+    var lst: []const T = &.{};
     var splitter = std.mem.splitScalar(u8, unicode_table_raw, 0xFF);
-    var glyph_trie = trie.StringRadixTree(GlyphRangeInt){};
-    var index = 0;
+    var index: GlyphRangeInt = 0;
     while (splitter.next()) |entry| : (index += 1) {
         var entry_strings = std.mem.splitScalar(u8, entry, 0xFE);
         while (entry_strings.next()) |str| {
-            _ = glyph_trie.insert(str, index);
+            if (str.len == 0) {
+                continue;
+            }
+            lst = lst ++ &[1]T{T{ str, index }};
         }
     }
-    break :blk glyph_trie;
+
+    break :blk std.StaticStringMap(GlyphRangeInt).initComptime(lst);
 };
 
 test {
-    std.log.warn("loaded psf font with {} glyphs, table offset 0x{X}. generated {} edges in glyph-search radix trie", .{ header.glyph_count, offset, unicode_entries.size });
+    std.log.warn("loaded psf font with {} glyphs, table offset 0x{X}. generated {} edges in glyph-search radix trie", .{ header.glyph_count, offset, unicode_entries.kvs.len });
+    for (unicode_entries.keys()) |k| {
+        std.log.warn("{x: >4}: {s}", .{ k, k });
+    }
 }
 
 pub const Flags = packed struct(u32) {
@@ -56,14 +64,18 @@ pub const Header = extern struct {
     width: u32,
 };
 
-pub const Font = extern struct {
+pub const Font = struct {
     header: Header,
     glyphs: *const [header.glyph_count]Glyph,
-    character_map: trie.StringRadixTrie(GlyphRangeInt),
+    // character_map: trie.StringRadixTree(GlyphRangeInt),
+    character_map: std.StaticStringMap(GlyphRangeInt),
 
-    pub fn get_glyph(self: *const Font, str: []const u8) ?struct { *const Glyph, u32 } {
+    pub fn get_glyph(self: *const Font, str: []const u8) ?struct { *const Glyph, usize } {
         if (self.character_map.getLongestPrefix(str)) |t| {
-            return .{ &self.glyphs[t[0]], t[1] };
+            if (t.key.len == 0) {
+                return null;
+            }
+            return .{ &self.glyphs[t.value], t.key.len };
         } else {
             return null;
         }
@@ -71,7 +83,7 @@ pub const Font = extern struct {
 };
 
 pub const font = Font{
-    .header = header,
-    .glyphs = psf_data[@sizeOf(header)..][0..@sizeOf([header.glyph_count]Glyph)],
+    .header = header.*,
+    .glyphs = std.mem.bytesAsValue([header.glyph_count]Glyph, psf_data[@sizeOf(Header)..][0..@sizeOf([header.glyph_count]Glyph)]),
     .character_map = unicode_entries,
 };

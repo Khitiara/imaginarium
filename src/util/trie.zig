@@ -23,26 +23,31 @@ pub fn RadixTree(comptime K: type, comptime V: type, comptime cmp: fn (K, K) boo
             edges: []Edge,
 
             /// Adds a new `Edge` in the `edges` list of the `Node`
-            fn addEdge(self: *Node, comptime e: Edge) void {
+            inline fn addEdge(self: *Node, comptime e: Edge) void {
                 comptime var edges: [self.edges.len + 1]Edge = undefined;
                 @memcpy(&edges, self.edges ++ &[_]Edge{e});
 
-                self.edges = &edges;
+                const es = edges;
+                self.edges = @constCast(&es);
             }
 
             /// Updates the edge's node that contains the given label with the new Node
             /// It's a Compiler error if the Edge does not yet exist
-            fn updateEdge(self: *Node, comptime label: K, comptime node: *Node) void {
+            inline fn updateEdge(comptime self: *Node, comptime label: K, comptime node: *Node) void {
                 const idx = blk: {
-                    var i: usize = 0;
-                    while (i < self.edges.len) : (i += 1) {
-                        if (cmp(self.edges[i].label, label)) break;
+                    inline for (self.edges, 0..) |*e, i| {
+                        if (cmp(e.label, label)) {
+                            break :blk i;
+                        }
                     }
-                    break :blk i;
+                    break :blk self.edges.len;
                 };
 
                 if (idx < self.edges.len and cmp(self.edges[idx].label, label)) {
-                    self.edges[idx].node = node;
+                    self.edges[idx] = Edge{
+                        .node = node,
+                        .label = label,
+                    };
                     return;
                 }
 
@@ -51,18 +56,21 @@ pub fn RadixTree(comptime K: type, comptime V: type, comptime cmp: fn (K, K) boo
 
             /// Retrieves a Node based on the given `label`
             /// Returns `null` if no Node exists with given label
-            fn edge(self: *Node, label: K) ?*Node {
+            inline fn edge(self: *Node, label: K) ?*Node {
                 @setEvalBranchQuota(100_000);
                 const idx = blk: {
                     var i: usize = 0;
                     while (i < self.edges.len) : (i += 1) {
-                        if (cmp(self.edges[i].label, label)) break;
+                        if (cmp(self.edges[i].label, label)) {
+                            break;
+                        }
                     }
                     break :blk i;
                 };
 
-                if (idx < self.edges.len and cmp(self.edges[idx].label, label))
+                if (idx < self.edges.len and cmp(self.edges[idx].label, label)) {
                     return self.edges[idx].node;
+                }
 
                 return null;
             }
@@ -93,7 +101,7 @@ pub fn RadixTree(comptime K: type, comptime V: type, comptime cmp: fn (K, K) boo
 
         /// Inserts or updates a Node based on the `key` and `data` where
         /// `data` is of type `V`
-        pub fn insert(self: *Self, comptime key: []const K, comptime data: V) ?V {
+        pub inline fn insert(self: *Self, comptime key: []const K, comptime data: V) ?V {
             var parent: *Node = undefined;
 
             var current: *Node = &self.root;
@@ -202,10 +210,11 @@ pub fn RadixTree(comptime K: type, comptime V: type, comptime cmp: fn (K, K) boo
             while (search.len != 0) {
                 current = (current.edge(search[0]) orelse return null).*;
 
-                if (startsWith(K, search, current.prefix, cmp))
-                    search = search[current.prefix.len..]
-                else
+                if (startsWith(K, search, current.prefix, cmp)) {
+                    search = search[current.prefix.len..];
+                } else {
                     return null;
+                }
             }
 
             return if (current.leaf) |leaf| leaf.data else null;
@@ -226,14 +235,17 @@ pub fn RadixTree(comptime K: type, comptime V: type, comptime cmp: fn (K, K) boo
                     last = leaf.data;
                 }
 
-                if (search.len == 0) break;
+                if (search.len == 0) {
+                    break;
+                }
 
                 current = (current.edge(search[0]) orelse break).*;
 
-                if (startsWith(K, search, current.prefix, cmp))
-                    search = search[current.prefix.len..]
-                else
+                if (startsWith(K, search, current.prefix, cmp)) {
+                    search = search[current.prefix.len..];
+                } else {
                     break;
+                }
             }
 
             return if (last) |l| .{ l, key.len - search.len } else null;
@@ -256,7 +268,9 @@ fn longestPrefix(
 
     var i: usize = 0;
     return while (i < max) : (i += 1) {
-        if (!cmp(lhs[i], rhs[i])) break i;
+        if (!cmp(lhs[i], rhs[i])) {
+            break i;
+        }
     } else i;
 }
 
@@ -277,9 +291,17 @@ fn eql(
     b: []const T,
     cmp: fn (T, T) bool,
 ) bool {
-    if (a.len != b.len) return false;
-    if (a.ptr == b.ptr) return true;
-    for (a, 0..) |item, i| if (!cmp(item, b[i])) return false;
+    if (a.len != b.len) {
+        return false;
+    }
+    if (a.ptr == b.ptr) {
+        return true;
+    }
+    for (a, 0..) |item, i| {
+        if (!cmp(item, b[i])) {
+            return false;
+        }
+    }
     return true;
 }
 
@@ -333,7 +355,7 @@ test "Lookup longest prefix (u8)" {
 
     const result = radix.getLongestPrefix("foobark");
 
-    try testing.expectEqual(.{@as(u32, 3),@as(usize,6)}, result);
+    try testing.expectEqual(.{ @as(u32, 3), @as(usize, 6) }, result);
 }
 
 fn testCmp(lhs: u16, rhs: u16) bool {
@@ -376,7 +398,7 @@ test "Lookup longest prefix (u16)" {
 
     const result = radix.getLongestPrefix(&[_]u16{ 'f', 'o', 'o', 'b', 'a', 'r', 'k' });
 
-    try testing.expectEqual(.{@as(u32, 3),@as(usize,6)}, result);
+    try testing.expectEqual(.{ @as(u32, 3), @as(usize, 6) }, result);
 }
 
 test "Struct as key" {

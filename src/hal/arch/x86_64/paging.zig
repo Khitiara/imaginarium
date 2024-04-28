@@ -74,6 +74,10 @@ pub const SplitPagingAddr = packed struct(isize) {
     dirptr: u9,
     pml4: i9,
     _: u7,
+
+    pub fn format(self: *const @This(), comptime _: []const u8, _: std.fmt.FormatOptions, fmt: anytype) !void {
+        try fmt.print("0x{X:0>16} {b:0>9}:{b:0>9}:{b:0>9}:{b:0>9}:{b:0>9}:{b:0>12}", .{ @as(usize, @bitCast(self.*)), @as(u9, @bitCast(self.pml4)), self.dirptr, self.directory, self.table, self.page, self.byte });
+    }
 };
 
 pub const PageSize = enum {
@@ -121,6 +125,7 @@ pub fn map_range(base_phys: usize, base_linear: isize, length: usize) !void {
 // the target physical memory is unallocated any created page tables may end up in the mapped region,
 // though in some cases e.g. the sequentially mapped region at base -1 << 45 this may be acceptable behavior
 pub fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSize) !void {
+    // log.debug("mapping {x:0>16} to {x:0>16} ({})", .{@as(usize, @bitCast(linear_addr)), phys_addr, page_size});
     // this method takes a physical address meaning the block is already mapped
     const alignment: u8 = switch (page_size) {
         .normal => 12,
@@ -139,7 +144,6 @@ pub fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSize) !void
     const split: SplitPagingAddr = @bitCast(linear_addr);
     const pml4: Table(entries.PML45E) = if (using_5_level_paging) b: {
         const pml5 = try get_or_create_root_table();
-        log.info("using lvl5 paging", .{});
         var entry: *entries.PML45E = &pml5[@as(u9, @bitCast(split.pml4))];
         if (entry.present) {
             break :b pmm.ptr_from_physaddr(Table(entries.PML45E), entry.get_phys_addr());
@@ -147,9 +151,12 @@ pub fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSize) !void
         entry.writable = true;
         entry.xd = false;
         entry.user_mode_accessible = split.pml4 < 0;
+        entry.present = true;
         break :b try create_page_table(entries.PML45E, entry);
     } else b: {
-        std.debug.assert(split.pml4 == 0 or split.pml4 == -1);
+        if (split.pml4 != 0 and split.pml4 != -1) {
+            std.debug.panic("Cannot map address {} without 5-level paging!", .{split});
+        }
         break :b try get_or_create_root_table();
     };
     const pdpt: Table(entries.PDPTE) = b2: {
@@ -157,9 +164,11 @@ pub fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSize) !void
         if (entry.present) {
             break :b2 pmm.ptr_from_physaddr(Table(entries.PDPTE), entry.get_phys_addr());
         }
+        entry.* = @bitCast(@as(usize, 0));
         entry.writable = true;
         entry.xd = false;
         entry.user_mode_accessible = split.pml4 < 0;
+        entry.present = true;
         break :b2 try create_page_table(entries.PDPTE, entry);
     };
     if (features.gigabyte_pages and page_size == .huge) {
@@ -169,6 +178,7 @@ pub fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSize) !void
             log.debug("huge page already mapped for 0x{X}", .{@as(usize, @bitCast(linear_addr))});
             return error.address_already_mapped;
         }
+        entry.* = @bitCast(@as(usize, 0));
         entry.writable = true;
         entry.xd = false;
         entry.user_mode_accessible = split.pml4 < 0;
@@ -180,8 +190,8 @@ pub fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSize) !void
         // log.debug("no huge page support, mapping a directory of large pages instead", .{});
         // no 1g page support so recurse and map 512 large pages. the higher level tables should all short-circuit here.
         for (0..512) |table| {
-            const new_addr = linear_addr + @as(isize, @intCast(table << 21));
-            try map_page(phys_addr + table << 21, new_addr, .large);
+            const new_addr = @as(isize, @bitCast(@as(usize, @bitCast(linear_addr)) + (table << 21)));
+            try map_page(phys_addr + (table << 21), new_addr, .large);
         }
         return;
     }
@@ -190,10 +200,12 @@ pub fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSize) !void
         if (entry.present) {
             break :b3 pmm.ptr_from_physaddr(Table(entries.PDE), entry.get_phys_addr());
         }
+        entry.* = @bitCast(@as(usize, 0));
         entry.writable = true;
         entry.xd = false;
         entry.user_mode_accessible = split.pml4 < 0;
         entry.page_size = false;
+        entry.present = true;
         break :b3 try create_page_table(entries.PDE, entry);
     };
     if (page_size == .large) {
@@ -203,6 +215,7 @@ pub fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSize) !void
             return error.address_already_mapped;
         }
         // log.debug("agony and sorrow {X} {X}", .{ phys_addr, phys_addr >> 21 });
+        entry.* = @bitCast(@as(usize, 0));
         entry.writable = true;
         entry.xd = false;
         entry.user_mode_accessible = split.pml4 < 0;
@@ -216,10 +229,12 @@ pub fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSize) !void
         if (entry.present) {
             break :b4 pmm.ptr_from_physaddr(Table(entries.PTE), entry.get_phys_addr());
         }
+        entry.* = @bitCast(@as(usize, 0));
         entry.writable = true;
         entry.xd = false;
         entry.user_mode_accessible = split.pml4 < 0;
         entry.page_size = false;
+        entry.present = true;
         break :b4 try create_page_table(entries.PTE, entry);
     };
     {
@@ -227,6 +242,7 @@ pub fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSize) !void
         if (entry.present) {
             return error.address_already_mapped;
         }
+        entry.* = @bitCast(@as(usize, 0));
         entry.writable = true;
         entry.xd = false;
         entry.user_mode_accessible = split.pml4 < 0;
@@ -250,12 +266,6 @@ fn get_or_create_root_table() !Table(entries.PML45E) {
 }
 
 pub fn load_pgtbl() void {
-    var cr4 = ctrl_registers.read(.cr4);
-    if (cr4.la57 != using_5_level_paging) {
-        log.debug("setting la57 to {}", .{using_5_level_paging});
-        cr4.la57 = using_5_level_paging;
-        ctrl_registers.write(.cr4, cr4);
-    }
     ctrl_registers.write(.cr3, cr3_new);
 }
 
@@ -271,9 +281,6 @@ fn create_page_table(Entry: type, entry: anytype) !Table(Entry) {
     const Ret = Table(Entry);
     const tbl_physaddr = try pmm.alloc(@sizeOf(std.meta.Child(Ret)));
     entry.set_phys_addr(tbl_physaddr);
-    if (@hasField(@TypeOf(entry.*), "present")) {
-        entry.present = true;
-    }
     const ptr = pmm.ptr_from_physaddr(Ret, tbl_physaddr);
     @memset(std.mem.asBytes(ptr), 0);
     return ptr;

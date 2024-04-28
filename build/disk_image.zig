@@ -96,6 +96,7 @@ fn make(step: *Step, prog_node: *std.Progress.Node) !void {
     // https://stackoverflow.com/a/68750259
     // so use setEndPos to expand the file ahead of time.
     // the write head remains at the beginning of the file and it can still expand if we write more than this amount
+    // we do this at the start so it doesnt truncate if we manage to get past this limit naturally
     try write.setEndPos(515585);
 
     for (self.sources.items) |f| {

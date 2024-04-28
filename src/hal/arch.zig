@@ -15,6 +15,8 @@ pub usingnamespace switch (@import("builtin").cpu.arch) {
         pub const puts = x86_64.puts;
         pub const ptr_from_physaddr = x86_64.ptr_from_physaddr;
 
+        pub const serial = x86_64.serial;
+
         pub fn phys_mem_base() isize {
             return x86_64.pmm.phys_mapping_base;
         }

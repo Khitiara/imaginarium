@@ -105,21 +105,41 @@ pub inline fn RegisterContentsWrite(comptime reg: Register) type {
     };
 }
 
-pub noinline fn outb(port: u16, comptime reg: Register, value: RegisterContentsWrite(reg)) void {
-    asm volatile (
-        \\ outb %[value], %[port]
+pub fn out_serial(port: u16, comptime reg: Register, value: RegisterContentsWrite(reg)) void {
+    out(port + @intFromEnum(reg), value);
+}
+
+pub fn in_serial(port: u16, comptime reg: Register) RegisterContentsRead(reg) {
+    return in(port + @intFromEnum(reg), RegisterContentsRead(reg));
+}
+
+inline fn safe_port_type(T: type) void {
+    switch (@typeInfo(T)) {
+        .Struct => |s| if (s.layout == .@"packed") safe_port_type(s.backing_integer.?),
+        .Int => |i| switch (i.bits) {
+            8, 16, 32, 64 => return,
+            else => {},
+        },
+        else => {},
+    }
+    @compileError(@import("std").fmt.comptimePrint("Invalid io port value type {s}", .{T}));
+}
+
+pub fn out(port: u16, value: anytype) void {
+    safe_port_type(@TypeOf(value));
+    asm volatile ("out %[value], %[port]"
         :
         : [value] "r" (value),
-          [port] "N{dx}" (port + @intFromEnum(reg)),
+          [port] "N{dx}" (port),
         : "memory"
     );
 }
 
-pub noinline fn inb(port: u16, comptime reg: Register) RegisterContentsRead(reg) {
-    return asm volatile (
-        \\ inb %[port], %[result]
-        : [result] "=r" (-> RegisterContentsRead(reg)),
-        : [port] "N{dx}" (port + @intFromEnum(reg)),
+pub fn in(port: u16, T: type) T {
+    safe_port_type(T);
+    return asm volatile ("in %[port], %[result]"
+        : [result] "=r" (-> T),
+        : [port] "N{dx}" (port),
         : "memory"
     );
 }
@@ -127,8 +147,8 @@ pub noinline fn inb(port: u16, comptime reg: Register) RegisterContentsRead(reg)
 pub const SerialInitError = error{serial_init_failure};
 
 pub fn init_serial(port: u16) !void {
-    outb(port, .interrupt_enable, @bitCast(@as(u8, 0)));
-    outb(port, .line_control, .{
+    out_serial(port, .interrupt_enable, @bitCast(@as(u8, 0)));
+    out_serial(port, .line_control, .{
         .data_bits = 3,
         .extra_stop_bit = false,
         .has_parity = false,
@@ -136,9 +156,9 @@ pub fn init_serial(port: u16) !void {
         .set_break_enable = false,
         .divisor_latch_access = true,
     });
-    outb(port, .data, 3);
-    outb(port, .interrupt_enable, @bitCast(@as(u8, 0)));
-    outb(port, .line_control, .{
+    out_serial(port, .data, 3);
+    out_serial(port, .interrupt_enable, @bitCast(@as(u8, 0)));
+    out_serial(port, .line_control, .{
         .data_bits = 3,
         .extra_stop_bit = false,
         .has_parity = false,
@@ -146,7 +166,7 @@ pub fn init_serial(port: u16) !void {
         .set_break_enable = false,
         .divisor_latch_access = false, // turn this back off
     });
-    outb(port, .interrupt_ident_fifo_control, .{
+    out_serial(port, .interrupt_ident_fifo_control, .{
         .enable = true,
         .clear_receive = true,
         .clear_transmit = true,
@@ -154,25 +174,26 @@ pub fn init_serial(port: u16) !void {
         .long_enable = false,
         .trigger_levels = .level_14_56,
     });
-    outb(port, .modem_control, .{
+    out_serial(port, .modem_control, .{
         .data_terminal_ready = true,
         .request_send = true,
         .aux = 2,
         .loopback = false,
         .autoflow = false,
     });
-    outb(port, .modem_control, .{
+    out_serial(port, .modem_control, .{
         .data_terminal_ready = false,
         .request_send = true,
         .aux = 3,
         .loopback = true,
         .autoflow = false,
     });
-    outb(port, .data, 0xAE);
-    if (inb(port, .data) != 0xAE)
+    out_serial(port, .data, 0xAE);
+    if (in_serial(port, .data) != 0xAE) {
         return error.serial_init_failure;
+    }
 
-    outb(port, .modem_control, .{
+    out_serial(port, .modem_control, .{
         .data_terminal_ready = true,
         .request_send = true,
         .aux = 3,
@@ -182,17 +203,19 @@ pub fn init_serial(port: u16) !void {
 }
 
 pub fn writeout(port: u16, value: u8) void {
-    while (!inb(port, .line_status).transmitted_empty)
+    while (!in_serial(port, .line_status).transmitted_empty) {
         asm volatile ("pause");
-    outb(port, .data, value);
+    }
+    out_serial(port, .data, value);
 }
 
 pub fn read(port: u16) ?u8 {
-    if (inb(port, .line_status).data_ready)
-        return inb(port, .data);
+    if (in_serial(port, .line_status).data_ready) {
+        return in_serial(port, .data);
+    }
     return null;
 }
 
 pub fn io_wait() void {
-    outb(0x80, .data, 0);
+    out_serial(0x80, .data, 0);
 }

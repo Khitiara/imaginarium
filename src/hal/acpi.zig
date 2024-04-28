@@ -1,6 +1,7 @@
 pub const sdt = @import("acpi/sdt.zig");
 pub const rsdp = @import("acpi/rsdp.zig");
 pub const madt = @import("acpi/madt.zig");
+pub const mcfg = @import("acpi/mcfg.zig");
 const std = @import("std");
 
 pub const GlobalSdtLoadError = error{
@@ -34,6 +35,7 @@ pub fn load_sdt_tableptr(table: *align(4) const anyopaque, expect_sig: ?sdt.Sign
                 const t: *const sdt.SystemDescriptorTableHeader = @ptrFromInt(e);
                 switch (t.signature) {
                     .APIC => madt.read_madt(@ptrCast(t)),
+                    .MCFG => mcfg.host_bridges = @as(*const mcfg.Mcfg, @ptrCast(t)).bridges(),
                     else => {},
                 }
             }
@@ -56,7 +58,7 @@ fn load_sdt_efi(oem_id_ptr: ?*[6]u8) GlobalSdtError!void {
     @panic("not implemented");
 }
 
-pub const load_sdt: fn(oem_id_ptr: ?*[6]u8) GlobalSdtError!void = if (@import("config").rsdp_search_bios) load_sdt_bios else load_sdt_efi;
+pub const load_sdt: fn (oem_id_ptr: ?*[6]u8) GlobalSdtError!void = if (@import("config").rsdp_search_bios) load_sdt_bios else load_sdt_efi;
 
 test {
     _ = sdt;

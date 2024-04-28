@@ -28,13 +28,12 @@ pub inline fn upper_string_comptime(comptime str: []const u8) *const [str.len:0]
     const slice = upper_string(&newArr, str);
     assert(slice.len == str.len);
     return &newArr;
-    }
+}
 
 // sign extends, assuming i is typed with the correct bitsize to sign-extend from
 pub inline fn signExtend(comptime T: type, i: anytype) T {
-    const b = @bitSizeOf(@TypeOf(i));
     // i hope zig realizes that the local `m` in signExtendBits can be made comptime in this case
-    return signExtendBits(T, b, i);
+    return signExtendBits(T, @typeInfo(@TypeOf(i)).Int.bits, i);
 }
 
 test signExtend {
@@ -44,13 +43,28 @@ test signExtend {
     try testing.expectEqual(1, signExtend(u4, @as(u2, 1)));
 }
 
-// sign-extends based on variable bitwidth stored in a potentially larger integer type
-// e.g. using a u57 for storage of a linear address on a system running only 4-level paging
-// and sign-extending from the 48-bit address to the 64-bit canonical address
+/// sign-extends based on variable bitwidth stored in a potentially larger integer type
+/// e.g. using a u57 for storage of a linear address on a system running only 4-level paging
+/// and sign-extending from the 48-bit address to the 64-bit canonical address
 pub inline fn signExtendBits(comptime T: type, b: Log2Int(T), i: anytype) T {
     // no i dont know how this works
     const m: T = 1 << (b - 1);
     return ((i & ((1 << b) - 1)) ^ m) -% m;
+}
+
+/// equivalent to @select(T, bitset, @splat(a), @splat(b)) but operates on a bit_set mask instead of a vector mask
+/// this function currently does not implement any vectorization as the kernel operates in a no-simd mode
+/// but for general utils such vectorization might be implemented later, maybe as a separate helper without the splat
+pub inline fn select(comptime T: type, comptime len: usize, bitset: anytype, a: T, b: T) [len]T {
+    var ret: [len]T = undefined;
+    for (0..len) |i| {
+        if (bitset.isSet(len - i - 1)) {
+            ret[i] = a;
+        } else {
+            ret[i] = b;
+        }
+    }
+    return ret;
 }
 
 test signExtendBits {

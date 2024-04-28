@@ -14,7 +14,7 @@ pub const interrupts = @import("x86_64/interrupts.zig");
 const memory = @import("../memory.zig");
 const acpi = @import("../acpi.zig");
 
-pub const cc: @import("std").builtin.CallingConvention = .SysV;
+pub const cc: @import("std").builtin.CallingConvention = .Win64;
 
 pub fn puts(bytes: []const u8) void {
     for (bytes) |b| {
