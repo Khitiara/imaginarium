@@ -12,6 +12,8 @@ pub const GlobalSdtLoadError = error{
 
 pub const GlobalSdtError = GlobalSdtLoadError || rsdp.RsdpError;
 
+pub const log = std.log.scoped(.acpi);
+
 pub fn load_sdt_tableptr(table: *align(4) const anyopaque, expect_sig: ?sdt.Signature) !void {
     const ptr: [*]align(4) const u8 = @ptrCast(table);
     const hdr: *const sdt.SystemDescriptorTableHeader = @ptrCast(ptr);
@@ -35,7 +37,8 @@ pub fn load_sdt_tableptr(table: *align(4) const anyopaque, expect_sig: ?sdt.Sign
                 const t: *const sdt.SystemDescriptorTableHeader = @ptrFromInt(e);
                 switch (t.signature) {
                     .APIC => madt.read_madt(@ptrCast(t)),
-                    .MCFG => mcfg.host_bridges = @as(*const mcfg.Mcfg, @ptrCast(t)).bridges(),
+                    .MCFG => mcfg.set_table(@ptrCast(t)),
+                    inline .RSDT, .XSDT => |s| log.err("Self-referential {s} ACPI root table, points to {s}", .{ @tagName(sig), @tagName(s) }),
                     else => {},
                 }
             }

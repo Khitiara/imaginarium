@@ -115,14 +115,23 @@ pub fn in_serial(port: u16, comptime reg: Register) RegisterContentsRead(reg) {
 
 inline fn safe_port_type(T: type) void {
     switch (@typeInfo(T)) {
-        .Struct => |s| if (s.layout == .@"packed") safe_port_type(s.backing_integer.?),
+        .Union => |u| if (u.layout == .@"packed") {
+            inline for (u.fields) |f| {
+                safe_port_type(f.type);
+            }
+            return;
+        },
+        .Struct => |s| if (s.layout == .@"packed") {
+            safe_port_type(s.backing_integer.?);
+            return;
+        },
         .Int => |i| switch (i.bits) {
             8, 16, 32, 64 => return,
             else => {},
         },
         else => {},
     }
-    @compileError(@import("std").fmt.comptimePrint("Invalid io port value type {s}", .{T}));
+    @compileError(@import("std").fmt.comptimePrint("Invalid io port value type {s}", .{@typeName(T)}));
 }
 
 pub fn out(port: u16, value: anytype) void {

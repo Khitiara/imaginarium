@@ -2,12 +2,12 @@ const std = @import("std");
 const assert = std.debug.assert;
 
 pub const RegisterId = enum(u16) {
-    id = 2,
-    version,
-    tpr = 8,
-    apr,
-    ppr,
-    eoi = 0xb,
+    id = 0x2,
+    version = 0x3,
+    tpr = 0x8,
+    apr = 0x9,
+    ppr = 0xA,
+    eoi = 0xB,
     isr = 0x10,
     tmr = 0x18,
     irr = 0x20,

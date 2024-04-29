@@ -4,6 +4,7 @@ const checksum = util.checksum;
 const WindowStructIndexer = util.WindowStructIndexer;
 
 const apic = @import("../apic.zig");
+const log = @import("../acpi.zig").log;
 
 const assert = @import("std").debug.assert;
 
@@ -93,6 +94,7 @@ fn MadtEntryPayload(comptime t: MadtEntryType) type {
 }
 
 pub fn read_madt(ptr: *const Madt) void {
+    log.info("APIC MADT table loaded at {*}", .{ptr});
     var lapic_ptr: usize = ptr.lapic_addr;
     const entries_base_ptr = @as([*]const u8, @ptrCast(ptr))[@sizeOf(Madt)..ptr.header.length];
     var indexer = WindowStructIndexer(MadtEntryHeader){ .buf = entries_base_ptr };

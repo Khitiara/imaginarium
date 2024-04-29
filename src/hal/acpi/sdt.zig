@@ -10,11 +10,11 @@ pub const Signature = enum(u32) {
     RSDT = cast_signature("RSDT"),
     XSDT = cast_signature("XSDT"),
     APIC = cast_signature("APIC"),
-    FACP = cast_signature("FACP"),
-    HPET = cast_signature("HPET"),
     MCFG = cast_signature("MCFG"),
-    WAET = cast_signature("WAET"),
-    BGRT = cast_signature("BGRT"),
+    // FACP = cast_signature("FACP"),
+    // HPET = cast_signature("HPET"),
+    // WAET = cast_signature("WAET"),
+    // BGRT = cast_signature("BGRT"),
     _,
 
     pub fn format(

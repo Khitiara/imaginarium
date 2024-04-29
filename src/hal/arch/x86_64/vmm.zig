@@ -3,6 +3,7 @@ const paging = @import("paging.zig");
 const entries = paging.entries;
 const std = @import("std");
 const ctrl_registers = @import("ctrl_registers.zig");
+const mcfg = @import("../../acpi/mcfg.zig");
 
 const apic = @import("../../apic.zig");
 const memory = @import("../../memory.zig");
@@ -60,6 +61,8 @@ pub fn init(memmap: []memory.MemoryMapEntry) !void {
     log.info("high physical memory given to pmm", .{});
     paging.finalize_and_fix_root();
     apic.lapic_ptr = @ptrFromInt(@intFromPtr(apic.lapic_ptr) + @as(usize, @bitCast(idmap_base)));
+    mcfg.host_bridges = @as([*]align(1) const mcfg.PciHostBridge, @ptrFromInt(@intFromPtr(mcfg.host_bridges.ptr) + @as(usize, @bitCast(idmap_base))))[0..mcfg.host_bridges.len];
+    log.info("ACPI table virtual pointers relocated to high memory", .{});
 }
 
 pub fn phys_from_virt(virt: anytype) usize {

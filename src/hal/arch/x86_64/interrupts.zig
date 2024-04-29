@@ -6,25 +6,25 @@ const log = std.log.scoped(.interrupts);
 
 fn disable_8259pic() void {
     // remap the pic. idk how this works
-    serial.outb(0x20, .data, 0x11);
+    serial.out_serial(0x20, .data, 0x11);
     serial.io_wait();
-    serial.outb(0xA0, .data, 0x11);
+    serial.out_serial(0xA0, .data, 0x11);
     serial.io_wait();
-    serial.outb(0x20, .interrupt_enable, @bitCast(@as(u8, 0x20)));
+    serial.out_serial(0x20, .interrupt_enable, @bitCast(@as(u8, 0x20)));
     serial.io_wait();
-    serial.outb(0xA0, .interrupt_enable, @bitCast(@as(u8, 0x28)));
+    serial.out_serial(0xA0, .interrupt_enable, @bitCast(@as(u8, 0x28)));
     serial.io_wait();
-    serial.outb(0x20, .interrupt_enable, .{ .break_error = true });
+    serial.out_serial(0x20, .interrupt_enable, .{ .break_error = true });
     serial.io_wait();
-    serial.outb(0xA0, .interrupt_enable, .{ .transmitted_empty = true });
+    serial.out_serial(0xA0, .interrupt_enable, .{ .transmitted_empty = true });
     serial.io_wait();
-    serial.outb(0x20, .interrupt_enable, .{ .data_available = true });
+    serial.out_serial(0x20, .interrupt_enable, .{ .data_available = true });
     serial.io_wait();
-    serial.outb(0xA0, .interrupt_enable, .{ .data_available = true });
+    serial.out_serial(0xA0, .interrupt_enable, .{ .data_available = true });
     serial.io_wait();
     // and disable the pic
-    serial.outb(0x20, .interrupt_enable, @bitCast(@as(u8, 0xFF)));
-    serial.outb(0xA0, .interrupt_enable, @bitCast(@as(u8, 0xFF)));
+    serial.out_serial(0x20, .interrupt_enable, @bitCast(@as(u8, 0xFF)));
+    serial.out_serial(0xA0, .interrupt_enable, @bitCast(@as(u8, 0xFF)));
     serial.io_wait();
 }
 
