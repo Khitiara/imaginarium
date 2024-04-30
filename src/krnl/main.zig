@@ -115,13 +115,15 @@ pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_
     }
 }
 
+const smp = @import("smp.zig");
+
 fn main(ldr_info: *bootelf.BootelfData) !void {
     const bootelf_magic_check = ldr_info.magic == bootelf.magic;
     std.debug.assert(bootelf_magic_check);
 
     try arch.platform_init(ldr_info.memory_map());
 
-    const current_apic_id = (cpuid.cpuid(.type_fam_model_stepping_features, 0)).brand_flush_count_id.apic_id;
+    const current_apic_id = cpuid.cpuid(.type_fam_model_stepping_features, {}).brand_flush_count_id.apic_id;
 
     log.info("local apic id {d}", .{current_apic_id});
     log.info("acpi oem id {s}", .{&arch.x86_64.oem_id});
@@ -147,4 +149,10 @@ fn main(ldr_info: *bootelf.BootelfData) !void {
     font_rendering.init();
     font_rendering.write("This is a test!\n=-+asbasdedfgwrgrgsae");
     log.info("wrote to screen", .{});
+
+    log.debug("__isrs[0]: {*}: {*}", .{ &arch.x86_64.idt.__isrs[0], arch.x86_64.idt.__isrs[0] });
+
+    _ = smp.lcb;
+
+    @breakpoint();
 }

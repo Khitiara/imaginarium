@@ -17,6 +17,13 @@ pub usingnamespace switch (@import("builtin").cpu.arch) {
 
         pub const serial = x86_64.serial;
 
+        pub const get_and_disable_interrupts = x86_64.idt.get_and_disable;
+        pub const restore_interrupt_state = x86_64.idt.restore;
+
+        pub const spin_hint = x86_64.pause;
+
+        pub const smp = x86_64.smp;
+
         pub fn phys_mem_base() isize {
             return x86_64.pmm.phys_mapping_base;
         }

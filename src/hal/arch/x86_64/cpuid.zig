@@ -10,7 +10,7 @@ pub const Leaf = enum(u32) {
 
 pub fn Subleaf(comptime leaf: Leaf) type {
     switch (leaf) {
-        else => return u0,
+        else => return void,
     }
 }
 

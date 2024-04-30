@@ -28,7 +28,7 @@ fn disable_8259pic() void {
     serial.io_wait();
 }
 
-fn unhandled_interrupt(frame: *idt.InterruptFrame(u64)) noreturn {
+fn unhandled_interrupt(frame: *idt.InterruptFrame(u64)) callconv(.Win64) noreturn {
     if (std.enums.tagName(idt.Interrupt, frame.interrupt_number)) |name| {
         log.err("unhandled interrupt: 0x{X:2} ({s})", .{ @intFromEnum(frame.interrupt_number), name });
     } else {

@@ -10,11 +10,17 @@ pub const pmm = @import("x86_64/pmm.zig");
 pub const vmm = @import("x86_64/vmm.zig");
 pub const idt = @import("x86_64/idt.zig");
 pub const interrupts = @import("x86_64/interrupts.zig");
+pub const rand = @import("x86_64/rand.zig");
+pub const smp = @import("x86_64/smp.zig");
 
 const memory = @import("../memory.zig");
 const acpi = @import("../acpi.zig");
 
 pub const cc: @import("std").builtin.CallingConvention = .Win64;
+
+pub fn pause() void {
+    asm volatile ("pause" ::: "memory");
+}
 
 pub fn puts(bytes: []const u8) void {
     for (bytes) |b| {
@@ -46,6 +52,9 @@ pub fn platform_init(memmap: []memory.MemoryMapEntry) !void {
     log.info("vmm initialized", .{});
     idt.load();
     log.info("interrupt table loaded", .{});
+    var cr4 = control_registers.read(.cr4);
+    cr4.osfxsr = true;
+    control_registers.write(.cr4, cr4);
     idt.enable();
     log.info("early platform init complete", .{});
 }

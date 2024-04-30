@@ -1,6 +1,7 @@
 const std = @import("std");
 const descriptors = @import("descriptors.zig");
 const gdt = @import("gdt.zig");
+const x86_64 = @import("../x86_64.zig");
 
 pub const GateType = enum(u4) {
     interrupt = 0xE,
@@ -166,11 +167,11 @@ pub fn InterruptFrame(ErrorCode: type) type {
                 \\v={X:0>2} e={X:0>16} cpl={d}
                 \\  rax={X:16} rbx={X:16} rcx={X:16} rdx={X:16}
                 \\  rsi={X:16} rdi={X:16} rbp={X:16} rsp={X:16}
-                \\   r8={X:16}  r9={X:16} r10={X:16} r11={X:16}
+                \\  r08={X:16} r09={X:16} r10={X:16} r11={X:16}
                 \\  r12={X:16} r13={X:16} r14={X:16} r15={X:16}
                 \\  rip={X:16}  fs={X:16}  gs={X:16} flg={X:16}
             , .{
-                self.interrupt_number,
+                @intFromEnum(self.interrupt_number),
                 self.error_code,
                 self.cs.rpl,
                 self.registers.rax,
@@ -199,8 +200,6 @@ pub fn InterruptFrame(ErrorCode: type) type {
 }
 
 comptime {
-    // the number of saved registers (for finding the intnum)
-    var regscnt = 0;
     // the asm snippet of push operations for saved registers
     var push: []const u8 = "\n";
     // and the pops
@@ -209,11 +208,10 @@ comptime {
     for (@typeInfo(SavedRegisters).Struct.fields) |reg| {
         // prepend to push and append to pop - earlier fields in the struct must be pushed later so prepend
         // matches the semantics required due to the stack pushing downward
-        push = "\n    pushq    %" ++ reg.name ++ push;
+        push = "\n    pushq     %" ++ reg.name ++ push;
         // and append to pop since it must reverse the push order
-        pop = pop ++ "    popq     %" ++ reg.name ++ "\n";
+        pop = pop ++ "    popq      %" ++ reg.name ++ "\n";
         // each register is 8 bytes so we add 8 here
-        regscnt += 8;
     }
 
     const code: []const u8 =
@@ -221,28 +219,29 @@ comptime {
         \\ .type __isr_common, @function;
         \\ __isr_common:
     ++ push ++ // push all the saved registers
-        \\     mov      %gs, %rax # push the fs and gs segment selectors
-        \\     pushq    %rax
-        \\     mov      %fs, %rax
-        \\     pushq    %rax
-        // movsbq regscnt(%rsp), %rdx ; all the pushes we made will place rsp regscnt bytes below the intnum
+        \\     mov       %gs, %rax # push the fs and gs segment selectors
+        \\     pushq     %rax
+        \\     mov       %fs, %rax
+        \\     pushq     %rax
+        \\     swapgs    # we saved the gs register selector so its safe to swap in the kernel gs base
+        // movsbq offsetOf(interrupt_number)(%rsp), %rdx ; all the pushes we made will place rsp regscnt bytes below the intnum
         // which we need in rdx for the indexed callq below
-    ++ "\n     movsbq   " ++ std.fmt.comptimePrint("{d}", .{regscnt}) ++ "(%rsp), %rdx\n" ++
-        \\     movq     %rsp, %rcx # rsp points to the bottom of the interrupt frame struct at this point so put that address in rdi
-        \\     callq    *__isrs(, %rdx, 8) # __isrs[intnum](&frame)
-        \\     popq     %rax # pop fs and gs segment selectors
-        \\     mov      %rax, %fs
-        \\     popq     %rax
-        \\     mov      %rax, %gs
+    ++ "\n     movsbq    " ++ std.fmt.comptimePrint("{d}", .{@offsetOf(RawInterruptFrame, "interrupt_number")}) ++ "(%rsp), %rdx\n" ++
+        \\     movq      %rsp, %rcx # rsp points to the bottom of the interrupt frame struct at this point so put that address in rdi
+        \\     callq     *__isrs(, %rdx, 8)
+        \\     swapgs    # and swap back out the kernel gs so we dont override it
+        \\     popq      %rax # pop fs and gs segment selectors
+        \\     mov       %rax, %fs
+        \\     popq      %rax
+        \\     mov       %rax, %gs
     ++ pop ++ // pop all the saved registers
-        \\     add      $16, %rsp # pop the interrupt number and error code
-        \\     iretq # and return from interrupt
+        \\     iretq     # and return from interrupt
     ;
     asm (code);
 }
 
 export var idt: [256]InterruptGateDescriptor = undefined;
-export var __isrs: [256]InterruptHandler = undefined;
+pub export var __isrs: [256]InterruptHandler = undefined;
 
 fn make_handler(comptime int: Interrupt) RawHandler {
     // if the interrupt has an error code then that code is on top of the stack.
@@ -262,14 +261,14 @@ fn make_handler(comptime int: Interrupt) RawHandler {
         comptime {
             // idk if this is strictly required but i was having a bit of a panic not being able to find the dang thing
             // in the disassembly, and at least with this i can confirm it works
-            @export(handler, .{ .name = std.fmt.comptimePrint("__isr_{x:2}", .{@intFromEnum(int)}), .linkage = .strong });
+            @export(handler, .{ .name = std.fmt.comptimePrint("__isr_{x:0>2}", .{@intFromEnum(int)}), .linkage = .strong });
         }
     }.handler;
 }
 
 // make 256 raw handlers here, one per vector
 // these are not put into the IDT immediately, instead we address them as needed when adding handlers
-const raw_handlers: [256]RawHandler = blk: {
+pub const raw_handlers: [256]RawHandler = blk: {
     var result: [256]RawHandler = undefined;
     for (0..256) |i| {
         result[i] = make_handler(@enumFromInt(i));
@@ -280,7 +279,7 @@ const raw_handlers: [256]RawHandler = blk: {
 /// handler can be a pointer to any function which takes *InterruptFrame(SomeErrorCodeType) as its only parameter
 pub fn add_handler(int: Interrupt, handler: anytype, typ: GateType, dpl: u2, ist: u3) void {
     // put a descriptor in the IDT pointing to the raw handler for the specified vector
-    idt[@intFromEnum(int)] = InterruptGateDescriptor.init(@intFromPtr(&raw_handlers[@intFromEnum(int)]), ist, typ, dpl);
+    idt[@intFromEnum(int)] = InterruptGateDescriptor.init(@intFromPtr(raw_handlers[@intFromEnum(int)]), ist, typ, dpl);
     // and put the managed isr into the function pointer array so __isr_common calls into it
     __isrs[@intFromEnum(int)] = @ptrCast(handler);
 }
@@ -308,6 +307,20 @@ pub fn load() void {
         :
         : [p] "*p" (&idtr.limit),
     );
+}
+
+pub fn get_and_disable() bool {
+    const f = x86_64.flags().interrupt_enable;
+    disable();
+    return f;
+}
+
+pub fn restore(state: bool) void {
+    if (state) {
+        enable();
+    } else {
+        disable();
+    }
 }
 
 test {

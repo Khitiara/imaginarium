@@ -15,10 +15,10 @@ pub const PagingFeatures = packed struct {
 };
 
 pub fn enumerate_paging_features() PagingFeatures {
-    const addresses = cpuid.cpuid(.extended_address_info, 0).address_size_info;
-    const feats_base = cpuid.cpuid(.type_fam_model_stepping_features, 0);
-    const feats_ext = cpuid.cpuid(.extended_fam_model_stepping_features, 0);
-    const flags = cpuid.cpuid(.feature_flags, 0);
+    const addresses = cpuid.cpuid(.extended_address_info, {}).address_size_info;
+    const feats_base = cpuid.cpuid(.type_fam_model_stepping_features, {});
+    const feats_ext = cpuid.cpuid(.extended_fam_model_stepping_features, {});
+    const flags = cpuid.cpuid(.feature_flags, {});
     features = PagingFeatures{
         .maxphyaddr = addresses.physical_address_bits,
         .linear_address_width = addresses.virtual_address_bits,

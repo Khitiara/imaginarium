@@ -4,6 +4,9 @@ pub const Msr = enum(u32) {
     apic_base = 0x1B,
     pat = 0x277,
     efer = 0xC0000080,
+    fs_base = 0xC000_0100,
+    gs_base = 0xC000_0101,
+    kernel_gs_base = 0xC000_0102,
 };
 
 const msr_writable = std.EnumArray(Msr, bool).initDefault(false, .{
@@ -39,6 +42,7 @@ fn MsrValueType(comptime msr: Msr) type {
             _reserved2: u48 = 0,
         },
         .pat => @import("paging/pat.zig").PAT,
+        .fs_base, .gs_base, .kernel_gs_base => isize,
     }
 }
 
