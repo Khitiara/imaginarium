@@ -24,7 +24,7 @@ pub var ioapics_count: u8 = 0;
 
 pub const ioapics = ioapics_count[0..ioapics_count];
 
-pub fn getRegisterPtr(reg: RegisterId) *align(16) u32 {
+pub fn get_register_ptr(reg: RegisterId) *align(16) u32 {
     return &lapic_ptr[@intFromEnum(reg)].item;
 }
 
@@ -34,6 +34,5 @@ pub const IOApic = struct {
 };
 
 test {
-    _ = getRegisterPtr;
-    // _ = readLargeRegister;
+    _ = get_register_ptr;
 }

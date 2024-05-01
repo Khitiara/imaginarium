@@ -43,10 +43,16 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
     LazyPath,
     ?LazyPath,
 } {
+    const hal = b.createModule(.{
+        .root_source_file = .{ .path = "src/hal/hal.zig" },
+    });
+    addImportFromTable(hal, "config");
+    addImportFromTable(hal, "util");
+
     const exe_name = "imaginarium.krnl.b";
     const exe = b.addExecutable(.{
         .name = "imaginarium.elf",
-        .root_source_file = .{ .path = "src/krnl/main.zig" },
+        .root_source_file = b.path("src/krnl/main.zig"),
         .target = target,
         .optimize = optimize,
         .code_model = .kernel,
@@ -54,10 +60,13 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
         .use_lld = true,
         .strip = false,
     });
+    // exe.export_memory = true;
     exe.entry = .disabled;
     exe.root_module.dwarf_format = .@"64";
+    exe.root_module.addImport("hal", hal);
 
-    addImportFromTable(&exe.root_module, "hal");
+    exe.addAssemblyFile(b.path(b.fmt("src/hal/arch/{s}/ap_trampoline.S",.{@tagName(arch)})));
+
     addImportFromTable(&exe.root_module, "util");
     addImportFromTable(&exe.root_module, "config");
 
@@ -119,7 +128,6 @@ fn usr(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, o
         .optimize = optimize,
     });
 
-    addImportFromTable(&usr_imports.root_module, "hal");
     addImportFromTable(&usr_imports.root_module, "util");
     addImportFromTable(&usr_imports.root_module, "config");
 
@@ -215,12 +223,6 @@ pub fn build(b: *std.Build) !void {
         .root_source_file = .{ .path = "src/util/util.zig" },
     });
     addImportFromTable(util, "config");
-
-    const hal = b.addModule("hal", .{
-        .root_source_file = .{ .path = "src/hal/hal.zig" },
-    });
-    addImportFromTable(hal, "config");
-    addImportFromTable(hal, "util");
 
     const krnlstep, const elf, const debug = try krnl(b, arch, target, optimize);
     const imgstep, const imgFile = try img(b, arch, krnlstep, elf, debug);

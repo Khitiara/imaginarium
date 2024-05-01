@@ -19,6 +19,7 @@ pub fn make_bootelf(b: *std.Build) !std.Build.LazyPath {
         "bootelf/elf_load.asm",
         "bootelf/memmap.asm",
         "bootelf/paging.asm",
+        "bootelf/bootelf.asm",
     };
     make.setCwd(this_dep.path("."));
 

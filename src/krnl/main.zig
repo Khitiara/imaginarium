@@ -150,9 +150,58 @@ fn main(ldr_info: *bootelf.BootelfData) !void {
     font_rendering.write("This is a test!\n=-+asbasdedfgwrgrgsae");
     log.info("wrote to screen", .{});
 
-    log.debug("__isrs[0]: {*}: {*}", .{ &arch.x86_64.idt.__isrs[0], arch.x86_64.idt.__isrs[0] });
+    // log.debug("__isrs[0]: {*}: {*}", .{ &arch.x86_64.idt.__isrs[0], arch.x86_64.idt.__isrs[0] });
 
-    _ = smp.lcb;
+    // log.debug("ap_trampoline: {*}", .{arch.x86_64.smp.ap_trampoline});
 
-    @breakpoint();
+    const ap_trampoline_length = @intFromPtr(arch.x86_64.smp.ap_end) - @intFromPtr(arch.x86_64.smp.ap_start);
+    const ap_trampoline_start = @as([*]const u8, @ptrCast(arch.x86_64.smp.ap_start));
+
+    log.debug("ap_trampoline: {*} (len {X})", .{ ap_trampoline_start, ap_trampoline_length });
+
+    try dump_hex(ap_trampoline_start[0..ap_trampoline_length]);
+}
+
+pub fn dump_hex(bytes: []const u8) !void {
+    const writer = SerialWriter.writer();
+    var chunks = std.mem.window(u8, bytes, 16, 16);
+    while (chunks.next()) |window| {
+        // 1. Print the address.
+        const address = (@intFromPtr(bytes.ptr) + 0x10 * (chunks.index orelse 0) / 16) - 0x10;
+        // We print the address in lowercase and the bytes in uppercase hexadecimal to distinguish them more.
+        // Also, make sure all lines are aligned by padding the address.
+        try writer.print("{x:0>[1]}  ", .{ address, @sizeOf(usize) * 2 });
+
+        // 2. Print the bytes.
+        for (window, 0..) |byte, index| {
+            try writer.print("{X:0>2} ", .{byte});
+            if (index == 7) try writer.writeByte(' ');
+        }
+        try writer.writeByte(' ');
+        if (window.len < 16) {
+            var missing_columns = (16 - window.len) * 3;
+            if (window.len < 8) missing_columns += 1;
+            try writer.writeByteNTimes(' ', missing_columns);
+        }
+
+        // 3. Print the characters.
+        for (window) |byte| {
+            if (std.ascii.isPrint(byte)) {
+                try writer.writeByte(byte);
+            } else {
+                // Related: https://github.com/ziglang/zig/issues/7600
+
+                // Let's print some common control codes as graphical Unicode symbols.
+                // We don't want to do this for all control codes because most control codes apart from
+                // the ones that Zig has escape sequences for are likely not very useful to print as symbols.
+                switch (byte) {
+                    '\n' => try writer.writeAll("␊"),
+                    '\r' => try writer.writeAll("␍"),
+                    '\t' => try writer.writeAll("␉"),
+                    else => try writer.writeByte('.'),
+                }
+            }
+        }
+        try writer.writeByte('\n');
+    }
 }

@@ -12,6 +12,8 @@ pub const GlobalSdtLoadError = error{
 
 pub const GlobalSdtError = GlobalSdtLoadError || rsdp.RsdpError;
 
+const ptr_from_physaddr = @import("arch.zig").ptr_from_physaddr;
+
 pub const log = std.log.scoped(.acpi);
 
 pub fn load_sdt_tableptr(table: *align(4) const anyopaque, expect_sig: ?sdt.Signature) !void {
@@ -34,7 +36,7 @@ pub fn load_sdt_tableptr(table: *align(4) const anyopaque, expect_sig: ?sdt.Sign
             const slice = std.mem.bytesAsSlice(EntryType, ptr[begin..hdr.length]);
 
             for (slice) |e| {
-                const t: *const sdt.SystemDescriptorTableHeader = @ptrFromInt(e);
+                const t: *const sdt.SystemDescriptorTableHeader = ptr_from_physaddr(*const sdt.SystemDescriptorTableHeader, e);
                 switch (t.signature) {
                     .APIC => madt.read_madt(@ptrCast(t)),
                     .MCFG => mcfg.set_table(@ptrCast(t)),

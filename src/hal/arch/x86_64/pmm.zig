@@ -37,8 +37,8 @@ const std = @import("std");
 // the base virtual address of the initial memory layout. should always be -2G but only set it once in the linkerscript
 const stage1_base = ext("__base");
 
-// the alignForward shouldnt be needed but just in case
 var kernel_phys_end = ext("__kernel_end");
+pub var kernel_size: usize = undefined;
 
 // the number of physical address bits
 var phys_addr_width: u8 = undefined;
@@ -74,8 +74,8 @@ const log = std.log.scoped(.pmm);
 pub fn init(paddrwidth: u8, memmap: []memory.MemoryMapEntry) void {
     phys_mapping_base = @bitCast(@intFromPtr(stage1_base));
     log.debug("initial physical mapping base 0x{X}", .{@as(usize, @bitCast(phys_mapping_base))});
-    kernel_phys_end = @ptrFromInt(@intFromPtr(kernel_phys_end) - @as(usize, @bitCast(phys_mapping_base)));
-    log.debug("kernel physical end 0x{X}", .{@intFromPtr(kernel_phys_end)});
+    kernel_size = std.mem.alignForwardLog2(@intFromPtr(kernel_phys_end) - @as(usize, @bitCast(phys_mapping_base)), 24);
+    log.debug("kernel physical end 0x{X}", .{kernel_size});
     // set our global physical address width
     phys_addr_width = paddrwidth;
     // slice our arrays
@@ -95,7 +95,7 @@ pub fn init(paddrwidth: u8, memmap: []memory.MemoryMapEntry) void {
             if (end > max_phys_mem)
                 max_phys_mem = end;
             // if the block is wholly within where the kernel is mapped then it should never be free
-            if (end < @intFromPtr(kernel_phys_end)) {
+            if (end < kernel_size) {
                 log.debug("skipping 0x{X}..0x{X} as it is wholly within space already reserved by the kernel", .{ base, end });
                 continue;
             }
@@ -106,10 +106,10 @@ pub fn init(paddrwidth: u8, memmap: []memory.MemoryMapEntry) void {
                 continue;
             }
             // if the block covers the boundary of the kernel then only free the portion after the kernel
-            if (base < @intFromPtr(kernel_phys_end)) {
-                const diff = @intFromPtr(kernel_phys_end) - base;
+            if (base < kernel_size) {
+                const diff = kernel_size - base;
                 log.debug("adjusting 0x{X}..0x{X} forward 0x{X} bytes to avoid initial kernel block", .{ base, end, diff });
-                base = @intFromPtr(kernel_phys_end);
+                base = kernel_size;
                 size -= diff;
             }
             log.debug("marking 0x{X}..0x{X} (0x{X} bytes)", .{ base, end, size });
@@ -211,6 +211,11 @@ pub fn alloc(len: usize) !usize {
     }
     // forward the actual allocation to alloc_impl
     return alloc_impl(idx);
+}
+
+pub fn get_allocation_size(size: usize) usize {
+    const idx = std.math.log2_int_ceil(usize, size) - 12;
+    return pmm_sizes[idx];
 }
 
 // free an allocated block which was at least len bytes

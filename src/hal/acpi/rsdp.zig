@@ -40,8 +40,8 @@ pub const RsdpInfo = struct {
 
     pub fn from_rsdp(rsdp: Rsdp) RsdpInfo {
         switch (rsdp) {
-            .v1 => |v1| return .{ .oem_id = v1.oem_id, .table_addr = @ptrFromInt(v1.rsdt_addr), .expect_signature = .RSDT },
-            .v2 => |v2| return .{ .oem_id = v2.v1.oem_id, .table_addr = @ptrFromInt(v2.xsdt_addr), .expect_signature = .XSDT },
+            .v1 => |v1| return .{ .oem_id = v1.oem_id, .table_addr = ptr_from_physaddr(*align(4) const anyopaque, v1.rsdt_addr), .expect_signature = .RSDT },
+            .v2 => |v2| return .{ .oem_id = v2.v1.oem_id, .table_addr = ptr_from_physaddr(*align(4) const anyopaque, v2.xsdt_addr), .expect_signature = .XSDT },
         }
     }
 };

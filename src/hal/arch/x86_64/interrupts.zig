@@ -30,12 +30,15 @@ fn disable_8259pic() void {
 
 fn unhandled_interrupt(frame: *idt.InterruptFrame(u64)) callconv(.Win64) noreturn {
     if (std.enums.tagName(idt.Interrupt, frame.interrupt_number)) |name| {
-        log.err("unhandled interrupt: 0x{X:2} ({s})", .{ @intFromEnum(frame.interrupt_number), name });
+        log.err("unhandled interrupt: 0x{X: <2} ({s}) --- {}", .{ @intFromEnum(frame.interrupt_number), name, frame });
     } else {
-        log.err("unhandled interrupt: 0x{X:2}", .{@intFromEnum(frame.interrupt_number)});
+        log.err("unhandled interrupt: 0x{X: <2} --- {}", .{ @intFromEnum(frame.interrupt_number), frame });
     }
-    log.err("{}", .{frame});
     while (true) {}
+}
+
+fn breakpoint(frame: *idt.InterruptFrame(u64)) callconv(.Win64) void {
+    std.log.debug("breakpoint: {}", .{ frame });
 }
 
 pub fn init() void {
@@ -46,4 +49,5 @@ pub fn init() void {
     for (0..256) |i| {
         idt.add_handler(@enumFromInt(i), &unhandled_interrupt, .interrupt, 0, 0);
     }
+    idt.add_handler(.breakpoint, &breakpoint, .interrupt, 0, 0);
 }

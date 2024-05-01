@@ -49,8 +49,8 @@ pub fn init(memmap: []memory.MemoryMapEntry) !void {
     log.info("mapping all phys mem at 0x{X}", .{@as(usize, @bitCast(idmap_base))});
     phys_mapping_range_bits = if (paging.using_5_level_paging) @min(paging.features.maxphyaddr, 48) else @min(paging.features.maxphyaddr, 39);
     try paging.map_range(0, idmap_base, @as(usize, 1) << phys_mapping_range_bits);
-    log.info("mapping bottom 2G at 0x{X}", .{@as(usize, @bitCast(@as(isize, -1 << 31)))});
-    try paging.map_range(0, -1 << 31, 1 << 31);
+    log.info("mapping bottom {X} at 0x{X}", .{ pmm.kernel_size, @as(usize, @bitCast(@as(isize, -1 << 31))) });
+    try paging.map_range(0, -1 << 31, pmm.kernel_size);
     log.info("mapping bottom 4M at 0", .{});
     try paging.map_range(0, 0, 1 << 22);
     // dump_paging_debug();
@@ -60,8 +60,6 @@ pub fn init(memmap: []memory.MemoryMapEntry) !void {
     pmm.enlarge_mapped_physical(memmap, idmap_base);
     log.info("high physical memory given to pmm", .{});
     paging.finalize_and_fix_root();
-    apic.lapic_ptr = @ptrFromInt(@intFromPtr(apic.lapic_ptr) + @as(usize, @bitCast(idmap_base)));
-    mcfg.host_bridges = @as([*]align(1) const mcfg.PciHostBridge, @ptrFromInt(@intFromPtr(mcfg.host_bridges.ptr) + @as(usize, @bitCast(idmap_base))))[0..mcfg.host_bridges.len];
     log.info("ACPI table virtual pointers relocated to high memory", .{});
 }
 
@@ -89,6 +87,70 @@ pub fn phys_from_virt(virt: anytype) usize {
     const page = pmm.ptr_from_physaddr(paging.Table(paging.entries.PTE), direntry.get_phys_addr())[split.page];
     return page.get_phys_addr() + split.byte;
 }
+
+pub const raw_page_allocator = struct {
+    vtab: std.mem.Allocator.VTable = .{ .alloc = alloc, .resize = resize, .free = free },
+
+    pub fn allocator(self: *const @This()) std.mem.Allocator {
+        return .{
+            .ptr = undefined,
+            .vtable = self.vtab,
+        };
+    }
+
+    fn alloc(_: *anyopaque, len: usize, ptr_align: u29, len_align: u29, _: usize) std.mem.Allocator.Error![]u8 {
+        const alloc_len = pmm.get_allocation_size(std.math.max(len_align, std.math.max(ptr_align, len)));
+
+        const ptr = pmm.ptr_from_physaddr([*]u8, pmm.alloc(alloc_len) catch |err| {
+            switch (err) {
+                error.OutOfMemory => return error.OutOfMemory,
+                else => {
+                    log.err("PMM allocator: {e}", .{err});
+                    @panic("PMM allocator allocation error");
+                },
+            }
+        });
+
+        return ptr[0..len];
+    }
+
+    fn resize(_: *anyopaque, old_mem: []u8, old_align: u29, new_size: usize, len_align: u29, ret_addr: usize) ?usize {
+        const old_alloc = pmm.get_allocation_size(std.math.max(old_mem.len, old_align));
+
+        const addr: isize = @intFromPtr(old_mem.ptr);
+        const base_vaddr = pmm.phys_mapping_base;
+        const paddr = addr - base_vaddr;
+
+        if (new_size == 0) {
+            free(undefined, old_mem, old_align, ret_addr);
+            return 0;
+        } else {
+            const new_alloc = pmm.get_allocation_size(std.math.max(new_size, len_align));
+
+            if (new_alloc > old_alloc) {
+                return null;
+            }
+
+            var curr_alloc = old_alloc;
+            while (new_alloc < curr_alloc) {
+                pmm.free(paddr + curr_alloc / 2, curr_alloc / 2);
+                curr_alloc /= 2;
+            }
+
+            return new_size;
+        }
+    }
+
+    fn free(_: *anyopaque, old_mem: []u8, old_align: u29, _: usize) void {
+        const old_alloc = pmm.get_allocation_size(std.math.max(old_mem.len, old_align));
+
+        const addr = @intFromPtr(old_mem.ptr);
+        const base_vaddr: usize = @bitCast(pmm.phys_mapping_base);
+        const paddr = addr - base_vaddr;
+
+        pmm.free(paddr, old_alloc);
+    }
+}{};
 
 pub fn alloc_page() !*anyopaque {
     const paddr = try pmm.alloc(1 << 12);

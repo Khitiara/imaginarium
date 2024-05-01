@@ -123,6 +123,8 @@ pub const SelectorIndexCode = packed struct(u64) {
     }
 };
 
+const crs = @import("ctrl_registers.zig").ControlRegisterValueType;
+
 pub const SavedRegisters = extern struct {
     // NOTE the registers are in reverse order because of how stack pushing works
     // NOTE the asm to push and pop registers as part of the common isr block is
@@ -151,25 +153,30 @@ const RawInterruptFrame = InterruptFrame(u64);
 
 pub fn InterruptFrame(ErrorCode: type) type {
     return extern struct {
+        cr4: crs(.cr4),
+        cr3: crs(.cr3),
+        cr2: crs(.cr2),
+        cr0: crs(.cr0),
         fs: descriptors.Selector align(8),
         gs: descriptors.Selector align(8),
         registers: SavedRegisters align(8),
         interrupt_number: Interrupt align(8),
         error_code: ErrorCode,
-        ss: descriptors.Selector align(8),
         rip: usize,
         cs: descriptors.Selector align(8),
         eflags: @import("../x86_64.zig").Flags,
         rsp: usize,
+        ss: descriptors.Selector align(8),
 
         pub fn format(self: *const @This(), comptime _: []const u8, _: std.fmt.FormatOptions, fmt: anytype) !void {
             try fmt.print(
-                \\v={X:0>2} e={X:0>16} cpl={d}
-                \\  rax={X:16} rbx={X:16} rcx={X:16} rdx={X:16}
-                \\  rsi={X:16} rdi={X:16} rbp={X:16} rsp={X:16}
-                \\  r08={X:16} r09={X:16} r10={X:16} r11={X:16}
-                \\  r12={X:16} r13={X:16} r14={X:16} r15={X:16}
-                \\  rip={X:16}  fs={X:16}  gs={X:16} flg={X:16}
+                \\v={x:0>2} e={x:0>16} cpl={d}
+                \\  rax={x:16} rbx={x:16} rcx={x:16} rdx={x:16}
+                \\  rsi={x:16} rdi={x:16} rbp={x:16} rsp={x:16}
+                \\  r08={x:16} r09={x:16} r10={x:16} r11={x:16}
+                \\  r12={x:16} r13={x:16} r14={x:16} r15={x:16}
+                \\  rip={x:16}  fs={x:16}  gs={x:16} flg={x:16}
+                \\  cr0={x:0>8}         cr2={x:0>16} cr3={x:0>16} cr4={x:0>8}
             , .{
                 @intFromEnum(self.interrupt_number),
                 self.error_code,
@@ -194,6 +201,10 @@ pub fn InterruptFrame(ErrorCode: type) type {
                 @as(u16, @bitCast(self.fs)),
                 @as(u16, @bitCast(self.gs)),
                 @as(u64, @bitCast(self.eflags)),
+                @as(u64, @bitCast(self.cr0)),
+                @as(u64, @bitCast(self.cr2)),
+                @as(u64, @bitCast(self.cr3)),
+                @as(u64, @bitCast(self.cr4)),
             });
         }
     };
@@ -223,6 +234,14 @@ comptime {
         \\     pushq     %rax
         \\     mov       %fs, %rax
         \\     pushq     %rax
+        \\     mov       %cr0, %rax # and the control registers
+        \\     pushq     %rax
+        \\     mov       %cr2, %rax
+        \\     pushq     %rax
+        \\     mov       %cr3, %rax
+        \\     pushq     %rax
+        \\     mov       %cr4, %rax
+        \\     pushq     %rax
         \\     swapgs    # we saved the gs register selector so its safe to swap in the kernel gs base
         // movsbq offsetOf(interrupt_number)(%rsp), %rdx ; all the pushes we made will place rsp regscnt bytes below the intnum
         // which we need in rdx for the indexed callq below
@@ -230,11 +249,13 @@ comptime {
         \\     movq      %rsp, %rcx # rsp points to the bottom of the interrupt frame struct at this point so put that address in rdi
         \\     callq     *__isrs(, %rdx, 8)
         \\     swapgs    # and swap back out the kernel gs so we dont override it
+        \\     add       $32, %rsp
         \\     popq      %rax # pop fs and gs segment selectors
         \\     mov       %rax, %fs
         \\     popq      %rax
         \\     mov       %rax, %gs
     ++ pop ++ // pop all the saved registers
+        \\     add       $16, %rsp
         \\     iretq     # and return from interrupt
     ;
     asm (code);

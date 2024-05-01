@@ -155,6 +155,10 @@ pub fn setup_gdt() void {
     gdt.task_state.set_base(@intFromPtr(&tss));
     gdt.task_state.set_limit(@sizeOf(TssBlock) - 1);
 
+    apply();
+}
+
+pub fn apply() void {
     const gdtr: desc.TableRegister = .{
         .base = @intFromPtr(&gdt),
         .limit = @sizeOf(Gdt) - 1,

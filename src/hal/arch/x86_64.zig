@@ -42,8 +42,6 @@ pub fn platform_init(memmap: []memory.MemoryMapEntry) !void {
     log.info("physical addr width: {d} (0x{x} pages)", .{ paging_feats.maxphyaddr, @as(u64, 1) << @truncate(paging_feats.maxphyaddr - 12) });
     log.info("linear addr width: {d}", .{paging_feats.linear_address_width});
     log.info("1g pages: {}; global pages: {}; lvl5 paging: {}", .{ paging_feats.gigabyte_pages, paging_feats.global_page_support, paging_feats.five_level_paging });
-    try acpi.load_sdt(&oem_id);
-    log.info("loaded acpi sdt", .{});
     pmm.init(paging_feats.maxphyaddr, memmap);
     log.info("initialized lower phys memory", .{});
     interrupts.init();
@@ -56,6 +54,9 @@ pub fn platform_init(memmap: []memory.MemoryMapEntry) !void {
     cr4.osfxsr = true;
     control_registers.write(.cr4, cr4);
     idt.enable();
+    log.info("interrupts enabled", .{});
+    try acpi.load_sdt(&oem_id);
+    log.info("loaded acpi sdt", .{});
     log.info("early platform init complete", .{});
 }
 

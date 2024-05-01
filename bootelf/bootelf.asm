@@ -1,4 +1,4 @@
-elf_load_base equ 0x7E00
+elf_load_base equ 0x8E00
 
 bootelf equ 0x7000
 
@@ -62,7 +62,7 @@ stopread:
 dap:
   dw 16
   dw 1
-  .offset: dw 0x7C00
+  .offset: dw elf_load_base - 0x200
   .segment: dw 0
   .lba: dq 0
 
