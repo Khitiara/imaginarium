@@ -37,8 +37,10 @@ fn unhandled_interrupt(frame: *idt.InterruptFrame(u64)) callconv(.Win64) noretur
     while (true) {}
 }
 
+fn spurious(_: *idt.InterruptFrame(u64)) callconv(.Win64) void {}
+
 fn breakpoint(frame: *idt.InterruptFrame(u64)) callconv(.Win64) void {
-    std.log.debug("breakpoint: {}", .{ frame });
+    std.log.debug("breakpoint: {}", .{frame});
 }
 
 pub fn init() void {
@@ -50,4 +52,5 @@ pub fn init() void {
         idt.add_handler(@enumFromInt(i), &unhandled_interrupt, .interrupt, 0, 0);
     }
     idt.add_handler(.breakpoint, &breakpoint, .interrupt, 0, 0);
+    idt.add_handler(@enumFromInt(0xFF), &spurious, .interrupt, 0, 0);
 }

@@ -13,9 +13,9 @@ pub fn lock(self: *@This()) bool {
 }
 
 pub fn lock_unsafe(self: *@This()) void {
-    const ticket = @atomicRmw(usize, &self.allocated, .Add, 1, .Monotonic);
+    const ticket = @atomicRmw(usize, &self.allocated, .add, 1, .monotonic);
     while (true) {
-        if(@atomicLoad(usize, &self.serving, .Acquire) == ticket) {
+        if(@atomicLoad(usize, &self.serving, .acquire) == ticket) {
             return;
         }
         arch.spin_hint();

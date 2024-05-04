@@ -1,0 +1,5 @@
+.{
+    .name = "zuid",
+    .version = "1.0.0",
+    .paths = .{"src"},
+}

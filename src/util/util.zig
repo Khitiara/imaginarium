@@ -4,6 +4,8 @@ pub const masking = @import("masking.zig");
 pub const trie = @import("trie.zig");
 pub const sentinel_bit_set = @import("sentinel_bit_set.zig");
 pub const extern_address = @import("externs.zig").extern_address;
+pub const SpinLock = @import("SpinLock.zig");
+pub const queue = @import("queue.zig");
 
 const std = @import("std");
 const lower_string = std.ascii.lowerString;
@@ -12,6 +14,26 @@ const assert = std.debug.assert;
 const testing = std.testing;
 
 const Log2Int = std.math.Log2Int;
+
+pub fn CopyPtrAttrs(
+    comptime source: type,
+    comptime size: std.builtin.Type.Pointer.Size,
+    comptime child: type,
+) type {
+    const info = @typeInfo(source).Pointer;
+    return @Type(.{
+        .Pointer = .{
+            .size = size,
+            .is_const = info.is_const,
+            .is_volatile = info.is_volatile,
+            .is_allowzero = info.is_allowzero,
+            .alignment = info.alignment,
+            .address_space = info.address_space,
+            .child = child,
+            .sentinel = null,
+        },
+    });
+}
 
 // lowercases an ascii string at comptime. does not work for utf8 - this is meant mainly for debug and panic messages
 // i think sentinel-terminated slices coerce to normal ones? in any case this returns a terminated one for convenience

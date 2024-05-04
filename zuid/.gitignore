@@ -1,0 +1,3 @@
+# Ignore zig build files
+zig-cache/
+zig-out/

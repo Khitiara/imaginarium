@@ -1,0 +1,363 @@
+// derived from https://github.com/FlorenceOS/Florence/blob/aaa5a9e568197ad24780ec9adb421217530d4466/lib/containers/queue.zig
+// which was released under CC0
+
+const std = @import("std");
+const CopyPtrAttrs = @import("util.zig").CopyPtrAttrs;
+
+pub const Node = extern struct {
+    next: ?*Node = null,
+};
+
+pub const UntypedQueue = struct {
+    head: ?*Node = null,
+    tail: ?*Node = null,
+    len: usize,
+
+    pub fn append(self: *UntypedQueue, hook: *Node) void {
+        hook.next = null;
+
+        if (self.tail) |tail| {
+            tail.next = hook;
+            self.tail = hook;
+        } else {
+            std.debug.assert(self.head == null);
+            self.head = hook;
+            self.tail = hook;
+        }
+
+        self.len += 1;
+    }
+
+    pub fn prepend(self: *UntypedQueue, hook: *Node) void {
+        hook.next = self.head;
+        self.head = hook;
+
+        self.len += 1;
+    }
+
+    pub fn peek(self: *const UntypedQueue) ?*Node {
+        return self.head;
+    }
+
+    pub fn dequeue(self: *UntypedQueue) ?*Node {
+        if (self.head) |head| {
+            if (head.next) |next| {
+                self.head = next;
+            } else {
+                self.head = null;
+                self.tail = null;
+            }
+
+            self.len -= 1;
+            return head;
+        } else {
+            return null;
+        }
+    }
+};
+
+pub fn Queue(comptime T: type, comptime field_name: []const u8) type {
+    return struct {
+        impl: UntypedQueue,
+
+        inline fn length(self: *const @This()) usize {
+            return self.impl.len;
+        }
+
+        inline fn node_from_ref(ref: *T) *Node {
+            return &@field(ref, field_name);
+        }
+
+        inline fn ref_from_node(node: *Node) *T {
+            return @fieldParentPtr(field_name, node);
+        }
+
+        pub fn append(self: *@This(), item: *T) void {
+            self.impl.append(node_from_ref(item));
+        }
+
+        pub fn prepend(self: *@This(), item: *T) void {
+            self.impl.prepend(node_from_ref(item));
+        }
+
+        pub fn peek(self: *const @This()) ?*T {
+            return if (self.impl.peek()) |head| ref_from_node(head) else null;
+        }
+
+        pub fn dequeue(self: *@This()) ?*T {
+            if (self.impl.dequeue()) |node| {
+                return ref_from_node(node);
+            } else {
+                return null;
+            }
+        }
+    };
+}
+
+test "append" {
+    const TestNode = struct {
+        hook: Node = undefined,
+        val: u64,
+    };
+    var queue: Queue(TestNode, "hook") = .{};
+    var elems = [_]TestNode{
+        .{ .val = 1 },
+        .{ .val = 2 },
+        .{ .val = 3 },
+    };
+    queue.append(&elems[0]);
+    queue.append(&elems[1]);
+    queue.append(&elems[2]);
+    try std.testing.expectEqual(&elems[0], queue.dequeue());
+    try std.testing.expectEqual(&elems[1], queue.dequeue());
+    try std.testing.expectEqual(&elems[2], queue.dequeue());
+    try std.testing.expectEqual(null, queue.dequeue());
+}
+
+test "prepend" {
+    const TestNode = struct {
+        hook: Node = undefined,
+        val: u64,
+    };
+    var queue: Queue(TestNode, "hook") = .{};
+    var elems = [_]TestNode{
+        .{ .val = 1 },
+        .{ .val = 2 },
+        .{ .val = 3 },
+    };
+    queue.prepend(&elems[0]);
+    queue.prepend(&elems[1]);
+    queue.prepend(&elems[2]);
+    try std.testing.expectEqual(&elems[2], queue.dequeue());
+    try std.testing.expectEqual(&elems[1], queue.dequeue());
+    try std.testing.expectEqual(&elems[0], queue.dequeue());
+    try std.testing.expectEqual(null, queue.dequeue());
+}
+
+pub fn PriorityQueue(comptime T: type, comptime node_field_name: []const u8, comptime prio_field_name: []const u8, comptime P: type) type {
+    const Tails = std.EnumArray(P, ?*Node);
+    const Indexer = Tails.Indexer;
+    return struct {
+        head: ?*Node,
+        tails: Tails = Tails.initFill(null),
+        len: usize,
+
+        inline fn node_from_ref(ref: *T) *Node {
+            return &@field(ref, node_field_name);
+        }
+        inline fn ref_from_node(node: *Node) *T {
+            return @fieldParentPtr(node_field_name, node);
+        }
+        inline fn node_prio(node: *const Node) P {
+            return @field(ref_from_node(node).*, prio_field_name);
+        }
+
+        pub fn add(self: *@This(), item: *T) void {
+            const prio: P = @field(item.*, prio_field_name);
+            const hook = node_from_ref(item);
+            if (self.head) |head| {
+                // iterate backwards to find the lowest tail with priority no lower than the new element
+                // whose next will be set to the new element.
+                // if such a tail doesnt exist then this element gets prepended as its a higher prio than everything
+                // in the list so far
+                var i = Indexer.indexOf(prio) + 1;
+                while (std.math.sub(usize, i, 1)) |idx| {
+                    i = idx;
+                    // if the tail of the ith priority exists
+                    if (self.tails.values[idx]) |tail| {
+                        // stick this node on the end of that tail
+                        hook.next = tail.next;
+                        tail.next = hook;
+                        break;
+                    }
+                } else |_| {
+                    hook.next = head;
+                    self.head = hook;
+                }
+            } else {
+                hook.next = null;
+                self.head = hook;
+            }
+            self.tails.getPtr(prio).* = hook;
+            self.len += 1;
+        }
+
+        pub fn dequeue(self: *@This()) ?*T {
+            if (self.head) |head| {
+                const head_prio = node_prio(head);
+                if (head == self.tails.get(head_prio)) {
+                    self.tails.set(head_prio, null);
+                }
+                self.head = head.next;
+                head.next = null;
+                self.len -= 1;
+                return ref_from_node(head);
+            } else {
+                return null;
+            }
+        }
+    };
+}
+
+pub const DoublyLinkedNode = extern struct {
+    next: ?*DoublyLinkedNode = null,
+    prev: ?*DoublyLinkedNode = null,
+};
+
+pub const UntypedDoublyLinkedList = struct {
+    head: ?*DoublyLinkedNode = null,
+    tail: ?*DoublyLinkedNode = null,
+    len: usize,
+
+    pub fn add_back(self: *UntypedDoublyLinkedList, n: *DoublyLinkedNode) void {
+        self.len += 1;
+        if (self.tail) |tail| {
+            tail.next = n;
+            self.tail = n;
+            n.prev = tail;
+            n.next = null;
+        } else {
+            self.head = n;
+            self.tail = n;
+            n.next = null;
+            n.prev = null;
+        }
+    }
+
+    pub fn add_front(self: *UntypedDoublyLinkedList, n: *DoublyLinkedNode) void {
+        self.len += 1;
+        if (self.head) |head| {
+            n.next = head;
+            n.prev = null;
+            head.prev = n;
+            self.head = n;
+        } else {
+            self.head = n;
+            self.tail = n;
+            n.next = null;
+            n.prev = null;
+        }
+    }
+
+    pub fn remove_front(self: *UntypedDoublyLinkedList) ?*Node {
+        self.len -= 1;
+        if (self.head) |head| {
+            if (head.next) |n| {
+                self.head = n;
+                n.prev = null;
+            } else {
+                self.head = null;
+                self.tail = null;
+            }
+            return head;
+        } else {
+            return null;
+        }
+    }
+
+    pub fn remove_back(self: *UntypedDoublyLinkedList) ?*Node {
+        self.len -= 1;
+        if (self.tail) |tail| {
+            if (tail.prev) |p| {
+                self.tail = p;
+                p.next = null;
+            } else {
+                self.head = null;
+                self.tail = null;
+            }
+            return tail;
+        } else {
+            return null;
+        }
+    }
+
+    pub fn remove(self: *UntypedDoublyLinkedList, n: *DoublyLinkedNode) void {
+        self.len -= 1;
+        if (n.next) |n2| {
+            // has a next item, update next.prev
+            n2.prev = n.prev;
+        } else {
+            // no next item therefore is the tail
+            self.tail = n.prev;
+        }
+        if (n.prev) |p| {
+            // has a prev item, update prev.next
+            p.next = n.next;
+        } else {
+            // no prev item therefore is the head
+            self.head = n.next;
+        }
+    }
+
+    pub fn add_after(self: *UntypedDoublyLinkedList, n: *DoublyLinkedNode, i: *DoublyLinkedNode) void {
+        self.len += 1;
+        if (n.next) |n1| {
+            i.next = n1;
+            n1.prev = i;
+        } else {
+            i.next = null;
+            self.tail = i;
+        }
+        n.next = i;
+        i.prev = n;
+    }
+
+    pub fn add_before(self: *UntypedDoublyLinkedList, n: *DoublyLinkedNode, i: *DoublyLinkedNode) void {
+        self.len += 1;
+        if (n.prev) |p| {
+            p.next = i;
+            i.prev = p;
+        } else {
+            i.prev = null;
+            self.head = i;
+        }
+        i.next = n;
+        n.prev = i;
+    }
+};
+
+pub fn DoublyLinkedList(comptime T: type, comptime field_name: []const u8) type {
+    return struct {
+        impl: UntypedDoublyLinkedList,
+
+        inline fn length(self: *const @This()) usize {
+            return self.impl.len;
+        }
+
+        inline fn node_from_ref(ref: *T) *DoublyLinkedNode {
+            return &@field(ref, field_name);
+        }
+
+        inline fn ref_from_node(node: *DoublyLinkedNode) *T {
+            return @fieldParentPtr(field_name, node);
+        }
+
+        pub fn add_back(self: *@This(), item: *T) void {
+            self.impl.add_back(node_from_ref(item));
+        }
+
+        pub fn add_front(self: *@This(), item: *T) void {
+            self.impl.add_front(node_from_ref(item));
+        }
+
+        pub fn add_before(self: *@This(), node: *T, item: *T) void {
+            self.impl.add_before(node_from_ref(node), node_from_ref(item));
+        }
+
+        pub fn add_after(self: *@This(), node: *T, item: *T) void {
+            self.impl.add_after(node_from_ref(node), node_from_ref(item));
+        }
+
+        pub fn remove(self: *@This(), item: *T) void {
+            self.impl.remove(node_from_ref(item));
+        }
+
+        pub fn remove_front(self: *@This()) ?*T {
+            return if (self.impl.remove_front()) |n| ref_from_node(n) else null;
+        }
+
+        pub fn remove_back(self: *@This()) ?*T {
+            return if (self.impl.remove_back()) |n| ref_from_node(n) else null;
+        }
+    };
+}

@@ -1,11 +1,12 @@
-    .section .text.ap, "a"
     .balign 128
     .code16
     .org 0x8000
+    .section .ap_trampoline
+    .global ap_trampoline
 ap_trampoline:
     cli
     cld
-    ljmp    $0, _trampoline_16
+    ljmpw   $0, $8040
     .balign 16
 _initial_gdt:
     .4byte 0, 0
@@ -14,17 +15,17 @@ _initial_gdt:
     .4byte 0x00000068, 0x00CF8900    // tss, not used but required by VB's vt-x
 _gdtr:
     .2byte   _gdtr - _initial_gdt - 1
-    .4byte  0x8010
+    .4byte  0x8030
     .4byte  0, 0
     .balign 64
 _trampoline_16:
     xorw    %ax, %ax
     movw    %ax, %ds
-    lgdtl   _gdtr
+    lgdtl   0x8030
     movl    %cr0, %eax
     orl     $1, %eax
     movl    %eax, %cr0
-    ljmp    $8, _trampoline_32
+    ljmpl   $8, $8060
     .balign 32
     .code32
 _trampoline_32:
@@ -33,7 +34,7 @@ _trampoline_32:
     movw    %ax, %ss
     movl    $0x368, %eax
     movl    %eax, %cr4
-    movl    _cr3_value, %eax
+    movl    (0x80C0), %eax
     movl    %eax, %cr3
     movl    $0x0C0000080, %ecx
     rdmsr
@@ -41,8 +42,8 @@ _trampoline_32:
     wrmsr
     movl    $0x0C0000011, %eax
     movl    %eax, %cr0
-    lgdtl   _gdtr
-    movl    _trampoline_64 - 8, %esp
+    lgdtl   0x8030
+    movl    $0x80C8 - 8, %esp
     lret
     .balign 32
     .code64
@@ -57,11 +58,14 @@ _trampoline_64:
     pushq   (_ap_stk)
     pushfq
     pushq   $8
-    pushq   __ap_landing
+    pushq   (_ap_land)
     iret
 .global _cr3_value
-_cr3_value:
-    .4byte   0, 0x1000, 0
+_ap_cr3:
+    .4byte   0, 0x1000
 .global _ap_stk
 _ap_stk:
+    .4byte   0, 0
+.global _ap_land
+_ap_land:
     .4byte   0, 0

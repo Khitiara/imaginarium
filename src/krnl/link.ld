@@ -19,11 +19,11 @@ SECTIONS
     __kernel_begin = .;
     __kernel_text_begin = .;
     .text . : {
-        __ap_trampoline_begin = .;
-        KEEP(*(.text.ap*));
-        __ap_trampoline_end = .;
-        . = ALIGN(4K);
         *(.text*)
+        . = ALIGN(4K);
+        __ap_trampoline_begin = .;
+        KEEP(*(.ap_trampoline*));
+        __ap_trampoline_end = .;
     }:text
     __kernel_text_end = .;
 

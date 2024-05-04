@@ -44,10 +44,11 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
     ?LazyPath,
 } {
     const hal = b.createModule(.{
-        .root_source_file = .{ .path = "src/hal/hal.zig" },
+        .root_source_file = b.path("src/hal/hal.zig"),
     });
     addImportFromTable(hal, "config");
     addImportFromTable(hal, "util");
+    addImportFromTable(hal, "zuid");
 
     const exe_name = "imaginarium.krnl.b";
     const exe = b.addExecutable(.{
@@ -62,15 +63,18 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
     });
     // exe.export_memory = true;
     exe.entry = .disabled;
-    exe.root_module.dwarf_format = .@"64";
-    exe.root_module.addImport("hal", hal);
 
-    exe.addAssemblyFile(b.path(b.fmt("src/hal/arch/{s}/ap_trampoline.S",.{@tagName(arch)})));
+    const exe_module = &exe.root_module;
+    exe_module.dwarf_format = .@"64";
+    exe_module.addImport("hal", hal);
 
-    addImportFromTable(&exe.root_module, "util");
-    addImportFromTable(&exe.root_module, "config");
+    exe.addAssemblyFile(b.path(b.fmt("src/hal/arch/{s}/ap_trampoline.S", .{@tagName(arch)})));
 
-    exe.setLinkerScript(.{ .path = "src/krnl/link.ld" });
+    addImportFromTable(exe_module, "util");
+    addImportFromTable(exe_module, "config");
+    addImportFromTable(exe_module, "zuid");
+
+    exe.setLinkerScript(b.path("src/krnl/link.ld"));
 
     const krnlstep = b.step("krnl", "imaginarium kernel");
 
@@ -113,7 +117,7 @@ fn usr(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, o
 
     const usrlib = b.addStaticLibrary(.{
         .name = lib_name,
-        .root_source_file = .{ .path = "src/usr/usr_lib.zig" },
+        .root_source_file = b.path("src/usr/usr_lib.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -123,7 +127,7 @@ fn usr(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, o
     // cant create from existing module so invert that and create the object first
     const usr_imports = b.addObject(.{
         .name = dynlib_name,
-        .root_source_file = .{ .path = "src/usr/usr_lib.zig" },
+        .root_source_file = b.path("src/usr/usr_lib.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -143,8 +147,8 @@ fn usr(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, o
     usrstep.dependOn(&b.addInstallArtifact(usrlib, .{
         .dest_dir = .{ .override = .{ .custom = usroutdir } },
     }).step);
-    usrstep.dependOn(&b.addInstallFile(.{ .path = "src/usr/usr.zig" }, try std.mem.concat(b.allocator, u8, &.{ usroutdir, "/include/usr.zig" })).step);
-    usrstep.dependOn(&b.addInstallFile(.{ .path = "src/usr/usr.h" }, try std.mem.concat(b.allocator, u8, &.{ usroutdir, "/include/usr.h" })).step);
+    usrstep.dependOn(&b.addInstallFile(b.path("src/usr/usr.zig"), try std.mem.concat(b.allocator, u8, &.{ usroutdir, "/include/usr.zig" })).step);
+    usrstep.dependOn(&b.addInstallFile(b.path("src/usr/usr.h"), try std.mem.concat(b.allocator, u8, &.{ usroutdir, "/include/usr.h" })).step);
     usrstep.dependOn(&usr_imports.step);
 
     b.getInstallStep().dependOn(usrstep);
@@ -219,10 +223,14 @@ pub fn build(b: *std.Build) !void {
     const optsModule = options.createModule();
     b.modules.put("config", optsModule) catch @panic("OOM");
 
+    const zuid_dep = b.dependency("zuid", .{});
+    b.modules.put("zuid", zuid_dep.module("zuid")) catch @panic("OOM");
+
     const util = b.addModule("util", .{
-        .root_source_file = .{ .path = "src/util/util.zig" },
+        .root_source_file = b.path("src/util/util.zig"),
     });
     addImportFromTable(util, "config");
+    addImportFromTable(util, "zuid");
 
     const krnlstep, const elf, const debug = try krnl(b, arch, target, optimize);
     const imgstep, const imgFile = try img(b, arch, krnlstep, elf, debug);

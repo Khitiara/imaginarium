@@ -28,6 +28,21 @@ pub fn puts(bytes: []const u8) void {
     }
 }
 
+pub fn rdtsc() u64 {
+    var eax: u32 = undefined;
+    var edx: u32 = undefined;
+    asm volatile ("rdtsc"
+        : [eax] "=a" (eax),
+          [edx] "=d" (edx),
+    );
+    return (@as(u64, edx) << 32) | eax;
+}
+
+pub fn delay_unsafe(cycles: u64) void {
+    const target = rdtsc() + cycles;
+    while (rdtsc() < target) {}
+}
+
 const log = @import("std").log.scoped(.init);
 
 pub const ptr_from_physaddr = pmm.ptr_from_physaddr;

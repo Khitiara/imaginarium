@@ -102,6 +102,12 @@ pub fn read_madt(ptr: *const Madt) void {
         const hdr = indexer.current();
 
         switch (hdr.type) {
+            .local_apic => {
+                const payload = @as(*const MadtEntryPayload(.local_apic), @alignCast(@ptrCast(hdr)));
+                apic.lapic_ids[apic.processor_count] = payload.local_apic_id;
+                apic.lapic_indices[payload.local_apic_id] = apic.processor_count;
+                apic.processor_count += 1;
+            },
             .io_apic => {
                 const payload = @as(*const MadtEntryPayload(.io_apic), @alignCast(@ptrCast(hdr)));
                 assert(hdr.length == 12);

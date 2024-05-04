@@ -4,9 +4,14 @@
     .dependencies = .{
         .bootelf = .{
             .path = "bootelf/",
-        }
+        },
+        .zuid = .{
+            .path = "zuid/",
+        },
     },
     .paths = .{
-        "",
+        "src/",
+        "build/",
+        "docs/",
     },
 }
