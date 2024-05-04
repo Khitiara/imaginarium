@@ -5,7 +5,7 @@ const expect = std.testing.expect;
 
 test "UUID v1" {
     const uuid = zuid.new.v1();
-    const version = (uuid.time_hi_and_version & 0xF000) >> 12;
+    const version = uuid.version;
     const variant = (uuid.clock_seq_hi_and_reserved & 0xC0) >> 6;
     const urn = uuid.toString();
     try expect(urn.len == 36);
@@ -23,7 +23,7 @@ test "UUID v3" {
 
     const uuid = zuid.new.v3(namespace, url);
     const urn = uuid.toString();
-    const version = (uuid.time_hi_and_version & 0xF000) >> 12;
+    const version = uuid.version;
     const variant = (uuid.clock_seq_hi_and_reserved & 0xC0) >> 6;
     try expect(std.mem.eql(u8, str, &urn));
     try expect(urn.len == 36);
@@ -35,7 +35,7 @@ test "UUID v3" {
 
 test "UUID v4" {
     const uuid = zuid.new.v4();
-    const version = (uuid.time_hi_and_version & 0xF000) >> 12;
+    const version = uuid.version;
     const variant = (uuid.clock_seq_hi_and_reserved & 0xC0) >> 6;
     const urn = uuid.toString();
     try expect(urn.len == 36);
@@ -53,7 +53,7 @@ test "UUID v5" {
 
     const uuid = zuid.new.v5(namespace, url);
     const urn = uuid.toString();
-    const version = (uuid.time_hi_and_version & 0xF000) >> 12;
+    const version = uuid.version;
     const variant = (uuid.clock_seq_hi_and_reserved & 0xC0) >> 6;
     try expect(std.mem.eql(u8, str, &urn));
     try expect(urn.len == 36);

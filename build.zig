@@ -275,4 +275,15 @@ pub fn build(b: *std.Build) !void {
     run.dependOn(&qemu.step);
 
     try usr(b, arch, target, optimize);
+
+    const test_step = b.step("test", "Run tests.");
+    const util_test = b.addTest(.{
+        .root_source_file = b.path("src/util/util.zig"),
+        .target = b.resolveTargetQuery(.{}),
+        .optimize = optimize,
+    });
+    test_step.dependOn(&util_test.step);
+    if (zuid_dep.builder.top_level_steps.get("test")) |zuid_tests| {
+        test_step.dependOn(&zuid_tests.step);
+    }
 }

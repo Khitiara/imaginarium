@@ -13,9 +13,9 @@ pub const UuidNamespace = struct {
 /// Convert a hexadecimal character to a numberic digit.
 fn hexCharToInt(c: u8) u4 {
     switch (c) {
-        '0'...'9' => return c - '0',
-        'a'...'f' => return c - 'a' + 10,
-        'A'...'F' => return c - 'A' + 10,
+        '0'...'9' => return @truncate(c - '0'),
+        'a'...'f' => return @truncate(c - 'a' + 10),
+        'A'...'F' => return @truncate(c - 'A' + 10),
         else => return 0,
     }
 }
@@ -31,10 +31,11 @@ pub const UUID = packed struct(u128) {
 
     pub fn toString(self: *const UUID) [36]u8 {
         var buffer: [36]u8 = undefined;
-        _ = std.fmt.bufPrint(&buffer, "{x:0>8}-{x:0>4}-{x:0>4}-{x:0>2}{x:0>2}-{x:0>12}", .{
+        _ = std.fmt.bufPrint(&buffer, "{x:0>8}-{x:0>4}-{x:1}{x:0>3}-{x:0>2}{x:0>2}-{x:0>12}", .{
             self.time_low,
             self.time_mid,
-            self.time_hi_and_version,
+            self.version,
+            self.time_hi,
             self.clock_seq_hi_and_reserved,
             self.clock_seq_low,
             self.node,
@@ -92,7 +93,8 @@ pub fn deserialize(urn: []const u8) !UUID {
     return UUID{
         .time_low = time_low,
         .time_mid = time_mid,
-        .time_hi_and_version = time_hi_and_version,
+        .time_hi = time_hi_and_version & 0x0FFF,
+        .version = time_hi_and_version >> 12,
         .clock_seq_hi_and_reserved = clock_seq_hi_and_reserved,
         .clock_seq_low = clock_seq_low,
         .node = node,
@@ -155,10 +157,10 @@ pub const new = struct {
 
         hasher.final(&digest);
 
-        const time_low: u32 = @truncate(std.mem.readInt(u32, digest[0..4], .big));
-        const time_mid: u16 = @truncate(std.mem.readInt(u16, digest[4..6], .big));
+        const time_low: u32 = std.mem.readInt(u32, digest[0..4], .big);
+        const time_mid: u16 = std.mem.readInt(u16, digest[4..6], .big);
 
-        const time_hi = std.mem.readInt(u16, digest[6..8], .big);
+        const time_hi: u12 = @truncate(std.mem.readInt(u16, digest[6..8], .big));
 
         var clock_seq_hi_and_reserved = digest[8];
         clock_seq_hi_and_reserved &= 0x3F;
