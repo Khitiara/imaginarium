@@ -32,7 +32,7 @@ pub fn get_lapic_id() u8 {
 }
 
 pub fn get_register_ptr(reg: u16, comptime T: type) *volatile align(16) T {
-    return @ptrCast(&lapic_ptr[@intFromEnum(reg)].item);
+    return @ptrCast(&lapic_ptr[reg].item);
 }
 
 pub const IOApic = struct {

@@ -93,41 +93,40 @@ pub const raw_page_allocator = struct {
     pub fn allocator(self: *const @This()) std.mem.Allocator {
         return .{
             .ptr = undefined,
-            .vtable = self.vtab,
+            .vtable = &self.vtab,
         };
     }
 
-    fn alloc(_: *anyopaque, len: usize, ptr_align: u29, len_align: u29, _: usize) std.mem.Allocator.Error![]u8 {
-        const alloc_len = pmm.get_allocation_size(std.math.max(len_align, std.math.max(ptr_align, len)));
+    fn alloc(_: *anyopaque, len: usize, ptr_align: u8, _: usize) ?[*]u8 {
+        const alloc_len = pmm.get_allocation_size(@max(ptr_align, len));
 
         const ptr = pmm.ptr_from_physaddr([*]u8, pmm.alloc(alloc_len) catch |err| {
             switch (err) {
-                error.OutOfMemory => return error.OutOfMemory,
+                error.OutOfMemory => return null,
                 else => {
-                    log.err("PMM allocator: {e}", .{err});
-                    @panic("PMM allocator allocation error");
+                    std.debug.panicExtra(@errorReturnTrace(), @returnAddress(), "PMM allocator: {}", .{err});
                 },
             }
         });
 
-        return ptr[0..len];
+        return ptr;
     }
 
-    fn resize(_: *anyopaque, old_mem: []u8, old_align: u29, new_size: usize, len_align: u29, ret_addr: usize) ?usize {
-        const old_alloc = pmm.get_allocation_size(std.math.max(old_mem.len, old_align));
+    fn resize(_: *anyopaque, old_mem: []u8, old_align: u8, new_size: usize, ret_addr: usize) bool {
+        const old_alloc = pmm.get_allocation_size(@max(old_mem.len, old_align));
 
-        const addr: isize = @intFromPtr(old_mem.ptr);
+        const addr: usize = @intFromPtr(old_mem.ptr);
         const base_vaddr = pmm.phys_mapping_base;
-        const paddr = addr - base_vaddr;
+        const paddr: usize = addr - @as(usize, @bitCast(base_vaddr));
 
         if (new_size == 0) {
             free(undefined, old_mem, old_align, ret_addr);
-            return 0;
+            return true;
         } else {
-            const new_alloc = pmm.get_allocation_size(std.math.max(new_size, len_align));
+            const new_alloc = pmm.get_allocation_size(@max(new_size, old_align));
 
             if (new_alloc > old_alloc) {
-                return null;
+                return false;
             }
 
             var curr_alloc = old_alloc;
@@ -136,12 +135,12 @@ pub const raw_page_allocator = struct {
                 curr_alloc /= 2;
             }
 
-            return new_size;
+            return true;
         }
     }
 
-    fn free(_: *anyopaque, old_mem: []u8, old_align: u29, _: usize) void {
-        const old_alloc = pmm.get_allocation_size(std.math.max(old_mem.len, old_align));
+    fn free(_: *anyopaque, old_mem: []u8, old_align: u8, _: usize) void {
+        const old_alloc = pmm.get_allocation_size(@max(old_mem.len, old_align));
 
         const addr = @intFromPtr(old_mem.ptr);
         const base_vaddr: usize = @bitCast(pmm.phys_mapping_base);
@@ -150,6 +149,8 @@ pub const raw_page_allocator = struct {
         pmm.free(paddr, old_alloc);
     }
 }{};
+
+pub var gpa: std.heap.GeneralPurposeAllocator(.{ .thread_safe = false }) = .{ .backing_allocator = raw_page_allocator.allocator() };
 
 pub fn alloc_page() !*anyopaque {
     const paddr = try pmm.alloc(1 << 12);

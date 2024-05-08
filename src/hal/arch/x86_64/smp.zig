@@ -2,6 +2,7 @@ const msr = @import("msr.zig");
 const util = @import("util");
 const crs = @import("ctrl_registers.zig");
 const apic = @import("../../apic/apic.zig");
+const std = @import("std");
 
 const ext = util.extern_address;
 
@@ -27,16 +28,40 @@ const arch = @import("x86_64.zig");
 const pause = arch.pause;
 const delay_unsafe = arch.delay_unsafe;
 
-var ap_stacks: [][8 << 20]u8 = undefined;
+var ap_stacks: []*[8 << 20]u8 = undefined;
 
-pub fn get_local_krnl_stack() *anyopaque {
-    return @ptrFromInt(@intFromPtr(&ap_stacks[apic.lapic_indices[apic.get_lapic_id()]]) + (8 << 20));
+pub fn get_local_krnl_stack() *[8 << 20]u8 {
+    return ap_stacks[apic.lapic_indices[apic.get_lapic_id()]];
+}
+pub fn get_local_krnl_stack_top() *anyopaque {
+    return @ptrFromInt(@intFromPtr(get_local_krnl_stack()) + (8 << 20));
 }
 
-pub fn init(proc_cnt: u8) !void {
-    const bspid = @import("cpuid.zig").cpuid(.type_fam_model_stepping_features, {}).brand_flush_count_id.apic_id;
-    const alloc = @import("vmm.zig").raw_page_allocator.allocator();
-    ap_stacks = try alloc.alloc([8 << 20]u8, proc_cnt);
+var _cb: *const fn (std.mem.Allocator) void = undefined;
+const vmm = @import("vmm.zig");
+var bspid: u8 = undefined;
+
+pub fn init(comptime cb: fn (std.mem.Allocator, std.mem.Allocator) std.mem.Allocator.Error!void) std.mem.Allocator.Error!void {
+    bspid = @import("cpuid.zig").cpuid(.type_fam_model_stepping_features, {}).brand_flush_count_id.apic_id;
+    const alloc = vmm.raw_page_allocator.allocator();
+    const gpa = vmm.gpa.allocator();
+    var raw_ap_stacks = try alloc.alloc([8 << 20]u8, apic.processor_count - 1);
+    ap_stacks = try gpa.alloc(*[8 << 20]u8, apic.processor_count);
+    var stk: usize = 0;
+    for (0..apic.processor_count) |i| {
+        if (apic.lapic_ids[i] == bspid) {
+            ap_stacks[i] = @ptrCast(ext("__bootstrap_stack_bottom"));
+        } else {
+            ap_stacks[i] = &raw_ap_stacks[stk];
+            stk += 1;
+        }
+    }
+    try cb(alloc, gpa);
+}
+
+pub fn start_aps(cb: *const fn (std.mem.Allocator) void) !void {
+    _cb = cb;
+
     const lnd_ofs = @intFromPtr(ext("_ap_land")) - @intFromPtr(ap_start);
     const stk_ofs = @intFromPtr(ext("_ap_stk")) - @intFromPtr(ap_start);
     const cr3_ofs = @intFromPtr(ext("_ap_cr3")) - @intFromPtr(ap_start);
@@ -48,11 +73,11 @@ pub fn init(proc_cnt: u8) !void {
     const ap_stk_ptr: *usize = @ptrCast(ap_trampoline[stk_ofs..]);
     const icr_high = apic.get_register_ptr(apic.RegisterId.icr + 1, apic.IcrHigh);
     const icr_low = apic.get_register_ptr(apic.RegisterId.icr, apic.IcrLow);
-    for (0..proc_cnt) |i| {
+    for (0..apic.processor_count) |i| {
         if (apic.lapic_ids[i] == bspid) {
             continue;
         }
-        ap_stk_ptr.* = @intFromPtr(&ap_stacks[i]) + (8 << 20);
+        ap_stk_ptr.* = @intFromPtr(ap_stacks[i]) + (8 << 20);
         apic.get_register_ptr(apic.RegisterId.esr, u32).* = 0;
         icr_high.*.dest = i;
         var l = icr_low.*;
@@ -73,12 +98,16 @@ pub fn init(proc_cnt: u8) !void {
     }
 }
 
-export fn __ap_landing() callconv(.Win64) noreturn {
-    @import("gdt.zig").apply();
-    @import("idt.zig").load();
+pub fn wait_for_all_aps() void {
     while (@atomicLoad(u8, &__bsp_start_spinlock_flag, .acquire) == 0) {
         pause();
     }
+}
+
+export fn __ap_landing() callconv(.Win64) noreturn {
+    @import("gdt.zig").apply();
+    @import("idt.zig").load();
+    _cb(vmm.gpa.allocator());
 
     while (true) {}
 }

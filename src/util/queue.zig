@@ -168,11 +168,11 @@ pub fn PriorityQueue(comptime T: type, comptime node_field_name: []const u8, com
             return @fieldParentPtr(node_field_name, node);
         }
 
-        inline fn node_prio(node: *const Node) P {
+        inline fn node_prio(node: *Node) P {
             return @field(ref_from_node(node).*, prio_field_name);
         }
 
-        pub fn peek(self: *const @This()) ?*Node {
+        pub fn peek(self: *const @This()) ?*T {
             return if (self.head) |h| ref_from_node(h) else null;
         }
 

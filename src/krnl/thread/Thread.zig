@@ -34,7 +34,7 @@ pub const SavedThreadState = struct {
 };
 
 header: ob.Object,
-lock: util.SpinLock = .{},
+lock: hal.SpinLock = .{},
 wait_list: queue.DoublyLinkedList(dispatcher.wait_block.WaitBlock, "thread_wait_list") = .{},
 state: State = .init,
 priority: Priority,
@@ -43,7 +43,7 @@ saved_state: SavedThreadState = undefined,
 stack: []const u8 = undefined,
 
 pub fn set_state(self: *@This(), expect: State, state: State) void {
-    const old = @cmpxchgStrong(State, &self.State, expect, state, .acq_rel, .monotonic);
+    const old = @cmpxchgStrong(State, &self.state, expect, state, .acq_rel, .monotonic);
     std.debug.assert(old != null);
 }
 
@@ -66,8 +66,8 @@ pub fn setup_stack(self: *@This(), allocator: std.mem.Allocator, thread_start: *
     // to initialize necessary selectors, stack, etc to enter ring 0
     frame.rip = @intFromPtr(thread_start);
     frame.registers.rcx = @intFromPtr(param);
-    self.stack = try allocator.alignedAlloc(u8, 1 << 12, 1 << 13);
-    frame.rsp = @intFromPtr(self.stack) + self.stack.len;
+    self.stack = try allocator.alignedAlloc(u8, 1 << 12, 1 << 12);
+    frame.rsp = @intFromPtr(self.stack.ptr) + self.stack.len;
     frame.eflags = arch.x86_64.flags();
     frame.eflags.interrupt_enable = true;
     frame.cs = arch.x86_64.gdt.selectors.kernel_code;

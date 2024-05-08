@@ -7,21 +7,12 @@ pub const Msr = enum(u32) {
     fs_base = 0xC000_0100,
     gs_base = 0xC000_0101,
     kernel_gs_base = 0xC000_0102,
+    _,
 };
 
-const msr_writable = std.EnumArray(Msr, bool).initDefault(false, .{
-    .apic_base = true,
-    .efer = true,
-});
-
-const msr_readable = std.EnumArray(Msr, bool).initDefault(false, .{
-    .apic_base = true,
-    .efer = true,
-});
-
 fn MsrValueType(comptime msr: Msr) type {
-    switch (msr) {
-        .apic_base => return packed struct(u64) {
+    return switch (msr) {
+        .apic_base => packed struct(u64) {
             _reserved1: u8 = 0,
             bsp: bool,
             _reserved2: u1 = 0,
@@ -29,7 +20,7 @@ fn MsrValueType(comptime msr: Msr) type {
             apic_global_enable: bool,
             lapic_base: u52, // may need truncated to maxphyaddr
         },
-        .efer => return packed struct(u64) {
+        .efer => packed struct(u64) {
             syscall_extensions: bool,
             _reserved1: u7 = 0,
             lme: bool,
@@ -43,18 +34,20 @@ fn MsrValueType(comptime msr: Msr) type {
         },
         .pat => @import("paging/pat.zig").PAT,
         .fs_base, .gs_base, .kernel_gs_base => isize,
-    }
+        _ => @panic(""),
+    };
 }
 
-fn isKnownMsr(msr: Msr) bool {
+inline fn isKnownMsr(msr: Msr) bool {
     return inline for (@typeInfo(Msr).Enum.fields) |f| {
         if (@intFromEnum(msr) == f.value) break true;
     } else false;
 }
 
 pub fn write(comptime msr: Msr, value: MsrValueType(msr)) void {
-    if (!isKnownMsr(msr)) @compileError("Unknown MSR " ++ std.fmt.comptimePrint("0x{X}", @intFromEnum(msr)));
-    if (!msr_writable.get(msr)) @compileError("Cannot write to read-only MSR " ++ @tagName(msr));
+    if (!isKnownMsr(msr)) {
+        @compileError("Unknown MSR " ++ std.fmt.comptimePrint("0x{X}", .{@intFromEnum(msr)}));
+    }
 
     const valueBytes: u64 = @bitCast(value);
     const low = @as(u32, @truncate(valueBytes));
@@ -69,8 +62,9 @@ pub fn write(comptime msr: Msr, value: MsrValueType(msr)) void {
 }
 
 pub fn read(comptime msr: Msr) MsrValueType(msr) {
-    if (!isKnownMsr(msr)) @compileError("Unknown MSR " ++ std.fmt.comptimePrint("0x{X}", @intFromEnum(msr)));
-    if (!msr_readable.get(msr)) @compileError("Cannot read to write-only MSR " ++ @tagName(msr));
+    if (!isKnownMsr(msr)) {
+        @compileError("Unknown MSR " ++ std.fmt.comptimePrint("0x{X}", @intFromEnum(msr)));
+    }
 
     var low: u32 = undefined;
     var high: u32 = undefined;

@@ -214,7 +214,7 @@ pub fn spoof_isr(isr: InterruptHandler) void {
     __isr__spoof__(isr, @returnAddress());
 }
 
-extern fn __isr__spoof__(isr: InterruptHandler, return_address: isize) callconv(.Win64) void;
+extern fn __isr__spoof__(isr: InterruptHandler, return_address: usize) callconv(.Win64) void;
 
 comptime {
     // the asm snippet of push operations for saved registers

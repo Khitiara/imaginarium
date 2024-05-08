@@ -13,17 +13,32 @@ pub const InterruptVector = packed struct(u8) {
     level: InterruptRequestPriority,
 };
 
-pub inline fn handle_interrupt(handler: fn (*arch.SavedRegisterState) void) fn (*arch.SavedRegisterState) void {
+pub inline fn handle_interrupt(handler: fn (*arch.SavedRegisterState) void) fn (*arch.SavedRegisterState) callconv(.Win64) void {
     return struct {
-        fn f(frame: *arch.SavedRegisterState) void {
+        fn f(frame: *arch.SavedRegisterState) callconv(.Win64) void {
             const is_root_interrupt: bool = lcb.frame == null;
             defer if (is_root_interrupt) dispatch_interrupt_tail(frame);
             lcb.frame = lcb.frame orelse frame;
-            const vector: InterruptVector = @bitCast(frame.interrupt_number);
+            const vector: InterruptVector = @bitCast(@intFromEnum(frame.interrupt_number));
             _ = set_irql(vector.level);
             @call(.always_inline, handler, .{frame});
         }
     }.f;
+}
+
+fn enter_scheduling_1(_: *arch.SavedRegisterState) void {}
+export const enter_scheduling_2 = handle_interrupt(enter_scheduling_1);
+
+pub noinline fn enter_scheduling() void {
+    arch.x86_64.idt.spoof_isr(&enter_scheduling_2);
+}
+
+fn enter_thread_ctx_1(frame: *arch.SavedRegisterState) callconv(.Win64) void {
+    lcb.current_thread.?.saved_state.registers = frame.*;
+}
+
+pub noinline fn enter_thread_ctx() void {
+    arch.x86_64.idt.spoof_isr(&enter_thread_ctx_1);
 }
 
 fn set_irql(level: InterruptRequestPriority) InterruptRequestPriority {
@@ -58,6 +73,7 @@ pub fn allocate_vector(level: InterruptRequestPriority) !InterruptVector {
 /// this may result in nested interrupts from other IRQLs, *but* the nested interrupt
 /// is guaranteed to correctly handle
 fn dispatch_interrupt_tail(frame: *arch.SavedRegisterState) void {
+    arch.enable_interrupts();
     var level = smp.lcb.irql;
     // higher IRQLs do processing through ISRs rather than fixed logic. loop through to process each IRQL in turn
     while (@intFromEnum(level) > @intFromEnum(InterruptRequestPriority.dpc)) : (level = set_irql(level.lower())) {}

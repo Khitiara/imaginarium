@@ -65,8 +65,9 @@ pub fn platform_init(memmap: []memory.MemoryMapEntry) !void {
     log.info("interrupts enabled", .{});
     try acpi.load_sdt(&oem_id);
     log.info("loaded acpi sdt", .{});
-    log.info("early platform init complete", .{});
     time.init_timing();
+    log.info("timekeeping initialized", .{});
+    log.info("early platform init complete", .{});
 }
 
 comptime {

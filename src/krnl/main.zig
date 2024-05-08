@@ -69,14 +69,21 @@ fn logFn(
     }
 }
 
+pub const os = struct {
+    pub const heap = struct {
+        pub const page_allocator = arch.x86_64.vmm.raw_page_allocator.allocator();
+    };
+};
+
 pub const std_options: std.Options = .{
     .logFn = logFn,
+    .cryptoRandomSeed = arch.x86_64.rand.fill,
 };
 
 const log = std.log.default;
 
 pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_addr: ?usize) noreturn {
-    log.err("PANIC {s}, IP={X:0>16}; error return trace:", .{ msg, ret_addr orelse 0 });
+    log.err("PANIC {s}, RETURN={?X:0>16}; error return trace:", .{ msg, ret_addr });
     if (error_return_trace) |stk| {
         var i: usize = 0;
         var frame_index: usize = 0;
@@ -87,8 +94,10 @@ pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_
             i += 1;
         }) {
             const return_address = stk.instruction_addresses[frame_index];
-            log.err("    {d: <4}: {x:0>16}", .{ i, return_address });
+            log.err("   at   {d: <4}: {x:0>16}", .{ i, return_address });
         }
+    } else {
+        log.err("    ---", .{});
     }
     log.err("current stack trace: ", .{});
     var addrs: [16]usize = undefined;
@@ -107,7 +116,7 @@ pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_
             i += 1;
         }) {
             const return_address = trace.instruction_addresses[frame_index];
-            log.err("    {d: <4}: {x:0>16}", .{ i, return_address });
+            log.err("   at   {d: <4}: {x:0>16}", .{ i, return_address });
         }
     }
     while (true) {
@@ -122,6 +131,7 @@ fn main(ldr_info: *bootelf.BootelfData) !void {
     std.debug.assert(bootelf_magic_check);
 
     try arch.platform_init(ldr_info.memory_map());
+    try arch.smp.init(smp.allocate_lcbs);
 
     const current_apic_id = cpuid.cpuid(.type_fam_model_stepping_features, {}).brand_flush_count_id.apic_id;
 

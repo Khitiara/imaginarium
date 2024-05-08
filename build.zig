@@ -61,11 +61,14 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
         .use_lld = true,
         .strip = false,
     });
+    b.verbose_llvm_ir = "agony.ir";
+    b.verbose_llvm_bc = "agony.bc";
+    const ir = exe.getEmittedLlvmIr();
     // exe.export_memory = true;
     exe.entry = .disabled;
 
     const exe_module = &exe.root_module;
-    exe_module.dwarf_format = .@"64";
+    // exe_module.dwarf_format = .@"64";
     exe_module.addImport("hal", hal);
 
     exe.addAssemblyFile(b.path(b.fmt("src/hal/arch/{s}/ap_trampoline.S", .{@tagName(arch)})));
@@ -77,7 +80,6 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
     exe.setLinkerScript(b.path("src/krnl/link.ld"));
 
     const krnlstep = b.step("krnl", "imaginarium kernel");
-
     krnlstep.dependOn(&b.addInstallArtifact(exe, .{
         .dest_dir = .{
             .override = .{
@@ -93,6 +95,7 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
 
     const krnloutdir = b.fmt("{s}/krnl/", .{@tagName(arch)});
     installFrom(b, &objcopy.step, krnlstep, objcopy.getOutput(), krnloutdir, b.dupe(exe_name));
+    installFrom(b, &exe.step, krnlstep, ir, "agony", "something.ir");
     if (objcopy.getOutputSeparatedDebug()) |dbg| {
         installFrom(b, &objcopy.step, krnlstep, dbg, krnloutdir, try std.mem.concat(b.allocator, u8, &.{ exe_name, ".debug" }));
     }

@@ -1,8 +1,8 @@
 const util = @import("util");
 const Dpc = @This();
 
-const Priority = util.PriorityEnum(3);
-const DpcFn = *const fn (*const Dpc, ?*anyopaque, ?*anyopaque, ?*anyopaque) void;
+pub const Priority = util.PriorityEnum(3);
+pub const DpcFn = *const fn (*const Dpc, ?*anyopaque, ?*anyopaque, ?*anyopaque) void;
 
 priority: Priority,
 procid: u8,

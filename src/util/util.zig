@@ -4,7 +4,6 @@ pub const masking = @import("masking.zig");
 pub const trie = @import("trie.zig");
 pub const sentinel_bit_set = @import("sentinel_bit_set.zig");
 pub const extern_address = @import("externs.zig").extern_address;
-pub const SpinLock = @import("SpinLock.zig");
 pub const queue = @import("queue.zig");
 
 const std = @import("std");
@@ -38,14 +37,14 @@ pub inline fn CopyPtrAttrs(
 pub inline fn PriorityEnum(comptime levels: comptime_int) type {
     var arr: [levels]std.builtin.Type.EnumField = undefined;
     for (0..levels) |l| {
-        arr[l] = .{ .name = std.fmt.comptimePrint("p{d}", .{levels - 1}), .value = l };
+        arr[l] = .{ .name = std.fmt.comptimePrint("p{d}", .{levels - l}), .value = l };
     }
     return @Type(.{
         .Enum = .{
             .is_exhaustive = true,
-            .fields = arr,
+            .fields = &arr,
             .decls = &.{},
-            .tag_type = std.math.IntFittingRange(0, levels.len - 1),
+            .tag_type = std.math.IntFittingRange(0, levels - 1),
         },
     });
 }

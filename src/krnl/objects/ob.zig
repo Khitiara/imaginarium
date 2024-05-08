@@ -19,14 +19,9 @@ pub const ObjectKind = enum(u7) {
     }
 };
 
-pub const ObjectKindAndLock = packed struct(u8) {
-    kind: ObjectKind,
-    lock: bool,
-};
-
 pub const ObNamespace = zuid.deserialize("2d7e52f8-0d27-4a40-a967-828c2900c33c");
 
-pub const Object = extern struct {
+pub const Object = struct {
     kind: ObjectKind,
     id: zuid.Uuid = zuid.null_uuid,
     /// max-value means the object is unnamed

@@ -20,7 +20,7 @@ fn hexCharToInt(c: u8) u4 {
     }
 }
 
-pub const null_uuid: Uuid = @bitCast(0);
+pub const null_uuid: Uuid = @bitCast(@as(u128, 0));
 
 pub const Uuid = packed struct(u128) {
     node: u48,
