@@ -1,7 +1,7 @@
 const msr = @import("msr.zig");
 const util = @import("util");
 const crs = @import("ctrl_registers.zig");
-const apic = @import("../../apic.zig");
+const apic = @import("../../apic/apic.zig");
 
 const ext = util.extern_address;
 
@@ -23,7 +23,7 @@ pub fn SmpUtil(comptime LocalControlBlock: type) type {
     };
 }
 
-const arch = @import("../x86_64.zig");
+const arch = @import("x86_64.zig");
 const pause = arch.pause;
 const delay_unsafe = arch.delay_unsafe;
 

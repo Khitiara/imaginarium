@@ -25,7 +25,7 @@ pub fn SentinelArrayBitSet(comptime MaskIntType: type, comptime size: usize, com
     if (!std.math.isPowerOfTwo(@bitSizeOf(MaskIntType))) {
         var desired_bits = std.math.ceilPowerOfTwoAssert(usize, @bitSizeOf(MaskIntType));
         if (desired_bits < byte_size) desired_bits = byte_size;
-        const FixedMaskType = std.meta.Int(.unsigned, desired_bits);
+        const FixedMaskType = @Type(.{ .Int = .{ .signedness = .unsigned, .bits = desired_bits } });
         @compileError("ArrayBitSet was passed integer type " ++ @typeName(MaskIntType) ++
             ", which is not a power of two.  Please round this up to a power of two integer size (i.e. " ++ @typeName(FixedMaskType) ++ ").");
     }
@@ -36,7 +36,7 @@ pub fn SentinelArrayBitSet(comptime MaskIntType: type, comptime size: usize, com
     if (@bitSizeOf(MaskIntType) != @sizeOf(MaskIntType) * byte_size) {
         var desired_bits = @sizeOf(MaskIntType) * byte_size;
         desired_bits = std.math.ceilPowerOfTwoAssert(usize, desired_bits);
-        const FixedMaskType = std.meta.Int(.unsigned, desired_bits);
+        const FixedMaskType = @Type(.{ .Int = .{ .signedness = .unsigned, .bits = desired_bits } });
         @compileError("ArrayBitSet was passed integer type " ++ @typeName(MaskIntType) ++
             ", which contains padding bits.  Please round this up to an unpadded integer size (i.e. " ++ @typeName(FixedMaskType) ++ ").");
     }

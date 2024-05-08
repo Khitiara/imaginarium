@@ -3,8 +3,8 @@ const util = @import("util");
 const checksum = util.checksum;
 const WindowStructIndexer = util.WindowStructIndexer;
 
-const apic = @import("../apic.zig");
-const log = @import("../acpi.zig").log;
+const apic = @import("../apic/apic.zig");
+const log = @import("acpi.zig").log;
 
 const assert = @import("std").debug.assert;
 
@@ -93,7 +93,7 @@ fn MadtEntryPayload(comptime t: MadtEntryType) type {
     };
 }
 
-pub fn read_madt(ptr: *const Madt) void {
+pub fn read_madt(ptr: *align(1) const Madt) void {
     log.info("APIC MADT table loaded at {*}", .{ptr});
     var lapic_ptr: usize = ptr.lapic_addr;
     const entries_base_ptr = @as([*]const u8, @ptrCast(ptr))[@sizeOf(Madt)..ptr.header.length];
@@ -103,26 +103,28 @@ pub fn read_madt(ptr: *const Madt) void {
 
         switch (hdr.type) {
             .local_apic => {
-                const payload = @as(*const MadtEntryPayload(.local_apic), @alignCast(@ptrCast(hdr)));
+                const payload = @as(*align(1) const MadtEntryPayload(.local_apic), @ptrCast(hdr));
                 apic.lapic_ids[apic.processor_count] = payload.local_apic_id;
                 apic.lapic_indices[payload.local_apic_id] = apic.processor_count;
                 apic.processor_count += 1;
             },
             .io_apic => {
-                const payload = @as(*const MadtEntryPayload(.io_apic), @alignCast(@ptrCast(hdr)));
+                const payload = @as(*align(1) const MadtEntryPayload(.io_apic), @ptrCast(hdr));
                 assert(hdr.length == 12);
 
                 apic.ioapics_buf[apic.ioapics_count] = .{ .phys_addr = payload.ioapic_addr, .gsi_base = payload.gsi_base };
                 apic.ioapics_count += 1;
             },
             .local_apic_addr_override => {
-                const payload = @as(*const MadtEntryPayload(.local_apic_addr_override), @alignCast(@ptrCast(hdr)));
+                const payload = @as(*align(1) const MadtEntryPayload(.local_apic_addr_override), @ptrCast(hdr));
                 assert(hdr.length == 12);
 
                 lapic_ptr = payload.lapic_addr;
             },
 
-            else => {},
+            else => {
+                log.debug("Found MADT payload {x}", .{hdr.type});
+            },
         }
 
         indexer.advance(hdr.length);

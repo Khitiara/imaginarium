@@ -245,13 +245,25 @@ pub fn build(b: *std.Build) !void {
         "int,cpu_reset",
         "--no-reboot",
         // "--no-shutdown",
+        "-smp",
+        "4,cores=4",
         "-M",
-        "type=q35,smm=off",
-        // "-cpu",
-        // "qemu64,la57",
+        "type=q35,smm=off,hpet=on", // q35 has HPET by default afaik but better safe than sorry
+        "-cpu",
+        "qemu64,la57,invtsc,pdpe1gb",
         "-m",
         "4G",
     });
+
+    if (b.option(bool, "qemu-no-accel", "disable native accel for qemu") != true) {
+        switch (b.graph.host.result.os.tag) {
+            .windows => qemu.addArgs(&.{ "-accel", "whpx" }),
+            .linux => qemu.addArgs(&.{ "-accel", "kvm" }),
+            .macos => qemu.addArgs(&.{ "-accel", "hvf" }),
+            else => {},
+        }
+    }
+
     qemu.setCwd(b.path("test"));
     qemu.stdio = .inherit;
 
@@ -282,7 +294,8 @@ pub fn build(b: *std.Build) !void {
         .target = b.resolveTargetQuery(.{}),
         .optimize = optimize,
     });
-    test_step.dependOn(&util_test.step);
+    const run_util_test = b.addRunArtifact(util_test);
+    test_step.dependOn(&run_util_test.step);
     if (zuid_dep.builder.top_level_steps.get("test")) |zuid_tests| {
         test_step.dependOn(&zuid_tests.step);
     }

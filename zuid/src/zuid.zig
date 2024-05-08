@@ -2,7 +2,7 @@ const std = @import("std");
 
 const rand = std.crypto.random;
 
-/// Pre-defined UUID Namespaces from RFC-4122.
+/// Pre-defined Uuid Namespaces from RFC-4122.
 pub const UuidNamespace = struct {
     pub const DNS = deserialize("6ba7b810-9dad-11d1-80b4-00c04fd430c8") catch unreachable;
     pub const URL = deserialize("6ba7b811-9dad-11d1-80b4-00c04fd430c8") catch unreachable;
@@ -20,7 +20,9 @@ fn hexCharToInt(c: u8) u4 {
     }
 }
 
-pub const UUID = packed struct(u128) {
+pub const null_uuid: Uuid = @bitCast(0);
+
+pub const Uuid = packed struct(u128) {
     node: u48,
     clock_seq_low: u8,
     clock_seq_hi_and_reserved: u8,
@@ -29,7 +31,7 @@ pub const UUID = packed struct(u128) {
     time_mid: u16,
     time_low: u32,
 
-    pub fn toString(self: *const UUID) [36]u8 {
+    pub fn toString(self: *const Uuid) [36]u8 {
         var buffer: [36]u8 = undefined;
         _ = std.fmt.bufPrint(&buffer, "{x:0>8}-{x:0>4}-{x:1}{x:0>3}-{x:0>2}{x:0>2}-{x:0>12}", .{
             self.time_low,
@@ -44,39 +46,15 @@ pub const UUID = packed struct(u128) {
         return buffer;
     }
 
-    pub fn toArray(self: *const UUID) [16]u8 {
+    pub fn toArray(self: Uuid) [16]u8 {
         var byte_array: [16]u8 = undefined;
-
-        const str = self.toString();
-
-        var byte: u8 = 0;
-        var high_nibble: bool = true;
-        var byte_index: usize = 0;
-
-        for (str) |char| {
-            if (char == '-') {
-                continue;
-            }
-
-            byte |= hexCharToInt(char);
-
-            if (high_nibble) {
-                byte <<= 4;
-                high_nibble = false;
-            } else {
-                byte_array[byte_index] = byte;
-                byte_index += 1;
-                byte = 0;
-                high_nibble = true;
-            }
-        }
-
+        std.mem.writeInt(u128, &byte_array, @bitCast(self), .big);
         return byte_array;
     }
 };
 
-/// Create a UUID object from a string
-pub fn deserialize(urn: []const u8) !UUID {
+/// Create a Uuid object from a string
+pub fn deserialize(urn: []const u8) !Uuid {
     @setEvalBranchQuota(4096);
 
     if (urn.len != 36 or std.mem.count(u8, urn, "-") != 4 or urn[8] != '-' or urn[13] != '-' or urn[18] != '-' or urn[23] != '-') {
@@ -90,7 +68,7 @@ pub fn deserialize(urn: []const u8) !UUID {
     const clock_seq_low = try std.fmt.parseInt(u8, urn[21..23], 16);
     const node = try std.fmt.parseInt(u48, urn[24..36], 16);
 
-    return UUID{
+    return Uuid{
         .time_low = time_low,
         .time_mid = time_mid,
         .time_hi = time_hi_and_version & 0x0FFF,
@@ -111,9 +89,9 @@ fn getTime() u60 {
     return @as(u60, @intCast(i_60_value));
 }
 
-/// Create a new UUID
+/// Create a new Uuid
 pub const new = struct {
-    pub fn v1() UUID {
+    pub fn v1() Uuid {
         const timestamp = getTime();
 
         // This library uses random values for the node and clock sequence because
@@ -135,7 +113,7 @@ pub const new = struct {
         clock_seq_hi_and_reserved &= 0x3F;
         clock_seq_hi_and_reserved |= 0x80;
 
-        return UUID{
+        return Uuid{
             .time_low = time_low,
             .time_mid = time_mid,
             .time_hi = time_hi,
@@ -146,7 +124,7 @@ pub const new = struct {
         };
     }
 
-    pub fn v3(uuid_namespace: UUID, name: []const u8) UUID {
+    pub fn v3(uuid_namespace: Uuid, name: []const u8) Uuid {
         var digest: [std.crypto.hash.Md5.digest_length]u8 = undefined;
         const namespace_str = uuid_namespace.toArray();
 
@@ -169,7 +147,7 @@ pub const new = struct {
         const clock_seq_low = digest[9];
         const node = std.mem.readInt(u48, digest[10..16], .big);
 
-        return UUID{
+        return Uuid{
             .time_low = time_low,
             .time_mid = time_mid,
             .time_hi = time_hi,
@@ -180,7 +158,7 @@ pub const new = struct {
         };
     }
 
-    pub fn v4() UUID {
+    pub fn v4() Uuid {
         const time_low = rand.int(u32);
         const time_mid = rand.int(u16);
 
@@ -193,7 +171,7 @@ pub const new = struct {
         const clock_seq_low = rand.int(u8);
         const node = rand.int(u48);
 
-        return UUID{
+        return Uuid{
             .time_low = time_low,
             .time_mid = time_mid,
             .time_hi = time_hi,
@@ -204,7 +182,7 @@ pub const new = struct {
         };
     }
 
-    pub fn v5(uuid_namespace: UUID, name: []const u8) UUID {
+    pub fn v5(uuid_namespace: Uuid, name: []const u8) Uuid {
         var digest: [std.crypto.hash.Sha1.digest_length]u8 = undefined;
         const namespace_str = uuid_namespace.toArray();
 
@@ -227,7 +205,7 @@ pub const new = struct {
         const clock_seq_low = std.mem.nativeToBig(u8, digest[9]);
         const node = std.mem.readInt(u48, digest[10..16], .big);
 
-        return UUID{
+        return Uuid{
             .time_low = time_low,
             .time_mid = time_mid,
             .time_hi = time_hi,

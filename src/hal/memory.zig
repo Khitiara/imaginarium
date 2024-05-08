@@ -1,18 +1,5 @@
 const std = @import("std");
 
-pub const VirtualRegion = enum(i20) {
-    RebasedPhysicalMem = -2,
-    KernelPrimaryRegion = -1,
-    _,
-};
-
-const VirtualSubAddress = std.meta.Int(.unsigned, @bitSizeOf(usize) - @bitSizeOf(VirtualRegion));
-
-pub const VirtualAddress = packed struct(isize) {
-    address: VirtualSubAddress,
-    region: VirtualRegion,
-};
-
 pub const RegionType = enum(u32) {
     normal = 1,
     reserved,

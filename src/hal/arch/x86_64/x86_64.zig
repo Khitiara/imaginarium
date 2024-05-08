@@ -1,20 +1,21 @@
-pub const cpuid = @import("x86_64/cpuid.zig");
-pub const msr = @import("x86_64/msr.zig");
-pub const segmentation = @import("x86_64/segmentation.zig");
-pub const paging = @import("x86_64/paging.zig");
-pub const control_registers = @import("x86_64/ctrl_registers.zig");
-pub const serial = @import("x86_64/serial.zig");
-pub const descriptors = @import("x86_64/descriptors.zig");
-pub const gdt = @import("x86_64/gdt.zig");
-pub const pmm = @import("x86_64/pmm.zig");
-pub const vmm = @import("x86_64/vmm.zig");
-pub const idt = @import("x86_64/idt.zig");
-pub const interrupts = @import("x86_64/interrupts.zig");
-pub const rand = @import("x86_64/rand.zig");
-pub const smp = @import("x86_64/smp.zig");
+pub const cpuid = @import("cpuid.zig");
+pub const msr = @import("msr.zig");
+pub const segmentation = @import("segmentation.zig");
+pub const paging = @import("paging.zig");
+pub const control_registers = @import("ctrl_registers.zig");
+pub const serial = @import("serial.zig");
+pub const descriptors = @import("descriptors.zig");
+pub const gdt = @import("gdt.zig");
+pub const pmm = @import("pmm.zig");
+pub const vmm = @import("vmm.zig");
+pub const idt = @import("idt.zig");
+pub const interrupts = @import("interrupts.zig");
+pub const rand = @import("rand.zig");
+pub const smp = @import("smp.zig");
+pub const time = @import("time.zig");
 
-const memory = @import("../memory.zig");
-const acpi = @import("../acpi.zig");
+const memory = @import("../../memory.zig");
+const acpi = @import("../../acpi/acpi.zig");
 
 pub const cc: @import("std").builtin.CallingConvention = .Win64;
 
@@ -28,19 +29,9 @@ pub fn puts(bytes: []const u8) void {
     }
 }
 
-pub fn rdtsc() u64 {
-    var eax: u32 = undefined;
-    var edx: u32 = undefined;
-    asm volatile ("rdtsc"
-        : [eax] "=a" (eax),
-          [edx] "=d" (edx),
-    );
-    return (@as(u64, edx) << 32) | eax;
-}
-
 pub fn delay_unsafe(cycles: u64) void {
-    const target = rdtsc() + cycles;
-    while (rdtsc() < target) {}
+    const target = time.rdtsc() + cycles;
+    while (time.rdtsc() < target) {}
 }
 
 const log = @import("std").log.scoped(.init);
@@ -73,10 +64,11 @@ pub fn platform_init(memmap: []memory.MemoryMapEntry) !void {
     try acpi.load_sdt(&oem_id);
     log.info("loaded acpi sdt", .{});
     log.info("early platform init complete", .{});
+    time.init_timing();
 }
 
 comptime {
-    _ = @import("x86_64/init.zig");
+    _ = @import("init.zig");
     _ = idt;
 }
 

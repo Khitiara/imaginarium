@@ -1,4 +1,4 @@
-const dispatcher = @import("../dispatcher.zig");
+const dispatcher = @import("../dispatcher/dispatcher.zig");
 
 header: dispatcher.DispatcherObject = .{ .kind = .semaphore },
 available: usize,

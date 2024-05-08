@@ -1,6 +1,5 @@
 const std = @import("std");
 const makeTruncMask = @import("util").masking.makeTruncMask;
-const TagPayloadByName = std.meta.TagPayloadByName;
 const assert = std.debug.assert;
 
 pub const PageMeta = packed struct(u7) {
@@ -26,7 +25,7 @@ pub const PML45E = packed struct(u64) {
     _ignored2: u4 = 0,
     xd: bool,
 
-    const physaddr_mask = makeTruncMask(PML45E, .physaddr);
+    const physaddr_mask = makeTruncMask(PML45E, "physaddr");
     pub fn get_phys_addr(self: PML45E) u64 {
         return @as(u64, @bitCast(self)) & physaddr_mask;
     }

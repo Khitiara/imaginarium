@@ -1,35 +1,17 @@
-const Thread = @import("Thread.zig");
+const Thread = @import("../thread/Thread.zig");
+const wait_block = @import("../dispatcher/dispatcher.zig").wait_block;
 const util = @import("util");
 const queue = util.queue;
+const zuid = @import("zuid");
+const std = @import("std");
 
-pub const InterruptRequestPriority = enum(u4) {
-    passive = 0x0,
-    dispatch = 0x1,
-    dev_0 = 0x2,
-    dev_1 = 0x3,
-    dev_2 = 0x4,
-    dev_3 = 0x5,
-    dev_4 = 0x6,
-    dev_5 = 0x7,
-    dev_6 = 0x8,
-    dev_7 = 0x9,
-    dev_8 = 0xA,
-    dev_9 = 0xB,
-    sync = 0xC,
-    clock = 0xD,
-    ipi = 0xE,
-    high = 0xF,
-};
-
-pub const wait_block = @import("dispatcher/wait_block.zig");
-
-pub const DispatcherObjectKind = enum(u7) {
+pub const ObjectKind = enum(u7) {
     semaphore,
     thread,
     interrupt,
     _,
 
-    pub inline fn ObjectType(self: DispatcherObjectKind) type {
+    pub inline fn ObjectType(self: ObjectKind) type {
         return switch (self) {
             .thread => Thread,
             .semaphore => Thread.Semaphore,
@@ -37,13 +19,18 @@ pub const DispatcherObjectKind = enum(u7) {
     }
 };
 
-pub const DispatcherObjectKindAndLock = packed struct(u8) {
-    kind: DispatcherObjectKind,
+pub const ObjectKindAndLock = packed struct(u8) {
+    kind: ObjectKind,
     lock: bool,
 };
 
-pub const DispatcherObject = extern struct {
-    kind: DispatcherObjectKind,
+pub const ObNamespace = zuid.deserialize("2d7e52f8-0d27-4a40-a967-828c2900c33c");
+
+pub const Object = extern struct {
+    kind: ObjectKind,
+    id: zuid.Uuid = zuid.null_uuid,
+    /// max-value means the object is unnamed
+    name_idx: u32 = std.math.maxInt(u32),
     wait_queue: queue.Queue(wait_block.WaitBlock, "wait_queue") = .{},
 
     // if you need a specific type either ptrCast it or call ptr_assert

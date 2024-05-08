@@ -4,7 +4,7 @@ const std = @import("std");
 
 pub const rsd_ptr_sig: *const [8]u8 = "RSD PTR ";
 
-const ptr_from_physaddr = @import("../arch.zig").ptr_from_physaddr;
+const ptr_from_physaddr = @import("../arch/arch.zig").ptr_from_physaddr;
 
 pub const Rsdp1 = extern struct {
     signature: [8]u8,
@@ -35,29 +35,35 @@ pub const RsdpError = error{
 
 pub const RsdpInfo = struct {
     oem_id: [6]u8,
-    table_addr: *align(4) const anyopaque,
+    table_addr: *align(1) const anyopaque,
     expect_signature: sdt.Signature,
 
     pub fn from_rsdp(rsdp: Rsdp) RsdpInfo {
         switch (rsdp) {
-            .v1 => |v1| return .{ .oem_id = v1.oem_id, .table_addr = ptr_from_physaddr(*align(4) const anyopaque, v1.rsdt_addr), .expect_signature = .RSDT },
-            .v2 => |v2| return .{ .oem_id = v2.v1.oem_id, .table_addr = ptr_from_physaddr(*align(4) const anyopaque, v2.xsdt_addr), .expect_signature = .XSDT },
+            .v1 => |v1| return .{ .oem_id = v1.oem_id, .table_addr = ptr_from_physaddr(*align(1) const anyopaque, v1.rsdt_addr), .expect_signature = .RSDT },
+            .v2 => |v2| return .{ .oem_id = v2.v1.oem_id, .table_addr = ptr_from_physaddr(*align(1) const anyopaque, v2.xsdt_addr), .expect_signature = .XSDT },
         }
     }
 };
+
+const log = std.log.scoped(.rsdp);
 
 pub const Rsdp = union(enum) {
     v1: *align(1) const Rsdp1,
     v2: *align(1) const Rsdp2,
 
-    pub fn fetch_from_pointer(ptr: *const anyopaque) !Rsdp {
+    pub fn fetch_from_pointer(ptr: *align(4) const anyopaque) !Rsdp {
         const v1_ptr: *align(1) const Rsdp1 = @ptrCast(ptr);
         try v1_ptr.verify_checksum();
         switch (v1_ptr.revision) {
-            0 => return .{ .v1 = v1_ptr },
+            0 => {
+                // log.debug("{}", .{v1_ptr});
+                return .{ .v1 = v1_ptr };
+            },
             2 => {
                 if (@import("builtin").target.cpu.arch == .x86) return error.xsdt_on_32bit;
                 const v2_ptr: *align(1) const Rsdp2 = @ptrCast(ptr);
+                // log.debug("{}", .{v2_ptr});
                 try v2_ptr.verify_checksum();
                 return .{ .v2 = v2_ptr };
             },
@@ -83,7 +89,7 @@ const RsdpAlignedPrologue = extern struct {
     _padding: [8]u8,
 };
 
-inline fn rsdp_search(region: []const u8) !?Rsdp {
+inline fn rsdp_search(region: []align(4) const u8) !?Rsdp {
     const slice = std.mem.bytesAsSlice(RsdpAlignedPrologue, region);
     for (slice) |*hay| {
         if (std.mem.eql(u8, &hay.signature, rsd_ptr_sig)) {
@@ -93,14 +99,34 @@ inline fn rsdp_search(region: []const u8) !?Rsdp {
     return null;
 }
 
-pub fn locate_rsdp_bios() !Rsdp {
+fn locate_rsdp_bios() !Rsdp {
     const ebda_addr = ptr_from_physaddr(*const u16, 0x40E).*;
-    const ebda = ptr_from_physaddr(*const [0x400]u8, ebda_addr << 4);
+    const ebda = ptr_from_physaddr(*align(4) const [0x400]u8, ebda_addr << 4);
     if (try rsdp_search(ebda)) |rsdp| {
         return rsdp;
     }
-    if (try rsdp_search(ptr_from_physaddr(*const [0x20000]u8, 0xE0000))) |rsdp| {
+    if (try rsdp_search(ptr_from_physaddr(*align(4) const [0x20000]u8, 0xE0000))) |rsdp| {
         return rsdp;
     }
     return error.rsdp_not_found;
 }
+
+const zuid = @import("zuid");
+
+fn locate_rsdp_efi() !Rsdp {
+    const sys = std.os.uefi.system_table;
+    const tbls = sys.configuration_table[0..sys.number_of_table_entries];
+    for (tbls) |t| {
+        if (t.vendor_guid.eql(std.os.uefi.tables.ConfigurationTable.acpi_20_table_guid)) {
+            return Rsdp.fetch_from_pointer(t.vendor_table);
+        }
+    }
+    for (tbls) |t| {
+        if (t.vendor_guid.eql(std.os.uefi.tables.ConfigurationTable.acpi_10_table_guid)) {
+            return Rsdp.fetch_from_pointer(t.vendor_table);
+        }
+    }
+    return error.rsdp_not_found;
+}
+
+pub const locate_rsdp: fn () RsdpError!Rsdp = if (@import("builtin").os.tag == .uefi or !@import("config").rsdp_search_bios) locate_rsdp_efi else locate_rsdp_bios;

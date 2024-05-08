@@ -1,6 +1,7 @@
 const queue = @import("util").queue;
-const Thread = @import("../Thread.zig");
-const dispatcher = @import("../dispatcher.zig");
+const Thread = @import("../thread/Thread.zig");
+const dispatcher = @import("dispatcher.zig");
+const ob = @import("../objects/ob.zig");
 
 pub const WaitKey = union(enum) {
     wait_single: void,
@@ -13,5 +14,5 @@ pub const WaitBlock = struct {
     thread_wait_list: queue.DoublyLinkedNode,
     key: WaitKey,
     thread: *Thread,
-    target: *dispatcher.DispatcherObject,
+    target: *ob.Object,
 };

@@ -1,7 +1,7 @@
 const std = @import("std");
 const descriptors = @import("descriptors.zig");
 const gdt = @import("gdt.zig");
-const x86_64 = @import("../x86_64.zig");
+const x86_64 = @import("x86_64.zig");
 
 pub const GateType = enum(u4) {
     interrupt = 0xE,
@@ -164,7 +164,7 @@ pub fn InterruptFrame(ErrorCode: type) type {
         error_code: ErrorCode,
         rip: usize,
         cs: descriptors.Selector align(8),
-        eflags: @import("../x86_64.zig").Flags,
+        eflags: @import("x86_64.zig").Flags,
         rsp: usize,
         ss: descriptors.Selector align(8),
 
@@ -249,6 +249,9 @@ comptime {
         \\     movq      %rsp, %rcx # rsp points to the bottom of the interrupt frame struct at this point so put that address in rdi
         \\     callq     *__isrs(, %rdx, 8)
         \\     swapgs    # and swap back out the kernel gs so we dont override it
+        \\ .global __iret__;
+        \\ .type __iret__, @function;
+        \\ __iret__:
         \\     add       $32, %rsp
         \\     popq      %rax # pop fs and gs segment selectors
         \\     mov       %rax, %fs
@@ -296,6 +299,15 @@ pub const raw_handlers: [256]RawHandler = blk: {
     }
     break :blk result;
 };
+
+var last_vector: u8 = 0x20;
+pub fn allocate_vector() u8 {
+    const value = @atomicRmw(u8, &last_vector, .Add, 1, .acq_rel);
+    if (value > 0xFC) {
+        @panic("out of vectors!");
+    }
+    return value;
+}
 
 /// handler can be a pointer to any function which takes *InterruptFrame(SomeErrorCodeType) as its only parameter
 pub fn add_handler(int: Interrupt, handler: anytype, typ: GateType, dpl: u2, ist: u3) void {

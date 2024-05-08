@@ -14,9 +14,10 @@
 // AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
 // OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-// these implementations are derived from N00byEdge's work in
-// https://github.com/FlorenceOS/Florence/blob/aaa5a9e568197ad24780ec9adb421217530d4466/lib/containers/queue.zig
-// which was released under the BSD 0-clause
+//! a selection of intrusive collections
+//! these implementations are derived from N00byEdge's work in
+//! https://github.com/FlorenceOS/Florence/blob/aaa5a9e568197ad24780ec9adb421217530d4466/lib/containers/queue.zig
+//! which was released under the BSD 0-clause
 
 const std = @import("std");
 const CopyPtrAttrs = @import("util.zig").CopyPtrAttrs;
@@ -28,7 +29,7 @@ pub const Node = extern struct {
 pub const UntypedQueue = struct {
     head: ?*Node = null,
     tail: ?*Node = null,
-    len: usize,
+    len: usize = 0,
 
     pub fn append(self: *UntypedQueue, hook: *Node) void {
         hook.next = null;
@@ -75,7 +76,7 @@ pub const UntypedQueue = struct {
 
 pub fn Queue(comptime T: type, comptime field_name: []const u8) type {
     return struct {
-        impl: UntypedQueue,
+        impl: UntypedQueue = .{},
 
         inline fn length(self: *const @This()) usize {
             return self.impl.len;
@@ -155,18 +156,24 @@ pub fn PriorityQueue(comptime T: type, comptime node_field_name: []const u8, com
     const Tails = std.EnumArray(P, ?*Node);
     const Indexer = Tails.Indexer;
     return struct {
-        head: ?*Node,
+        head: ?*Node = null,
         tails: Tails = Tails.initFill(null),
-        len: usize,
+        len: usize = 0,
 
         inline fn node_from_ref(ref: *T) *Node {
             return &@field(ref, node_field_name);
         }
+
         inline fn ref_from_node(node: *Node) *T {
             return @fieldParentPtr(node_field_name, node);
         }
+
         inline fn node_prio(node: *const Node) P {
             return @field(ref_from_node(node).*, prio_field_name);
+        }
+
+        pub fn peek(self: *const @This()) ?*Node {
+            return if (self.head) |h| ref_from_node(h) else null;
         }
 
         pub fn add(self: *@This(), item: *T) void {
@@ -224,7 +231,7 @@ pub const DoublyLinkedNode = extern struct {
 pub const UntypedDoublyLinkedList = struct {
     head: ?*DoublyLinkedNode = null,
     tail: ?*DoublyLinkedNode = null,
-    len: usize,
+    len: usize = 0,
 
     pub fn add_back(self: *UntypedDoublyLinkedList, n: *DoublyLinkedNode) void {
         self.len += 1;
@@ -335,7 +342,7 @@ pub const UntypedDoublyLinkedList = struct {
 
 pub fn DoublyLinkedList(comptime T: type, comptime field_name: []const u8) type {
     return struct {
-        impl: UntypedDoublyLinkedList,
+        impl: UntypedDoublyLinkedList = .{},
 
         inline fn length(self: *const @This()) usize {
             return self.impl.len;

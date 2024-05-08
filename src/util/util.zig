@@ -15,7 +15,7 @@ const testing = std.testing;
 
 const Log2Int = std.math.Log2Int;
 
-pub fn CopyPtrAttrs(
+pub inline fn CopyPtrAttrs(
     comptime source: type,
     comptime size: std.builtin.Type.Pointer.Size,
     comptime child: type,
@@ -35,16 +35,70 @@ pub fn CopyPtrAttrs(
     });
 }
 
-// lowercases an ascii string at comptime. does not work for utf8 - this is meant mainly for debug and panic messages
-// i think sentinel-terminated slices coerce to normal ones? in any case this returns a terminated one for convenience
+pub inline fn PriorityEnum(comptime levels: comptime_int) type {
+    var arr: [levels]std.builtin.Type.EnumField = undefined;
+    for (0..levels) |l| {
+        arr[l] = .{ .name = std.fmt.comptimePrint("p{d}", .{levels - 1}), .value = l };
+    }
+    return @Type(.{
+        .Enum = .{
+            .is_exhaustive = true,
+            .fields = arr,
+            .decls = &.{},
+            .tag_type = std.math.IntFittingRange(0, levels.len - 1),
+        },
+    });
+}
+
+pub inline fn ReverseEnum(comptime T: type) type {
+    const e = @typeInfo(T).Enum;
+    const orig = e.fields;
+    const cnt = orig.len;
+    var arr: [cnt]std.builtin.Type.EnumField = undefined;
+    for (orig, 0..) |fld, i| {
+        arr[i] = fld;
+        arr[i].value = cnt - arr[i].value - 1;
+    }
+    return @Type(.{
+        .Enum = .{
+            .is_exhaustive = e.is_exhaustive,
+            .fields = arr,
+            .decls = &.{},
+            .tag_type = e.tag_type,
+        },
+    });
+}
+
+pub inline fn OffsetEnum(comptime T: type, comptime ofs: comptime_int) type {
+    const e = @typeInfo(T).Enum;
+    const orig = e.fields;
+    const cnt = orig.len;
+    var arr: [cnt]std.builtin.Type.EnumField = undefined;
+    for (orig, 0..) |fld, i| {
+        arr[i] = fld;
+        arr[i].value = arr[i].value + ofs;
+    }
+    return @Type(.{
+        .Enum = .{
+            .is_exhaustive = e.is_exhaustive,
+            .fields = arr,
+            .decls = &.{},
+            .tag_type = e.tag_type,
+        },
+    });
+}
+
+/// lowercases an ascii string at comptime. does not work for utf8 - this is meant mainly for debug and panic messages
+/// i think sentinel-terminated slices coerce to normal ones? in any case this returns a terminated one for convenience
 pub inline fn lower_string_comptime(comptime str: []const u8) *const [str.len:0]u8 {
     var newArr: [str.len:0]u8 = [_:0]u8{0} ** str.len;
     const slice = lower_string(&newArr, str);
     assert(slice.len == str.len);
     return &newArr;
 }
-// uppercases an ascii string at comptime. does not work for utf8 - this is meant mainly for debug and panic messages
-// i think sentinel-terminated slices coerce to normal ones? in any case this returns a terminated one for convenience
+
+/// uppercases an ascii string at comptime. does not work for utf8 - this is meant mainly for debug and panic messages
+/// i think sentinel-terminated slices coerce to normal ones? in any case this returns a terminated one for convenience
 pub inline fn upper_string_comptime(comptime str: []const u8) *const [str.len:0]u8 {
     var newArr: [str.len:0]u8 = [_:0]u8{0} ** str.len;
     const slice = upper_string(&newArr, str);
@@ -74,6 +128,13 @@ pub inline fn signExtendBits(comptime T: type, b: Log2Int(T), i: anytype) T {
     return ((i & ((1 << b) - 1)) ^ m) -% m;
 }
 
+test signExtendBits {
+    // 0b10 sign-extends into 0b1110
+    try testing.expectEqual(14, signExtendBits(u4, 2, 2));
+    // 0b01 sign-extends into 0b0001
+    try testing.expectEqual(1, signExtendBits(u4, 2, 1));
+}
+
 /// equivalent to @select(T, bitset, @splat(a), @splat(b)) but operates on a bit_set mask instead of a vector mask
 /// this function currently does not implement any vectorization as the kernel operates in a no-simd mode
 /// but for general utils such vectorization might be implemented later, maybe as a separate helper without the splat
@@ -87,13 +148,6 @@ pub inline fn select(comptime T: type, comptime len: usize, bitset: anytype, a: 
         }
     }
     return ret;
-}
-
-test signExtendBits {
-    // 0b10 sign-extends into 0b1110
-    try testing.expectEqual(14, signExtendBits(u4, 2, 2));
-    // 0b01 sign-extends into 0b0001
-    try testing.expectEqual(1, signExtendBits(u4, 2, 1));
 }
 
 test {

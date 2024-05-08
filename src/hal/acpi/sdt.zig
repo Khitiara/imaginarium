@@ -11,8 +11,8 @@ pub const Signature = enum(u32) {
     XSDT = cast_signature("XSDT"),
     APIC = cast_signature("APIC"),
     MCFG = cast_signature("MCFG"),
+    HPET = cast_signature("HPET"),
     // FACP = cast_signature("FACP"),
-    // HPET = cast_signature("HPET"),
     // WAET = cast_signature("WAET"),
     // BGRT = cast_signature("BGRT"),
     _,
@@ -32,14 +32,14 @@ pub const Signature = enum(u32) {
 
 pub const SystemDescriptorTableHeader = extern struct {
     signature: Signature align(1),
-    length: u32,
-    revision: u8,
-    checksum: u8,
-    oemid: [6]u8,
-    oem_table_id: [8]u8,
-    oem_revision: u32,
-    creator_id: u32,
-    creator_revision: u32,
+    length: u32 align(1),
+    revision: u8 align(1),
+    checksum: u8 align(1),
+    oemid: [6]u8 align(1),
+    oem_table_id: [8]u8 align(1),
+    oem_revision: u32 align(1),
+    creator_id: u32 align(1),
+    creator_revision: u32 align(1),
 
     pub usingnamespace util.checksum.add_checksum(@This(), *const SystemDescriptorTableHeader, true);
 };

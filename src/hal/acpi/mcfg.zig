@@ -9,7 +9,7 @@ pub const Mcfg = extern struct {
 
     pub usingnamespace checksum.add_acpi_checksum(Mcfg);
 
-    pub fn bridges(self: *const Mcfg) []align(1) const PciHostBridge {
+    pub fn bridges(self: *align(1) const Mcfg) []align(1) const PciHostBridge {
         return std.mem.bytesAsSlice(PciHostBridge, @as([*]const u8, @ptrCast(self))[@sizeOf(Mcfg)..self.header.length]);
     }
 };
@@ -24,9 +24,9 @@ pub const PciHostBridge = extern struct {
     _: u32 = 0,
 };
 
-const log = @import("../acpi.zig").log;
+const log = @import("acpi.zig").log;
 
-pub fn set_table(table: *const Mcfg) void {
+pub fn set_table(table: *align(1) const Mcfg) void {
     log.info("PCI(E) MCFG table loaded at {*}", .{table});
     host_bridges = table.bridges();
 }

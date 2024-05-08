@@ -5,7 +5,7 @@ const std = @import("std");
 const ctrl_registers = @import("ctrl_registers.zig");
 const mcfg = @import("../../acpi/mcfg.zig");
 
-const apic = @import("../../apic.zig");
+const apic = @import("../../apic/apic.zig");
 const memory = @import("../../memory.zig");
 
 // the base where we plan to id-map physical memory
@@ -60,7 +60,6 @@ pub fn init(memmap: []memory.MemoryMapEntry) !void {
     pmm.enlarge_mapped_physical(memmap, idmap_base);
     log.info("high physical memory given to pmm", .{});
     paging.finalize_and_fix_root();
-    log.info("ACPI table virtual pointers relocated to high memory", .{});
 }
 
 pub fn phys_from_virt(virt: anytype) usize {

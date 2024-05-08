@@ -63,7 +63,7 @@ const PageFaultErrorCode = packed struct(usize) {
     hlat: bool,
     _1: u7 = 0,
     sgx: bool,
-    _2: std.meta.Int(.unsigned, @bitSizeOf(usize) - 16) = 0,
+    _2: @Type(.{ .Int = .{ .signedness = .unsigned, .bits = @bitSizeOf(usize) - 16 } }) = 0,
 };
 
 pub const SplitPagingAddr = packed struct(isize) {

@@ -205,3 +205,7 @@ pub fn dump_hex(bytes: []const u8) !void {
         try writer.writeByte('\n');
     }
 }
+
+test {
+    _ = @import("dispatcher/dispatcher.zig");
+}

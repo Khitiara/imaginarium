@@ -3,7 +3,7 @@ file paths are a null-terminated sequence of non-null bytes with the following s
       - `/:/` for device-relative paths
       - `/?/` for kernel objects
       - `/*/` for the efi boot partition
-      - `/./` for the root file system (and by extension any mounted file system)
+      - `/!/` for the root file system (and by extension any mounted file system)
   - path components are separated by the `/` character encoded as its UTF8 single byte 0x2F
   - directories in canonical form are written with a trailing `/` but are recognized by the OS without it
   - CASE SENSITIVE - only the byte strings are compared!
@@ -15,15 +15,15 @@ a file system entry may be:
   - a symbolic link to another entry
   - a mount point with a UUID
       - mount point UUID is used to load a symbolic link from a config file in the root FS
-      - e.g. if `/./code/foo` is a mount point with UUID `c0e8e20c-4481-4b65-8388-28995906fd7c`, then the fstab file
-          in the eystem directory `/./`imaginarium/` will contain a line like
+      - e.g. if `/!/code/foo` is a mount point with UUID `c0e8e20c-4481-4b65-8388-28995906fd7c`, then the fstab file
+          in the eystem directory `/!/`imaginarium/` will contain a line like
           `c0e8e20c-4481-4b65-8388-28995906fd7c /:/{dc542bcc-a142-4aaf-b28f-6d4e3aa8bfa2}/ rw`
           referring a hardware storage device with the UUID dc542bcc-a142-4aaf-b28f-6d4e3aa8bfa2
           whose file system will be loaded. see the fstab docs for more details
   - when creating a symbolic link, links  directly to device-relative paths will be converted to a mount point by
       the kernel filesystem drivers before saving
-the directory `/./imaginarium/` exists on every system and contains primary OS binaries, configuration, and logs. the
-  layout and contents of `/./imaginarium/` may vary and should for the most part not be relied on, except as
+the directory `/!/imaginarium/` exists on every system and contains primary OS binaries, configuration, and logs. the
+  layout and contents of `/!/imaginarium/` may vary and should for the most part not be relied on, except as
   specified in the boot protocol docs. system config files, despite being normal files with known format, should
   still be accessed by user code through the configuration APIs in the usermode kernel services for the system
   component being configured.
