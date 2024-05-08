@@ -26,7 +26,7 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
                         // curr -> queue
                         // queue head -> stby
                         std.debug.assert(lcb.frame != null);
-                        cur.saved_state = frame.*;
+                        cur.saved_state.registers = frame.*;
                         cur.set_state(.running, .assigned);
                         frame.* = stby.saved_state.registers;
                         lcb.current_thread = stby;
@@ -34,9 +34,11 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
 
                         // grab the lock a bit early to put the old running thread into the queue
                         const r = lcb.local_dispatcher_lock.lock();
-                        lcb.local_dispatcher_queue.add(cur);
-                        lcb.standby_thread = lcb.local_dispatcher_queue.dequeue();
-                        if (lcb.standby_thread) |new_stby| {
+                        if (!cur.header.id.eql(smp.idle_thread_id)) {
+                            lcb.local_dispatcher_queue.add(cur);
+                        }
+                        if (lcb.local_dispatcher_queue.dequeue()) |new_stby| {
+                            lcb.standby_thread = new_stby;
                             new_stby.set_state(.assigned, .standby);
                         }
                         break :b r;
@@ -54,20 +56,24 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
                         lcb.standby_thread = lcb.local_dispatcher_queue.dequeue().?;
                     }
                 }
+                // in this branch, there is a current thread so we just return now
+                return;
             } else {
                 // nothing running but we have a standby, so move that up to run
                 const restore = lcb.local_dispatcher_lock.lock();
                 defer lcb.local_dispatcher_lock.unlock(restore);
                 lcb.current_thread = stby;
                 stby.set_state(.standby, .running);
-                // move the queue head up to standby
-                lcb.standby_thread = lcb.local_dispatcher_queue.dequeue();
-                if (lcb.standby_thread) |new_stby| {
-                    new_stby.set_state(.assigned, .standby);
-                }
                 // and set up the LCB to restore the saved register state of the thread
                 // the caller should have the lcb already set up with a frame pointer
                 frame.* = stby.saved_state.registers;
+                // move the queue head up to standby
+                if (lcb.local_dispatcher_queue.dequeue()) |new_stby| {
+                    lcb.standby_thread = new_stby;
+                    new_stby.set_state(.assigned, .standby);
+                }
+                // and we're done. this is the fast path
+                return;
             }
         } else {
             // nothing in standby
@@ -78,7 +84,17 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
                 defer queued.lock.unlock(tr);
                 std.debug.assert(queued.state == .assigned);
                 queued.state = .standby;
+                lcb.standby_thread = queued;
+                // and loop around to figure out standby and running
             } else {
+                // nothing on standby and nothing in queue
+                // if theres nothing running then just stick the idle thread in
+                // and then return with something set to run
+                if (lcb.current_thread == null) {
+                    lcb.current_thread = lcb.idle_thread;
+                    lcb.idle_thread.set_state(.assigned, .running);
+                    frame.* = lcb.idle_thread.saved_state.registers;
+                }
                 return;
             }
         }

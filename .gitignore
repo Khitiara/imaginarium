@@ -10,3 +10,5 @@ zig-out/
 bootelf/.github/
 bootelf/bootelf
 zuid/.github/
+
+listing.txt

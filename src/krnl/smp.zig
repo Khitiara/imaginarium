@@ -6,10 +6,14 @@ const apic = hal.apic;
 const std = @import("std");
 const util = @import("util");
 const queue = util.queue;
+const zuid = @import("zuid");
+
+pub const idle_thread_id = zuid.null_uuid;
 
 pub const LocalControlBlock = extern struct {
     current_thread: ?*Thread = null,
     standby_thread: ?*Thread = null,
+    idle_thread: *Thread = undefined,
     syscall_stack: *anyopaque = undefined,
     kernel_stack: *anyopaque = undefined,
     local_dispatcher_queue: queue.PriorityQueue(Thread, "scheduler_hook", "priority", Thread.Priority) = .{},
@@ -24,6 +28,17 @@ pub const LocalControlBlock = extern struct {
 pub var lcbs: []LocalControlBlock = undefined;
 const hal_smp = arch.smp.SmpUtil(LocalControlBlock);
 pub const lcb = hal_smp.lcb;
+
+pub fn init(alloc: std.mem.Allocator) void {
+    lcb.idle_thread = alloc.create(Thread);
+    lcb.idle_thread.* = .{
+        .header = .{
+            .kind = .thread,
+            .id = idle_thread_id,
+        },
+    };
+    lcb.idle_thread.setup_stack(alloc, @import("../dispatcher/idle.zig").idle, null);
+}
 
 pub fn allocate_lcbs(alloc: std.mem.Allocator) void {
     lcbs = alloc.alignedAlloc(LocalControlBlock, 1 << 12, apic.processor_count);

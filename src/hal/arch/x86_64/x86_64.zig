@@ -31,7 +31,9 @@ pub fn puts(bytes: []const u8) void {
 
 pub fn delay_unsafe(cycles: u64) void {
     const target = time.rdtsc() + cycles;
-    while (time.rdtsc() < target) {}
+    while (time.rdtsc() < target) {
+        pause();
+    }
 }
 
 const log = @import("std").log.scoped(.init);

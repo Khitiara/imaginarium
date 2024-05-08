@@ -210,6 +210,12 @@ pub fn InterruptFrame(ErrorCode: type) type {
     };
 }
 
+pub fn spoof_isr(isr: InterruptHandler) void {
+    __isr__spoof__(isr, @returnAddress());
+}
+
+extern fn __isr__spoof__(isr: InterruptHandler, return_address: isize) callconv(.Win64) void;
+
 comptime {
     // the asm snippet of push operations for saved registers
     var push: []const u8 = "\n";
@@ -225,43 +231,70 @@ comptime {
         // each register is 8 bytes so we add 8 here
     }
 
+    const isr_setup: []const u8 = push ++ // push all the saved registers
+        \\     mov      %gs, %rax # push the fs and gs segment selectors
+        \\     pushq    %rax
+        \\     mov      %fs, %rax
+        \\     pushq    %rax
+        \\     mov      %cr0, %rax # and the control registers
+        \\     pushq    %rax
+        \\     mov      %cr2, %rax
+        \\     pushq    %rax
+        \\     mov      %cr3, %rax
+        \\     pushq    %rax
+        \\     mov      %cr4, %rax
+        \\     pushq    %rax
+        \\     swapgs   # we saved the gs register selector so its safe to swap in the kernel gs base
+    ;
+
+    const fake_isr: []const u8 =
+        \\ .global __isr_spoof__;
+        \\ .type __isr_spoof__, @function;
+        \\ __isr__spoof__:
+        \\     pushq    %rcx # push the handler address. this will be right above the frame
+        \\     movq     %ss, %rcx
+        \\     pushq    %rcx # normal interrupt frame things
+        \\     movq     %rsp, %rcx
+        \\     addq     $8, %rcx
+        \\     pushq    %rcx
+        \\     pushfq
+        \\     movq     %cs, %rcx
+        \\     pushq    %rcx
+        \\     pushq    %rdx
+        \\     pushq    $0x20 # use vector 0x20 to set the IRQL if the handler uses the normal bits
+        \\     pushq    $0 # no error code
+    ++ isr_setup
+    // movsbq sizeOf(interrupt_frame)(%rsp), %rdx ; all the pushes we made will place the target handler to just above the frame
+    ++ "\n     movsbq   " ++ std.fmt.comptimePrint("{d}", .{@sizeOf(RawInterruptFrame)}) ++ "(%rsp), %rdx\n" ++
+        \\     movq     %rsp, %rcx # rsp points to the bottom of the interrupt frame struct at this point so put that address in rcx
+        \\     callq    *(%rdx)
+        \\     jmp      __iret__
+    ;
+
     const code: []const u8 =
         \\ .global __isr_common;
         \\ .type __isr_common, @function;
         \\ __isr_common:
-    ++ push ++ // push all the saved registers
-        \\     mov       %gs, %rax # push the fs and gs segment selectors
-        \\     pushq     %rax
-        \\     mov       %fs, %rax
-        \\     pushq     %rax
-        \\     mov       %cr0, %rax # and the control registers
-        \\     pushq     %rax
-        \\     mov       %cr2, %rax
-        \\     pushq     %rax
-        \\     mov       %cr3, %rax
-        \\     pushq     %rax
-        \\     mov       %cr4, %rax
-        \\     pushq     %rax
-        \\     swapgs    # we saved the gs register selector so its safe to swap in the kernel gs base
-        // movsbq offsetOf(interrupt_number)(%rsp), %rdx ; all the pushes we made will place rsp regscnt bytes below the intnum
-        // which we need in rdx for the indexed callq below
-    ++ "\n     movsbq    " ++ std.fmt.comptimePrint("{d}", .{@offsetOf(RawInterruptFrame, "interrupt_number")}) ++ "(%rsp), %rdx\n" ++
-        \\     movq      %rsp, %rcx # rsp points to the bottom of the interrupt frame struct at this point so put that address in rdi
-        \\     callq     *__isrs(, %rdx, 8)
-        \\     swapgs    # and swap back out the kernel gs so we dont override it
+    ++ isr_setup
+    // movsbq offsetOf(interrupt_number)(%rsp), %rdx ; all the pushes we made will place rsp regscnt bytes below the intnum
+    // which we need in rdx for the indexed callq below
+    ++ "\n     movsbq   " ++ std.fmt.comptimePrint("{d}", .{@offsetOf(RawInterruptFrame, "interrupt_number")}) ++ "(%rsp), %rdx\n" ++
+        \\     movq     %rsp, %rcx # rsp points to the bottom of the interrupt frame struct at this point so put that address in rcx
+        \\     callq    *__isrs(, %rdx, 8)
         \\ .global __iret__;
         \\ .type __iret__, @function;
         \\ __iret__:
-        \\     add       $32, %rsp
-        \\     popq      %rax # pop fs and gs segment selectors
-        \\     mov       %rax, %fs
-        \\     popq      %rax
-        \\     mov       %rax, %gs
+        \\     swapgs   # and swap back out the kernel gs so we dont override it
+        \\     add      $32, %rsp
+        \\     popq     %rax # pop fs and gs segment selectors
+        \\     mov      %rax, %fs
+        \\     popq     %rax
+        \\     mov      %rax, %gs
     ++ pop ++ // pop all the saved registers
-        \\     add       $16, %rsp
-        \\     iretq     # and return from interrupt
+        \\     add      $16, %rsp
+        \\     iretq    # and return from interrupt
     ;
-    asm (code);
+    asm (fake_isr ++ "\n" ++ code);
 }
 
 export var idt: [256]InterruptGateDescriptor = undefined;
@@ -300,13 +333,15 @@ pub const raw_handlers: [256]RawHandler = blk: {
     break :blk result;
 };
 
-var last_vector: u8 = 0x20;
-pub fn allocate_vector() u8 {
-    const value = @atomicRmw(u8, &last_vector, .Add, 1, .acq_rel);
-    if (value > 0xFC) {
-        @panic("out of vectors!");
-    }
-    return value;
+var vectors = blk: {
+    var v1 = std.StaticBitSet(256).initEmpty();
+    v1.setRangeValue(.{.start = 0x0, .end = 0x1F}, true);
+    v1.setRangeValue(.{.start = 0xFE, .end = 0xFF}, true);
+    break :blk v1;
+};
+
+pub fn is_vector_free(vector: u8) bool {
+    return !vectors.isSet(vector);
 }
 
 /// handler can be a pointer to any function which takes *InterruptFrame(SomeErrorCodeType) as its only parameter
@@ -315,6 +350,7 @@ pub fn add_handler(int: Interrupt, handler: anytype, typ: GateType, dpl: u2, ist
     idt[@intFromEnum(int)] = InterruptGateDescriptor.init(@intFromPtr(raw_handlers[@intFromEnum(int)]), ist, typ, dpl);
     // and put the managed isr into the function pointer array so __isr_common calls into it
     __isrs[@intFromEnum(int)] = @ptrCast(handler);
+    vectors.set(@intFromEnum(int));
 }
 
 /// disable maskable interrupts

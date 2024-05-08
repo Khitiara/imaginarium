@@ -51,6 +51,10 @@ pub const Uuid = packed struct(u128) {
         std.mem.writeInt(u128, &byte_array, @bitCast(self), .big);
         return byte_array;
     }
+
+    pub fn eql(a: Uuid, b: Uuid) bool {
+        return @as(u128, @bitCast(a)) == @as(u128, @bitCast(b));
+    }
 };
 
 /// Create a Uuid object from a string

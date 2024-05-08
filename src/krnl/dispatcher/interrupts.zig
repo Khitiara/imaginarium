@@ -43,13 +43,15 @@ pub fn allocate_vector(level: InterruptRequestPriority) !InterruptVector {
     const idx = @intFromEnum(level) - 2;
     const restore = vectors_lock.lock();
     defer vectors_lock.unlock(restore);
-    if (lasts[idx] >= 0x10) {
-        return error.out_of_vectors;
+
+    while (lasts[idx] < 0x10) {
+        const l: u4 = @truncate(@atomicRmw(u8, &lasts[idx], .Add, 1, .acq_rel));
+        const v: InterruptVector = .{ .vector = l, .level = level };
+        if (arch.is_vector_free(@bitCast(v))) {
+            return v;
+        }
     }
-    if (level == .high and lasts[idx] >= 0xF) {
-        return error.out_of_vectors;
-    }
-    return .{ .vector = @truncate(@atomicRmw(u8, &lasts[idx], .Add, 1, .acq_rel)), .level = level };
+    return error.out_of_vectors;
 }
 
 /// progresses downward through the IRQL levels and addresses each in turn if needed
