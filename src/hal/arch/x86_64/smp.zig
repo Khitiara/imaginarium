@@ -29,6 +29,10 @@ const delay_unsafe = arch.delay_unsafe;
 
 var ap_stacks: [][8 << 20]u8 = undefined;
 
+pub fn get_local_krnl_stack() *anyopaque {
+    return @ptrFromInt(@intFromPtr(&ap_stacks[apic.lapic_indices[apic.get_lapic_id()]]) + (8 << 20));
+}
+
 pub fn init(proc_cnt: u8) !void {
     const bspid = @import("cpuid.zig").cpuid(.type_fam_model_stepping_features, {}).brand_flush_count_id.apic_id;
     const alloc = @import("vmm.zig").raw_page_allocator.allocator();
@@ -41,14 +45,14 @@ pub fn init(proc_cnt: u8) !void {
     @memcpy(ap_trampoline, ap_start[0..(@intFromPtr(ap_end) - @intFromPtr(ap_start))]);
     @as(**const fn () callconv(.Win64) void, @ptrCast(ap_trampoline[lnd_ofs..])).* = &__ap_landing;
     @as(*usize, @ptrCast(ap_trampoline[cr3_ofs..])).* = crs.read(.cr3);
-    const ap_stk_ptr: **[8 << 20]u8 = @ptrCast(ap_trampoline[stk_ofs..]);
+    const ap_stk_ptr: *usize = @ptrCast(ap_trampoline[stk_ofs..]);
     const icr_high = apic.get_register_ptr(apic.RegisterId.icr + 1, apic.IcrHigh);
     const icr_low = apic.get_register_ptr(apic.RegisterId.icr, apic.IcrLow);
     for (0..proc_cnt) |i| {
         if (apic.lapic_ids[i] == bspid) {
             continue;
         }
-        ap_stk_ptr.* = &ap_stacks[i];
+        ap_stk_ptr.* = @intFromPtr(&ap_stacks[i]) + (8 << 20);
         apic.get_register_ptr(apic.RegisterId.esr, u32).* = 0;
         icr_high.*.dest = i;
         var l = icr_low.*;

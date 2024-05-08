@@ -30,6 +30,10 @@ const hal_smp = arch.smp.SmpUtil(LocalControlBlock);
 pub const lcb = hal_smp.lcb;
 
 pub fn init(alloc: std.mem.Allocator) void {
+    lcb.syscall_stack = @ptrFromInt(@intFromPtr(alloc.alignedAlloc(u8, 4096, 8192)) + 8192);
+
+    lcb.kernel_stack = arch.smp.get_local_krnl_stack();
+
     lcb.idle_thread = alloc.create(Thread);
     lcb.idle_thread.* = .{
         .header = .{

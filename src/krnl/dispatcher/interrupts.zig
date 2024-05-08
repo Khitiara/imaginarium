@@ -20,7 +20,7 @@ pub inline fn handle_interrupt(handler: fn (*arch.SavedRegisterState) void) fn (
             defer if (is_root_interrupt) dispatch_interrupt_tail(frame);
             lcb.frame = lcb.frame orelse frame;
             const vector: InterruptVector = @bitCast(frame.interrupt_number);
-            set_irql(vector.level);
+            _ = set_irql(vector.level);
             @call(.always_inline, handler, .{frame});
         }
     }.f;
