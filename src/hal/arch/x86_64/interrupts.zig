@@ -34,7 +34,8 @@ fn unhandled_interrupt(frame: *idt.InterruptFrame(u64)) callconv(.Win64) noretur
     } else {
         log.err("unhandled interrupt: 0x{X: <2} --- {}", .{ @intFromEnum(frame.interrupt_number), frame });
     }
-    while (true) {}
+
+    @panic("UNHANDLED EXCEPTION");
 }
 
 fn spurious(_: *idt.InterruptFrame(u64)) callconv(.Win64) void {}

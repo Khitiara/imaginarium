@@ -60,6 +60,7 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
         .pic = false,
         .use_lld = true,
         .strip = false,
+        .single_threaded = true,
     });
     b.verbose_llvm_ir = "agony.ir";
     b.verbose_llvm_bc = "agony.bc";

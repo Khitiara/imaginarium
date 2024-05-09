@@ -16,10 +16,16 @@ export var __bsp_start_spinlock_flag: u8 = 0;
 pub fn SmpUtil(comptime LocalControlBlock: type) type {
     return struct {
         pub const LocalControlBlockPointer = *addrspace(.gs) LocalControlBlock;
-        pub const lcb: *addrspace(.gs) LocalControlBlock = @ptrFromInt(@alignOf(LocalControlBlock));
+        pub const lcb: *addrspace(.gs) LocalControlBlock = @ptrFromInt(8);
 
-        pub fn setup(base_linear_addr: isize) void {
+        pub fn setup(base_linear_addr: usize) void {
             msr.write(.gs_base, base_linear_addr);
+            msr.write(.kernel_gs_base, base_linear_addr);
+            asm volatile("swapgs" : : : "memory");
+        }
+
+        pub fn lcb_ptr(comptime offset: usize) LocalControlBlock {
+            return asm("movq %gs:" ++ std.fmt.comptimePrint("{d}", .{offset}) ++ ", %[out]" : [out] "=r" (-> LocalControlBlock));
         }
     };
 }

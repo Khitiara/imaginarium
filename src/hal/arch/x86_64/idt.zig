@@ -267,7 +267,7 @@ comptime {
     // movsbq sizeOf(interrupt_frame)(%rsp), %rdx ; all the pushes we made will place the target handler to just above the frame
     ++ "\n     movsbq   " ++ std.fmt.comptimePrint("{d}", .{@sizeOf(RawInterruptFrame)}) ++ "(%rsp), %rdx\n" ++
         \\     movq     %rsp, %rcx # rsp points to the bottom of the interrupt frame struct at this point so put that address in rcx
-        \\     callq    *(%rdx)
+        \\     callq    *%rdx
         \\     jmp      __iret__
     ;
 

@@ -33,7 +33,7 @@ fn MsrValueType(comptime msr: Msr) type {
             _reserved2: u48 = 0,
         },
         .pat => @import("paging/pat.zig").PAT,
-        .fs_base, .gs_base, .kernel_gs_base => isize,
+        .fs_base, .gs_base, .kernel_gs_base => usize,
         _ => @panic(""),
     };
 }

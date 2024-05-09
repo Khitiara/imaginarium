@@ -83,7 +83,7 @@ pub const std_options: std.Options = .{
 const log = std.log.default;
 
 pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_addr: ?usize) noreturn {
-    log.err("PANIC {s}, RETURN={?X:0>16}; error return trace:", .{ msg, ret_addr });
+    log.err("PANIC {s}, RETURN={X:0>16}; error return trace:", .{ msg, ret_addr orelse 0 });
     if (error_return_trace) |stk| {
         var i: usize = 0;
         var frame_index: usize = 0;

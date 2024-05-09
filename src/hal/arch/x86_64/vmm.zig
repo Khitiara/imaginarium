@@ -98,7 +98,7 @@ pub const raw_page_allocator = struct {
     }
 
     fn alloc(_: *anyopaque, len: usize, ptr_align: u8, _: usize) ?[*]u8 {
-        const alloc_len = pmm.get_allocation_size(@max(ptr_align, len));
+        const alloc_len = pmm.get_allocation_size(@max(@as(usize, 1) << @truncate(ptr_align), len));
 
         const ptr = pmm.ptr_from_physaddr([*]u8, pmm.alloc(alloc_len) catch |err| {
             switch (err) {

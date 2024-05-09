@@ -10,7 +10,7 @@ const lcb = smp.lcb;
 const Thread = @import("../thread/Thread.zig");
 
 pub fn dispatch(frame: *arch.SavedRegisterState) void {
-    const l: *smp.LocalControlBlock = @addrSpaceCast(lcb);
+    const l: *smp.LocalControlBlock = lcb(8);
     // TODO: thread scheduling fun times
     // for now, just check if the current thread is lower prio then the head of the queue
     while (true) {
@@ -26,7 +26,7 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
                         // stby -> curr
                         // curr -> queue
                         // queue head -> stby
-                        std.debug.assert(lcb.frame != null);
+                        std.debug.assert(lcb(8).frame != null);
                         cur.saved_state.registers = frame.*;
                         cur.set_state(.running, .assigned);
                         frame.* = stby.saved_state.registers;
@@ -44,7 +44,7 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
                         }
                         break :b r;
                     } else {
-                        break :b lcb.local_dispatcher_lock.lock();
+                        break :b l.local_dispatcher_lock.lock();
                     }
                 };
                 defer l.local_dispatcher_lock.unlock(restore);
@@ -92,7 +92,7 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
                 // if theres nothing running then just stick the idle thread in
                 // and then return with something set to run
                 if (l.current_thread == null) {
-                    l.current_thread = lcb.idle_thread;
+                    l.current_thread = l.idle_thread;
                     l.idle_thread.set_state(.assigned, .running);
                     frame.* = l.idle_thread.saved_state.registers;
                 }

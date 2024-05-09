@@ -214,7 +214,7 @@ pub fn alloc(len: usize) !usize {
 }
 
 pub fn get_allocation_size(size: usize) usize {
-    const idx = std.math.log2_int_ceil(usize, size) - 12;
+    const idx = std.math.log2_int_ceil(usize, size) -| 12;
     return pmm_sizes[idx];
 }
 
