@@ -150,18 +150,10 @@ inline fn outw(port: u16, value: u16) void {
         : "memory"
     );
 }
-inline fn outd(port: u16, value: u32) void {
+inline fn outl(port: u16, value: u32) void {
     asm volatile ("outd %[value], %[port]"
         :
         : [value] "{eax}" (value),
-          [port] "N{dx}" (port),
-        : "memory"
-    );
-}
-inline fn outq(port: u16, value: u64) void {
-    asm volatile ("outq %[value], %[port]"
-        :
-        : [value] "{rax}" (value),
           [port] "N{dx}" (port),
         : "memory"
     );
@@ -171,8 +163,7 @@ pub inline fn out(port: u16, value: anytype) void {
     switch (safe_port_type(@TypeOf(value))) {
         u8, i8 => outb(port, value),
         u16, i16 => outw(port, value),
-        u32, i32 => outd(port, value),
-        u64, i64 => outq(port, value),
+        u32, i32 => outl(port, value),
         else => unreachable,
     }
 }
@@ -193,17 +184,9 @@ inline fn inw(port: u16) u8 {
     );
 }
 
-inline fn ind(port: u16) u8 {
-    return asm volatile ("ind %[port], %[result]"
+inline fn inl(port: u16) u8 {
+    return asm volatile ("inl %[port], %[result]"
         : [result] "={eax}" (-> u8),
-        : [port] "N{dx}" (port),
-        : "memory"
-    );
-}
-
-inline fn inq(port: u16) u8 {
-    return asm volatile ("inq %[port], %[result]"
-        : [result] "={rax}" (-> u8),
         : [port] "N{dx}" (port),
         : "memory"
     );
@@ -213,8 +196,7 @@ pub inline fn in(port: u16, T: type) T {
     return switch (safe_port_type(T)) {
         u8, i8 => @bitCast(inb(port)),
         u16, i16 => @bitCast(inw(port)),
-        u32, i32 => @bitCast(ind(port)),
-        u64, i64 => @bitCast(inq(port)),
+        u32, i32 => @bitCast(inl(port)),
         else => unreachable,
     };
 }
