@@ -113,20 +113,20 @@ pub fn in_serial(port: u16, comptime reg: Register) RegisterContentsRead(reg) {
     return in(port + @intFromEnum(reg), RegisterContentsRead(reg));
 }
 
-inline fn safe_port_type(T: type) type {
+inline fn safe_port_type(T: type) void {
     switch (@typeInfo(T)) {
         .Union => |u| if (u.layout == .@"packed") {
-            var t: type = undefined;
             inline for (u.fields) |f| {
-                t = safe_port_type(f.type);
+                safe_port_type(f.type);
             }
-            return t;
+            return;
         },
         .Struct => |s| if (s.layout == .@"packed") {
-            return safe_port_type(s.backing_integer.?);
+            safe_port_type(s.backing_integer.?);
+            return;
         },
         .Int => |i| switch (i.bits) {
-            8, 16, 32, 64 => return T,
+            8, 16, 32 => return,
             else => {},
         },
         else => {},
@@ -134,71 +134,23 @@ inline fn safe_port_type(T: type) type {
     @compileError(@import("std").fmt.comptimePrint("Invalid io port value type {s}", .{@typeName(T)}));
 }
 
-inline fn outb(port: u16, value: u8) void {
-    asm volatile ("outb %[value], %[port]"
-        :
-        : [value] "{al}" (value),
-          [port] "N{dx}" (port),
-        : "memory"
-    );
-}
-inline fn outw(port: u16, value: u16) void {
-    asm volatile ("outw %[value], %[port]"
-        :
-        : [value] "{ax}" (value),
-          [port] "N{dx}" (port),
-        : "memory"
-    );
-}
-inline fn outl(port: u16, value: u32) void {
-    asm volatile ("outd %[value], %[port]"
-        :
-        : [value] "{eax}" (value),
-          [port] "N{dx}" (port),
-        : "memory"
-    );
-}
-
 pub inline fn out(port: u16, value: anytype) void {
-    switch (safe_port_type(@TypeOf(value))) {
-        u8, i8 => outb(port, value),
-        u16, i16 => outw(port, value),
-        u32, i32 => outl(port, value),
-        else => unreachable,
-    }
-}
-
-inline fn inb(port: u16) u8 {
-    return asm volatile ("inb %[port], %[result]"
-        : [result] "={al}" (-> u8),
-        : [port] "N{dx}" (port),
-        : "memory"
-    );
-}
-
-inline fn inw(port: u16) u8 {
-    return asm volatile ("inw %[port], %[result]"
-        : [result] "={ax}" (-> u8),
-        : [port] "N{dx}" (port),
-        : "memory"
-    );
-}
-
-inline fn inl(port: u16) u8 {
-    return asm volatile ("inl %[port], %[result]"
-        : [result] "={eax}" (-> u8),
-        : [port] "N{dx}" (port),
+    safe_port_type(@TypeOf(value));
+    asm volatile ("out %[value], %[port]"
+        :
+        : [value] "{al},{ax},{eax}" (value),
+          [port] "N{dx}" (port),
         : "memory"
     );
 }
 
 pub inline fn in(port: u16, T: type) T {
-    return switch (safe_port_type(T)) {
-        u8, i8 => @bitCast(inb(port)),
-        u16, i16 => @bitCast(inw(port)),
-        u32, i32 => @bitCast(inl(port)),
-        else => unreachable,
-    };
+    safe_port_type(T);
+    return asm volatile ("in %[port], %[result]"
+        : [result] "={al},={ax},={eax}" (-> T),
+        : [port] "N{dx}" (port),
+        : "memory"
+    );
 }
 
 pub const SerialInitError = error{serial_init_failure};
