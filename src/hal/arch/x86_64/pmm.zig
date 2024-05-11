@@ -210,7 +210,9 @@ pub fn alloc(len: usize) !usize {
         return error.physical_allocation_too_large;
     }
     // forward the actual allocation to alloc_impl
-    return alloc_impl(idx);
+    const p = try alloc_impl(idx);
+    @memset(ptr_from_physaddr([*]u8, p)[0..len], undefined);
+    return p;
 }
 
 pub fn get_allocation_size(size: usize) usize {

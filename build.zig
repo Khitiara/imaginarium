@@ -62,6 +62,7 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
         .strip = false,
         .single_threaded = true,
     });
+    // exe.want_lto = false;
     b.verbose_llvm_ir = "agony.ir";
     b.verbose_llvm_bc = "agony.bc";
     const ir = exe.getEmittedLlvmIr();
