@@ -254,7 +254,7 @@ pub fn build(b: *std.Build) !void {
         "-M",
         "type=q35,smm=off,hpet=on", // q35 has HPET by default afaik but better safe than sorry
         "-cpu",
-        "qemu64,la57,invtsc,pdpe1gb",
+        "qemu64,la57,invtsc,pdpe1gb,rdrand",
         "-m",
         "4G",
     });

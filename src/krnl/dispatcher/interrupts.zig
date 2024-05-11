@@ -16,9 +16,9 @@ pub const InterruptVector = packed struct(u8) {
 pub inline fn handle_interrupt(handler: fn (*arch.SavedRegisterState) void) fn (*arch.SavedRegisterState) callconv(.Win64) void {
     return struct {
         fn f(frame: *arch.SavedRegisterState) callconv(.Win64) void {
-            const is_root_interrupt: bool = lcb(8).frame == null;
+            const is_root_interrupt: bool = lcb().frame == null;
             defer if (is_root_interrupt) dispatch_interrupt_tail(frame);
-            lcb(8).frame = lcb(8).frame orelse frame;
+            lcb().frame = lcb().frame orelse frame;
             const vector: InterruptVector = @bitCast(@intFromEnum(frame.interrupt_number));
             _ = set_irql(vector.level);
             @call(.always_inline, handler, .{frame});
@@ -34,7 +34,8 @@ pub noinline fn enter_scheduling() void {
 }
 
 fn enter_thread_ctx_1(frame: *arch.SavedRegisterState) callconv(.Win64) void {
-    lcb(8).current_thread.?.saved_state.registers = frame.*;
+    std.log.debug("entering thread frame, RIP=0x{x:0>16}", .{frame.rip});
+    lcb().current_thread.?.saved_state.registers = frame.*;
 }
 
 pub noinline fn enter_thread_ctx() void {
@@ -42,9 +43,9 @@ pub noinline fn enter_thread_ctx() void {
 }
 
 fn set_irql(level: InterruptRequestPriority) InterruptRequestPriority {
-    const rest = lcb(8).irql_lock.lock();
-    defer lcb(8).irql_lock.unlock(rest);
-    lcb(8).irql = level;
+    const rest = lcb().irql_lock.lock();
+    defer lcb().irql_lock.unlock(rest);
+    lcb().irql = level;
     apic.get_register_ptr(apic.RegisterId.tpr, InterruptRequestPriority).* = level;
     return level;
 }
@@ -74,14 +75,14 @@ pub fn allocate_vector(level: InterruptRequestPriority) !InterruptVector {
 /// is guaranteed to correctly handle
 fn dispatch_interrupt_tail(frame: *arch.SavedRegisterState) void {
     arch.enable_interrupts();
-    var level = smp.lcb(8).irql;
+    var level = smp.lcb().irql;
     // higher IRQLs do processing through ISRs rather than fixed logic. loop through to process each IRQL in turn
     while (@intFromEnum(level) > @intFromEnum(InterruptRequestPriority.dpc)) : (level = set_irql(level.lower())) {}
 
     // IRQL:DPC
     {
         // TODO: run any queued DPCs
-        _ = set_irql(lcb(8).irql.lower());
+        _ = set_irql(lcb().irql.lower());
     }
 
     // IRQL:DISPATCH
@@ -90,12 +91,12 @@ fn dispatch_interrupt_tail(frame: *arch.SavedRegisterState) void {
         // from kernel-mode code which is setting a new thread when one previously did not
         // exist, e.g. during startup. if the frame in the LCB is null, the frame in our
         // function parameter should still be correct
-        if (lcb(8).frame) |f| {
+        if (lcb().frame) |f| {
             frame.* = f.*;
-            lcb(8).frame = null;
+            lcb().frame = null;
         }
         dispatcher.scheduler.dispatch(frame);
-        _ = set_irql(lcb(8).irql.lower());
+        _ = set_irql(lcb().irql.lower());
     }
-    std.debug.assert(lcb(8).irql == .passive);
+    std.debug.assert(lcb().irql == .passive);
 }

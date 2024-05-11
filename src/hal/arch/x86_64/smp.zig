@@ -13,7 +13,16 @@ const ptr_from_physaddr = @import("pmm.zig").ptr_from_physaddr;
 
 export var __bsp_start_spinlock_flag: u8 = 0;
 
-pub fn SmpUtil(comptime LocalControlBlock: type) type {
+pub fn SmpUtil(comptime Wrapper: type, comptime LocalControlBlock: type, comptime fields: []const []const u8) type {
+    const offset = blk: {
+        var T = Wrapper;
+        var o: usize = 0;
+        for(fields) |f| {
+            o += @offsetOf(T, f);
+            T = @TypeOf(@field(@as(T, undefined), f));
+        }
+        break :blk o;
+    };
     return struct {
         pub const LocalControlBlockPointer = *addrspace(.gs) LocalControlBlock;
         pub const lcb: *addrspace(.gs) LocalControlBlock = @ptrFromInt(8);
@@ -24,7 +33,7 @@ pub fn SmpUtil(comptime LocalControlBlock: type) type {
             asm volatile("swapgs" : : : "memory");
         }
 
-        pub fn lcb_ptr(comptime offset: usize) LocalControlBlock {
+        pub fn lcb_ptr() LocalControlBlock {
             return asm("movq %gs:" ++ std.fmt.comptimePrint("{d}", .{offset}) ++ ", %[out]" : [out] "=r" (-> LocalControlBlock));
         }
     };
