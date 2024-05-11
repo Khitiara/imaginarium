@@ -31,6 +31,10 @@ pub const Uuid = packed struct(u128) {
     time_mid: u16,
     time_low: u32,
 
+    pub fn format(self: *const Uuid, comptime _: []const u8, _: std.fmt.FormatOptions, fmt: anytype) !void {
+        try fmt.writeAll(&self.toString());
+    }
+
     pub fn toString(self: *const Uuid) [36]u8 {
         var buffer: [36]u8 = undefined;
         _ = std.fmt.bufPrint(&buffer, "{x:0>8}-{x:0>4}-{x:1}{x:0>3}-{x:0>2}{x:0>2}-{x:0>12}", .{
