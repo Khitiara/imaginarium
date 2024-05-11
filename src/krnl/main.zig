@@ -77,7 +77,8 @@ pub const os = struct {
 
 pub const std_options: std.Options = .{
     .logFn = logFn,
-    .cryptoRandomSeed = arch.x86_64.rand.fill,
+    // .crypto_always_getrandom = true,
+    .cryptoRandomSeed = arch.x86_64.rand.fill_secure,
 };
 
 const log = std.log.default;

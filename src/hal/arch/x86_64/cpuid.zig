@@ -282,9 +282,9 @@ pub inline fn CpuidOutputType(comptime leaf: Leaf, comptime subleaf: Subleaf(lea
         },
         .feature_flags => extern struct {
             _: u32 = 0,
-            flags1: Flags1,
-            flags2: Flags2,
             flags3: Flags3,
+            flags2: Flags2,
+            flags1: Flags1,
         },
         .freq_1 => extern struct {
             denominator: u32,
