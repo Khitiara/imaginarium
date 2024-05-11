@@ -167,7 +167,7 @@ inline fn outq(port: u16, value: u64) void {
     );
 }
 
-pub fn out(port: u16, value: anytype) void {
+pub inline fn out(port: u16, value: anytype) void {
     switch (safe_port_type(@TypeOf(value))) {
         u8, i8 => outb(port, value),
         u16, i16 => outw(port, value),
@@ -209,7 +209,7 @@ inline fn inq(port: u16) u8 {
     );
 }
 
-pub fn in(port: u16, T: type) T {
+pub inline fn in(port: u16, T: type) T {
     return switch (safe_port_type(T)) {
         u8, i8 => @bitCast(inb(port)),
         u16, i16 => @bitCast(inw(port)),
