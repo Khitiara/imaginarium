@@ -36,6 +36,7 @@ pub noinline fn enter_scheduling() void {
 fn enter_thread_ctx_1(frame: *arch.SavedRegisterState) callconv(.Win64) void {
     std.log.debug("entering thread frame, RIP=0x{x:0>16}", .{frame.rip});
     lcb().current_thread.?.saved_state.registers = frame.*;
+    std.log.debug("returning to thread {}", .{lcb().current_thread.?.header.id});
 }
 
 pub noinline fn enter_thread_ctx() void {
