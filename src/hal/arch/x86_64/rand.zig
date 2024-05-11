@@ -12,18 +12,16 @@ pub fn hardware_getseed_supported() bool {
 
 pub fn rdseed() u32 {
     return asm volatile (
-        \\ _rdseed_1:
-        \\     rdseed %[r]
-        \\     jnc _rdseed_1
+        \\ 1:  rdseed %[r]
+        \\     jnc 1b
         : [r] "=r" (-> u32),
     );
 }
 
 pub fn rdrand() u32 {
     return asm volatile (
-        \\ _rdrand_1:
-        \\     rdrand %[r]
-        \\     jnc _rdrand_1
+        \\ 1:  rdrand %[r]
+        \\     jnc 1b
         : [r] "=r" (-> u32),
     );
 }
