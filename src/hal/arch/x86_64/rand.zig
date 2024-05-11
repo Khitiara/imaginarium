@@ -11,23 +11,21 @@ pub fn hardware_getseed_supported() bool {
 }
 
 pub fn rdseed() u32 {
-    var r: u32 = 0;
-    while (!x86_64.flags().carry) {
-        r = asm ("rdseed %[r]"
-            : [r] "=r" (-> u32),
-        );
-    }
-    return r;
+    return asm volatile (
+        \\ _rdseed_1:
+        \\     rdseed %[r]
+        \\     jnc _rdseed_1
+        : [r] "=r" (-> u32),
+    );
 }
 
 pub fn rdrand() u32 {
-    var r: u32 = 0;
-    while (!x86_64.flags().carry) {
-        r = asm ("rdrand %[r]"
-            : [r] "=r" (-> u32),
-        );
-    }
-    return r;
+    return asm volatile (
+        \\ _rdrand_1:
+        \\     rdrand %[r]
+        \\     jnc _rdrand_1
+        : [r] "=r" (-> u32),
+    );
 }
 
 pub fn fill(buf: []u8) void {
@@ -52,6 +50,10 @@ pub fn fill_secure(buf: []u8) void {
     }
 }
 
-fn fillFn(_: *anyopaque, buf: []u8) void {
+fn fill_fn(_: *anyopaque, buf: []u8) void {
     fill(buf);
+}
+
+fn secure_fill_fn(_: *anyopaque, buf: []u8) void {
+    fill_secure(buf);
 }
