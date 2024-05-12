@@ -210,7 +210,7 @@ pub fn InterruptFrame(ErrorCode: type) type {
     };
 }
 
-pub fn spoof_isr(isr: InterruptHandler) void {
+pub noinline fn spoof_isr(isr: InterruptHandler) void {
     __isr__spoof__(isr, @returnAddress());
 }
 

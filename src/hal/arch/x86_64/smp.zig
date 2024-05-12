@@ -17,7 +17,7 @@ pub fn SmpUtil(comptime Wrapper: type, comptime LocalControlBlock: type, comptim
     const offset = blk: {
         var T = Wrapper;
         var o: usize = 0;
-        for(fields) |f| {
+        for (fields) |f| {
             o += @offsetOf(T, f);
             T = @TypeOf(@field(@as(T, undefined), f));
         }
@@ -30,11 +30,13 @@ pub fn SmpUtil(comptime Wrapper: type, comptime LocalControlBlock: type, comptim
         pub fn setup(base_linear_addr: usize) void {
             msr.write(.gs_base, base_linear_addr);
             msr.write(.kernel_gs_base, base_linear_addr);
-            asm volatile("swapgs" : : : "memory");
+            asm volatile ("swapgs" ::: "memory");
         }
 
         pub fn lcb_ptr() LocalControlBlock {
-            return asm("movq %gs:" ++ std.fmt.comptimePrint("{d}", .{offset}) ++ ", %[out]" : [out] "=r" (-> LocalControlBlock));
+            return asm ("movq %gs:" ++ std.fmt.comptimePrint("{d}", .{offset}) ++ ", %[out]"
+                : [out] "=r" (-> LocalControlBlock),
+            );
         }
     };
 }
@@ -57,7 +59,7 @@ const vmm = @import("vmm.zig");
 var bspid: u8 = undefined;
 
 pub fn init(comptime cb: fn (std.mem.Allocator, std.mem.Allocator) std.mem.Allocator.Error!void) std.mem.Allocator.Error!void {
-    bspid = @import("cpuid.zig").cpuid(.type_fam_model_stepping_features, {}).brand_flush_count_id.apic_id;
+    bspid = apic.get_lapic_id();
     const alloc = vmm.raw_page_allocator.allocator();
     const gpa = vmm.gpa.allocator();
     var raw_ap_stacks = try alloc.alloc([8 << 20]u8, apic.processor_count - 1);

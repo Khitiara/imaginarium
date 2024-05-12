@@ -46,6 +46,7 @@ pub const os = struct {
 
 pub const std_options: std.Options = .{
     .logFn = logFn,
+    .log_level = .debug,
     // .crypto_always_getrandom = true,
     .cryptoRandomSeed = arch.x86_64.rand.fill_secure,
 };
@@ -65,17 +66,17 @@ export fn __kstart2(ldr_info: *bootelf.BootelfData) callconv(arch.cc) noreturn {
             },
         }
     };
-    puts("STOP");
     while (true) {
         asm volatile ("hlt");
     }
 }
 
-fn main(ldr_info: *bootelf.BootelfData) !void {
+noinline fn main(ldr_info: *bootelf.BootelfData) !void {
     const bootelf_magic_check = ldr_info.magic == bootelf.magic;
     std.debug.assert(bootelf_magic_check);
 
     try arch.platform_init(ldr_info.memory_map());
+    debug.dump_stack_trace(log, null);
     try arch.smp.init(smp.allocate_lcbs);
 
     const current_apic_id = cpuid.cpuid(.type_fam_model_stepping_features, {}).brand_flush_count_id.apic_id;
@@ -116,6 +117,8 @@ fn main(ldr_info: *bootelf.BootelfData) !void {
 
     try debug.dump_hex(ap_trampoline_start[0..ap_trampoline_length]);
     debug.dump_stack_trace(log, null);
+    puts("STOP");
+    while (true) {}
 }
 
 test {
