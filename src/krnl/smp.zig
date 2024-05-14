@@ -13,6 +13,7 @@ const log = std.log.scoped(.smp);
 
 pub const LocalControlBlock = struct {
     self: *LocalControlBlock,
+    apic_id: u8,
     current_thread: ?*Thread = null,
     standby_thread: ?*Thread = null,
     idle_thread: *Thread = undefined,
@@ -60,10 +61,11 @@ fn init(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator, wait_for_aps: boo
 
 pub fn allocate_lcbs(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator) std.mem.Allocator.Error!void {
     lcbs = try page_alloc.alignedAlloc(LcbWrapper, 1 << 12, apic.processor_count);
-    for (lcbs) |*l| {
+    for (lcbs, 0..) |*l, i| {
         l.* = .{
             .lcb = .{
                 .self = &l.lcb,
+                .apic_id = apic.lapic_ids[i],
             },
         };
     }

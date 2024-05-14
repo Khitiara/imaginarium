@@ -5,6 +5,7 @@ const hal = @import("hal");
 const arch = hal.arch;
 const std = @import("std");
 const queue = util.queue;
+const smp = @import("../smp.zig");
 
 pub const Semaphore = @import("Semaphore.zig");
 
@@ -33,11 +34,27 @@ pub const SavedThreadState = struct {
     registers: arch.SavedRegisterState,
 };
 
+pub const WaitType = enum {
+    Any,
+    All,
+};
+
+pub const Affinity = struct {
+    last_processor: u8 = 0xFF,
+    want_processor: union(enum) {
+        processor: u8,
+        core: u8,
+        chip: u8,
+    },
+};
+
 header: ob.Object,
 lock: hal.SpinLock = .{},
-wait_list: queue.DoublyLinkedList(dispatcher.wait_block.WaitBlock, "thread_wait_list") = .{},
+wait_type: WaitType = undefined,
+wait_list: queue.DoublyLinkedList(dispatcher.WaitBlock, "thread_wait_list") = .{},
 state: State = .init,
 priority: Priority,
+affinity: Affinity,
 scheduler_hook: queue.Node = .{},
 saved_state: SavedThreadState = undefined,
 stack: []const u8 = undefined,

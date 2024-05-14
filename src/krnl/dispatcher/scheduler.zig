@@ -8,10 +8,76 @@ const apic = hal.apic;
 const InterruptRequestPriority = dispatcher.InterruptRequestPriority;
 const lcb = smp.lcb;
 const Thread = @import("../thread/Thread.zig");
+const Dpc = dispatcher.Dpc;
+const WaitBlock = dispatcher.WaitBlock;
+
+fn schedule_dpc(_: *const Dpc, thread_opaque: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque) void {
+    const thread: *Thread = @ptrCast(thread_opaque.?);
+    schedule(thread);
+}
+
+pub fn cancel(alloc: std.mem.Allocator, wait: *WaitBlock) void {
+    cancel_impl(alloc, wait, false);
+}
+
+fn cancel_impl(alloc: std.mem.Allocator, wait: *WaitBlock, from_waitall_finish: bool) void {
+    defer alloc.destroy(wait);
+    const k1 = wait.target.wait_lock.lock();
+    defer wait.target.wait_lock.unlock(k1);
+    wait.target.wait_queue.remove(wait);
+    if(from_waitall_finish) {
+        const k2 = wait.thread.lock.lock();
+        defer wait.thread.lock.unlock(k2);
+        wait.thread.wait_list.remove(wait);
+    }
+}
+
+/// schedule a thread to the given processor, or the thread's last processor, if no processor is given
+/// that processor is responsible for offloading it elsewhere if needed
+/// final version will use DPC to get onto other processors when scheduling there
+pub fn schedule(thread: *Thread, processor: ?u8) void {
+    const l: *smp.LocalControlBlock = lcb();
+    const target = processor orelse thread.affinity.last_processor;
+    if (l.apic_id != target) {
+        // TODO trampoline into a DPC on the target processor
+        // DPC execution is not implemented yet so for now dont bother and just eat the lock penalty
+    }
+    const key = l.local_dispatcher_lock.lock();
+    defer l.local_dispatcher_lock.unlock(key);
+    thread.set_state(.ready, .assigned);
+    l.local_dispatcher_queue.add(thread);
+}
+
+pub fn signal_wait_block(alloc: std.mem.Allocator, thread: *Thread, block: *WaitBlock) void {
+    {
+        const key = thread.lock.lock();
+        defer thread.lock.unlock(key);
+        switch (thread.wait_type) {
+            .All => {
+                thread.wait_list.remove(block);
+                alloc.destroy(block);
+                if (thread.wait_list.impl.len != 0) return;
+            },
+            .Any => {
+                var n = thread.wait_list.clear();
+                if (n) {
+                    while (n) |node| {
+                        n = node.next;
+                        alloc.destroy(node);
+                    }
+                } else {
+                    @panic("Thread signalled to end WaitAny with nothing in wait list!");
+                }
+            },
+        }
+        thread.set_state(.blocked, .ready);
+    }
+    schedule(thread, null);
+}
 
 pub fn dispatch(frame: *arch.SavedRegisterState) void {
     const l: *smp.LocalControlBlock = lcb();
-    // TODO: thread scheduling fun times
+    // TODO: cross-processor thread scheduling fun times
     // for now, just check if the current thread is lower prio then the head of the queue
     while (true) {
         if (l.standby_thread) |stby| {

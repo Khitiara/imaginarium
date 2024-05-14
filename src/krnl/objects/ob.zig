@@ -1,9 +1,11 @@
 const Thread = @import("../thread/Thread.zig");
-const wait_block = @import("../dispatcher/dispatcher.zig").wait_block;
+const WaitBlock = @import("../dispatcher/dispatcher.zig").WaitBlock;
 const util = @import("util");
 const queue = util.queue;
 const zuid = @import("zuid");
 const std = @import("std");
+const atomic = std.atomic;
+const hal = @import("hal");
 
 pub const ObjectKind = enum(u7) {
     semaphore,
@@ -21,12 +23,31 @@ pub const ObjectKind = enum(u7) {
 
 pub const ObNamespace = zuid.deserialize("2d7e52f8-0d27-4a40-a967-828c2900c33c");
 
+pub const ObjectRef = opaque {
+    pub fn ptr(self: anytype) util.CopyPtrAttrs(@TypeOf(self), .One, anyopaque) {
+        const Concrete = util.CopyPtrAttrs(@TypeOf(self), .One, Object);
+        return @as(Concrete, @ptrCast(self)).ptr();
+    }
+    pub fn ptr_assert(self: anytype, comptime Assert: type) util.CopyPtrAttrs(@TypeOf(self), .One, Assert) {
+        const Concrete = util.CopyPtrAttrs(@TypeOf(self), .One, Object);
+        return @as(Concrete, @ptrCast(self)).ptr_assert(Assert);
+    }
+};
+
 pub const Object = struct {
     kind: ObjectKind,
     id: zuid.Uuid = zuid.null_uuid,
     /// max-value means the object is unnamed
     name_idx: u32 = std.math.maxInt(u32),
-    wait_queue: queue.Queue(wait_block.WaitBlock, "wait_queue") = .{},
+    wait_lock: hal.SpinLock = .{},
+    wait_queue: queue.DoublyLinkedList(WaitBlock, "wait_queue") = .{},
+    /// kernel-mode users can copy a pointer using this refcount, thereby avoiding
+    /// the need to potentially allocate in the handle table
+    pointer_count: atomic.Value(u64),
+    /// usermode cant get a pointer to a kernel-mode object, and certainly not a useful one
+    /// thus for usermode references we use a true handle table
+    handle_count: atomic.Value(u64),
+    vtable: *const ObjectFunctions,
 
     // if you need a specific type either ptrCast it or call ptr_assert
     pub fn ptr(self: anytype) util.CopyPtrAttrs(@TypeOf(self), .One, anyopaque) {
@@ -50,4 +71,9 @@ pub const Object = struct {
             },
         }
     }
+};
+
+pub const ObjectFunctions = struct {
+    deinit: *const fn (*const Object, std.mem.Allocator) void,
+    signal: *const fn (*const Object) void,
 };

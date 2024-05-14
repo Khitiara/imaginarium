@@ -37,7 +37,7 @@ pub const InterruptRequestPriority = enum(u4) {
     }
 };
 
-pub const wait_block = @import("wait_block.zig");
+pub const WaitBlock = @import("WaitBlock.zig");
 
 var global_dispatcher_lock: util.SpinLock = .{};
 var dispatch_queue: queue.PriorityQueue(Thread, "scheduler_hook", "priority", Thread.Priority) = .{};

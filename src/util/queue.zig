@@ -72,6 +72,16 @@ pub const UntypedQueue = struct {
             return null;
         }
     }
+
+    /// WARNING: THIS FUNCTION DOES NOT ENSURE REMOVED ITEMS ARE FREED. BE CAREFUL
+    /// returns the old head for iteration and freeing
+    pub fn clear(self: *UntypedQueue) ?*Node {
+        defer {
+            self.head = null;
+            self.tail = null;
+        }
+        return self.head;
+    }
 };
 
 pub fn Queue(comptime T: type, comptime field_name: []const u8) type {
@@ -108,6 +118,10 @@ pub fn Queue(comptime T: type, comptime field_name: []const u8) type {
             } else {
                 return null;
             }
+        }
+
+        pub fn clear(self: *@This()) ?*T {
+            return if (self.impl.clear()) |n| ref_from_node(n) else return null;
         }
     };
 }
@@ -219,6 +233,15 @@ pub fn PriorityQueue(comptime T: type, comptime node_field_name: []const u8, com
             } else {
                 return null;
             }
+        }
+
+        pub fn clear(self: *@This()) ?*T {
+            defer {
+                self.head = null;
+                @memset(&self.tails.values, null);
+            }
+
+            return if (self.head) |h| ref_from_node(h) else null;
         }
     };
 }
@@ -382,6 +405,10 @@ pub fn DoublyLinkedList(comptime T: type, comptime field_name: []const u8) type 
 
         pub fn remove_back(self: *@This()) ?*T {
             return if (self.impl.remove_back()) |n| ref_from_node(n) else null;
+        }
+
+        pub fn clear(self: *@This()) ?*T {
+            return if (self.impl.clear()) |n| ref_from_node(n) else return null;
         }
     };
 }
