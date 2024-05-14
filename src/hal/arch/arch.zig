@@ -22,7 +22,6 @@ pub usingnamespace switch (@import("builtin").cpu.arch) {
         pub const disable_interrupts = x86_64.idt.disable;
         pub const enable_interrupts = x86_64.idt.enable;
 
-        pub const spin_hint = x86_64.pause;
         pub const delay_unsafe = x86_64.delay_unsafe;
 
         pub const is_vector_free = x86_64.idt.is_vector_free;

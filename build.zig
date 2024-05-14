@@ -11,6 +11,10 @@ fn target_features(query: *Target.Query) !void {
             const Features = std.Target.x86.Feature;
             // zig needs floats of some sort, but we dont want to use simd in kernel
             query.cpu_features_add.addFeature(@intFromEnum(Features.soft_float));
+            query.cpu_features_add.addFeature(@intFromEnum(Features.bmi));
+            query.cpu_features_add.addFeature(@intFromEnum(Features.bmi2));
+            query.cpu_features_add.addFeature(@intFromEnum(Features.rdrnd));
+            query.cpu_features_add.addFeature(@intFromEnum(Features.rdseed));
 
             query.cpu_features_sub.addFeature(@intFromEnum(Features.mmx));
             query.cpu_features_sub.addFeature(@intFromEnum(Features.sse));

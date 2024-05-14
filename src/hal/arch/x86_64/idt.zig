@@ -285,7 +285,7 @@ comptime {
         \\ .type __iret__, @function;
         \\ __iret__:
         \\     swapgs   # and swap back out the kernel gs so we dont override it
-        \\     add      $32, %rsp
+        \\     add      $32, %rsp # skip the control registers
         \\     popq     %rax # pop fs and gs segment selectors
         \\     mov      %rax, %fs
         \\     popq     %rax

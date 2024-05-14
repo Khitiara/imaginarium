@@ -6,6 +6,8 @@ const arch = hal.arch;
 const std = @import("std");
 const queue = util.queue;
 const smp = @import("../smp.zig");
+const zuid = @import("zuid");
+const atomic = std.atomic;
 
 pub const Semaphore = @import("Semaphore.zig");
 
@@ -42,10 +44,11 @@ pub const WaitType = enum {
 pub const Affinity = struct {
     last_processor: u8 = 0xFF,
     want_processor: union(enum) {
+        no_pref: void,
         processor: u8,
         core: u8,
         chip: u8,
-    },
+    } = .no_pref,
 };
 
 header: ob.Object,
@@ -54,10 +57,38 @@ wait_type: WaitType = undefined,
 wait_list: queue.DoublyLinkedList(dispatcher.WaitBlock, "thread_wait_list") = .{},
 state: State = .init,
 priority: Priority,
-affinity: Affinity,
+affinity: Affinity = .{},
 scheduler_hook: queue.Node = .{},
 saved_state: SavedThreadState = undefined,
 stack: []const u8 = undefined,
+
+const vtable: ob.ObjectFunctions = .{
+    .deinit = &ob_deinit,
+    .signal = &ob_signal,
+};
+
+fn ob_deinit(o: *const ob.Object, alloc: std.mem.Allocator) void {
+    const t: *@This() = @constCast(@fieldParentPtr("header", o));
+    t.deinit(alloc);
+}
+
+fn ob_signal(o: *ob.Object) void {
+    const t: *@This() = @constCast(@fieldParentPtr("header", o));
+    _ = t;
+}
+
+pub fn init(alloc: std.mem.Allocator, id: zuid.Uuid) !*@This() {
+    const self = try alloc.create(@This());
+    self.* = .{
+        .header = .{
+            .kind = .thread,
+            .id = id,
+            .vtable = &vtable,
+        },
+        .priority = .p1,
+    };
+    return self;
+}
 
 pub fn set_state(self: *@This(), expect: State, state: State) void {
     const old = @cmpxchgStrong(State, &self.state, expect, state, .acq_rel, .monotonic);
@@ -75,7 +106,8 @@ pub fn setup_stack(self: *@This(), allocator: std.mem.Allocator, thread_start: *
     @memset(std.mem.asBytes(frame), 0);
     // all normally-saved registers are 0 EXCEPT:
     // new RIP is the thread start
-    // new RSP is the new top of stack
+    // new RSP is the new top of stack - 2 usizes
+    // top two usizes of the stack are cleared to 0
     // segment selectors set up for *KERNEL MODE*
     // flags copied from current flags EXCEPT the interrupt flag is set
     // new RCX is the address of the parameter (win64 callconv because rdi for first argument is dumb)
@@ -84,7 +116,9 @@ pub fn setup_stack(self: *@This(), allocator: std.mem.Allocator, thread_start: *
     frame.rip = @intFromPtr(thread_start);
     frame.registers.rcx = @intFromPtr(param);
     self.stack = try allocator.alignedAlloc(u8, 1 << 12, 1 << 12);
+    @memset(@constCast(self.stack[self.stack.len - (2 * @sizeOf(usize)) ..]), 0);
     frame.rsp = @intFromPtr(self.stack.ptr) + self.stack.len;
+    frame.rsp -= 2 * @sizeOf(usize);
     frame.eflags = arch.x86_64.flags();
     frame.eflags.interrupt_enable = true;
     frame.cs = arch.x86_64.gdt.selectors.kernel_code;

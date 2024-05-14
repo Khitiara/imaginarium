@@ -13,15 +13,12 @@ pub const interrupts = @import("interrupts.zig");
 pub const rand = @import("rand.zig");
 pub const smp = @import("smp.zig");
 pub const time = @import("time.zig");
+const std = @import("std");
 
 const memory = @import("../../memory.zig");
 const acpi = @import("../../acpi/acpi.zig");
 
 pub const cc: @import("std").builtin.CallingConvention = .Win64;
-
-pub fn pause() void {
-    asm volatile ("pause" ::: "memory");
-}
 
 pub fn puts(bytes: []const u8) void {
     for (bytes) |b| {
@@ -32,11 +29,11 @@ pub fn puts(bytes: []const u8) void {
 pub fn delay_unsafe(cycles: u64) void {
     const target = time.rdtsc() + cycles;
     while (time.rdtsc() < target) {
-        pause();
+        std.atomic.spinLoopHint();
     }
 }
 
-const log = @import("std").log.scoped(.init);
+const log = std.log.scoped(.init);
 
 pub const ptr_from_physaddr = pmm.ptr_from_physaddr;
 

@@ -25,7 +25,7 @@ pub fn lock_unsafe(self: anytype) void {
         if (@atomicLoad(usize, &self.serving, .acquire) == ticket) {
             return;
         }
-        arch.spin_hint();
+        atomic.spinLoopHint();
     }
 }
 

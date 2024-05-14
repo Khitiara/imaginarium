@@ -43,10 +43,10 @@ pub const Object = struct {
     wait_queue: queue.DoublyLinkedList(WaitBlock, "wait_queue") = .{},
     /// kernel-mode users can copy a pointer using this refcount, thereby avoiding
     /// the need to potentially allocate in the handle table
-    pointer_count: atomic.Value(u64),
+    pointer_count: atomic.Value(u64) = atomic.Value(u64).init(0),
     /// usermode cant get a pointer to a kernel-mode object, and certainly not a useful one
     /// thus for usermode references we use a true handle table
-    handle_count: atomic.Value(u64),
+    handle_count: atomic.Value(u64) = atomic.Value(u64).init(0),
     vtable: *const ObjectFunctions,
 
     // if you need a specific type either ptrCast it or call ptr_assert
@@ -75,5 +75,5 @@ pub const Object = struct {
 
 pub const ObjectFunctions = struct {
     deinit: *const fn (*const Object, std.mem.Allocator) void,
-    signal: *const fn (*const Object) void,
+    signal: *const fn (*Object) void,
 };

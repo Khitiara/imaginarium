@@ -25,7 +25,7 @@ fn cancel_impl(alloc: std.mem.Allocator, wait: *WaitBlock, from_waitall_finish: 
     const k1 = wait.target.wait_lock.lock();
     defer wait.target.wait_lock.unlock(k1);
     wait.target.wait_queue.remove(wait);
-    if(from_waitall_finish) {
+    if (from_waitall_finish) {
         const k2 = wait.thread.lock.lock();
         defer wait.thread.lock.unlock(k2);
         wait.thread.wait_list.remove(wait);
@@ -86,34 +86,31 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
                 // have both a standby and a current thread. check if the priority is wrong
 
                 // lower = more prioritized
-                const restore = b: {
-                    if (@intFromEnum(stby.priority) < @intFromEnum(cur.priority)) {
-                        // priority is swapped, so do the three way swap
-                        // stby -> curr
-                        // curr -> queue
-                        // queue head -> stby
-                        std.debug.assert(l.frame != null);
-                        cur.saved_state.registers = frame.*;
-                        cur.set_state(.running, .assigned);
-                        frame.* = stby.saved_state.registers;
-                        l.current_thread = stby;
-                        stby.set_state(.standby, .running);
+                if (@intFromEnum(stby.priority) < @intFromEnum(cur.priority)) {
+                    // priority is swapped, so do the three way swap
+                    // stby -> curr
+                    // curr -> queue
+                    // queue head -> stby
+                    std.debug.assert(l.frame != null);
+                    cur.saved_state.registers = frame.*;
+                    cur.set_state(.running, .assigned);
+                    frame.* = stby.saved_state.registers;
+                    l.current_thread = stby;
+                    stby.set_state(.standby, .running);
 
-                        // grab the lock a bit early to put the old running thread into the queue
-                        const r = l.local_dispatcher_lock.lock();
-                        if (!cur.header.id.eql(smp.idle_thread_id)) {
-                            l.local_dispatcher_queue.add(cur);
-                        }
-                        if (l.local_dispatcher_queue.dequeue()) |new_stby| {
-                            l.standby_thread = new_stby;
-                            new_stby.set_state(.assigned, .standby);
-                        }
-                        break :b r;
-                    } else {
-                        break :b l.local_dispatcher_lock.lock();
+                    // grab the lock a bit early to put the old running thread into the queue
+                    l.local_dispatcher_lock.lock();
+                    if (!cur.header.id.eql(smp.idle_thread_id)) {
+                        l.local_dispatcher_queue.add(cur);
                     }
-                };
-                defer l.local_dispatcher_lock.unlock(restore);
+                    if (l.local_dispatcher_queue.dequeue()) |new_stby| {
+                        l.standby_thread = new_stby;
+                        new_stby.set_state(.assigned, .standby);
+                    }
+                } else {
+                    l.local_dispatcher_lock.lock();
+                }
+                defer l.local_dispatcher_lock.unlock();
                 // check if theres anything in the queue, and swap standby and the head if needed
                 if (l.local_dispatcher_queue.peek()) |peek| {
                     if (@intFromEnum(peek.priority) < @intFromEnum(stby.priority)) {
@@ -127,8 +124,8 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
                 return;
             } else {
                 // nothing running but we have a standby, so move that up to run
-                const restore = l.local_dispatcher_lock.lock();
-                defer l.local_dispatcher_lock.unlock(restore);
+                l.local_dispatcher_lock.lock();
+                defer l.local_dispatcher_lock.unlock();
                 l.current_thread = stby;
                 stby.set_state(.standby, .running);
                 // and set up the LCB to restore the saved register state of the thread
@@ -144,8 +141,8 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
             }
         } else {
             // nothing in standby
-            const restore = l.local_dispatcher_lock.lock();
-            defer l.local_dispatcher_lock.unlock(restore);
+            l.local_dispatcher_lock.lock();
+            defer l.local_dispatcher_lock.unlock();
             if (l.local_dispatcher_queue.dequeue()) |queued| {
                 const tr = queued.lock.lock();
                 defer queued.lock.unlock(tr);

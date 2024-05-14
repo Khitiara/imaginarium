@@ -20,7 +20,7 @@ pub inline fn handle_interrupt(handler: fn (*arch.SavedRegisterState) void) fn (
             defer if (is_root_interrupt) dispatch_interrupt_tail(frame);
             lcb().frame = lcb().frame orelse frame;
             const vector: InterruptVector = @bitCast(@intFromEnum(frame.interrupt_number));
-            _ = set_irql(vector.level);
+            set_irql(vector.level);
             @call(.always_inline, handler, .{frame});
         }
     }.f;
@@ -43,11 +43,22 @@ pub noinline fn enter_thread_ctx() void {
     arch.x86_64.idt.spoof_isr(&enter_thread_ctx_1);
 }
 
-fn set_irql(level: InterruptRequestPriority) InterruptRequestPriority {
-    const rest = lcb().irql_lock.lock();
-    defer lcb().irql_lock.unlock(rest);
-    lcb().irql = level;
-    apic.get_register_ptr(apic.RegisterId.tpr, InterruptRequestPriority).* = level;
+pub inline fn fetch_set_irql(level: InterruptRequestPriority) InterruptRequestPriority {
+    const restore = arch.get_and_disable_interrupts();
+    defer arch.restore_interrupt_state(restore);
+    defer {
+        lcb().irql = level;
+        apic.get_register_ptr(apic.RegisterId.tpr, InterruptRequestPriority).* = level;
+    }
+    return lcb().irql;
+}
+
+pub inline fn set_irql(level: InterruptRequestPriority) void {
+    _ = set_irql_internal(level);
+}
+
+inline fn set_irql_internal(level: InterruptRequestPriority) InterruptRequestPriority {
+    _ = fetch_set_irql(level);
     return level;
 }
 
@@ -78,12 +89,12 @@ fn dispatch_interrupt_tail(frame: *arch.SavedRegisterState) void {
     arch.enable_interrupts();
     var level = smp.lcb().irql;
     // higher IRQLs do processing through ISRs rather than fixed logic. loop through to process each IRQL in turn
-    while (@intFromEnum(level) > @intFromEnum(InterruptRequestPriority.dpc)) : (level = set_irql(level.lower())) {}
+    while (@intFromEnum(level) > @intFromEnum(InterruptRequestPriority.dpc)) : (level = set_irql_internal(level.lower())) {}
 
     // IRQL:DPC
     {
         // TODO: run any queued DPCs
-        _ = set_irql(lcb().irql.lower());
+        set_irql(lcb().irql.lower());
     }
 
     // IRQL:DISPATCH
@@ -97,7 +108,7 @@ fn dispatch_interrupt_tail(frame: *arch.SavedRegisterState) void {
             lcb().frame = null;
         }
         dispatcher.scheduler.dispatch(frame);
-        _ = set_irql(lcb().irql.lower());
+        set_irql(lcb().irql.lower());
     }
     std.debug.assert(lcb().irql == .passive);
 }
