@@ -60,7 +60,7 @@ pub inline fn fetch_set_irql(level: InterruptRequestPriority, op: IrqlOp) Interr
             .lower => @intFromEnum(level) < @intFromEnum(l.irql),
         }) {
             l.irql = level;
-            apic.get_register_ptr(apic.RegisterId.tpr, InterruptRequestPriority).* = level;
+            arch.x86_64.control_registers.write(.cr8, .{ .tpr = @intFromEnum(level) });
         }
     }
     return l.irql;

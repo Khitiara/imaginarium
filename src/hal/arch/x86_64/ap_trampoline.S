@@ -6,7 +6,7 @@
 ap_trampoline:
     cli
     cld
-    ljmpw   $0, $8080
+    ljmpw   $0, $0x8000 + (_trampoline_16 - ap_trampoline)
     .balign 16
 _initial_gdt:
     .8byte 0
@@ -15,18 +15,17 @@ _initial_gdt:
 _gdtr:
     .2byte   _gdtr - _initial_gdt - 1
     .4byte  0x8010
-    .4byte  0, 0
     .balign 64
 _trampoline_16:
     xorw    %ax, %ax
     movw    %ax, %ds
-    lgdtl   0x8030
+    lgdtl   0x8000 + (_gdtr - ap_trampoline)
     movw    $16, %ax
     movw    %ax, %ds
     movw    %ax, %ss
     movl    $0x368, %eax
     movl    %eax, %cr4
-    movl    (0x80D0), %eax
+    movl    (0x8000 + (_ap_cr3 - ap_trampoline)), %eax
     movl    %eax, %cr3
     movl    $0x0C0000080, %ecx
     rdmsr
@@ -34,7 +33,7 @@ _trampoline_16:
     wrmsr
     movl    $0x0C0000011, %eax
     movl    %eax, %cr0
-    ljmpl   $8, $0x80E0
+    ljmpl   $8, $0x8000 + (_trampoline_64 - ap_trampoline)
     .balign 32
     .code64
 _trampoline_64:
@@ -45,10 +44,10 @@ _trampoline_64:
     movw    %ax, %fs
     movw    %ax, %gs
     pushq   $16
-    pushq   (0x8120)
+    pushq   (0x8000 + (_ap_stk - ap_trampoline))
     pushfq
     pushq   $8
-    pushq   (0x8130)
+    pushq   (0x8000 + (_ap_land - ap_trampoline))
     iretq
 .balign 16
 .global _ap_cr3

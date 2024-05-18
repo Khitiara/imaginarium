@@ -77,8 +77,6 @@ pub fn init(comptime cb: fn (std.mem.Allocator, std.mem.Allocator) std.mem.Alloc
     try cb(alloc, gpa);
 }
 
-
-
 pub fn start_aps(cb: *const fn (std.mem.Allocator) void) !void {
     _cb = cb;
 
@@ -91,27 +89,41 @@ pub fn start_aps(cb: *const fn (std.mem.Allocator) void) !void {
     @as(**const fn () callconv(.Win64) void, @ptrCast(ap_trampoline[lnd_ofs..])).* = &__ap_landing;
     @as(*usize, @ptrCast(ap_trampoline[cr3_ofs..])).* = crs.read(.cr3);
     const ap_stk_ptr: *usize = @ptrCast(ap_trampoline[stk_ofs..]);
-    const icr_high = apic.get_register_ptr(apic.RegisterId.icr + 1, apic.IcrHigh);
-    const icr_low = apic.get_register_ptr(apic.RegisterId.icr, apic.IcrLow);
+    var init_icr: apic.Icr = .{
+        .vector = 0,
+        .delivery = .init,
+        .dest_mode = .physical,
+        .assert = false,
+        .trigger_mode = .level,
+        .shorthand = .none,
+        .dest = 0,
+    };
+    // var sipi_icr: apic.Icr = .{
+    //     .vector = 8,
+    //     .delivery = .startup,
+    //     .dest_mode = .physical,
+    //     .assert = false,
+    //     .trigger_mode = .edge,
+    //     .shorthand = .none,
+    //     .dest = 0,
+    // };
     for (0..apic.processor_count) |i| {
-        if (apic.lapic_ids[i] == bspid) {
+        const id = apic.lapic_ids[i];
+        if (id == bspid) {
             continue;
         }
         ap_stk_ptr.* = @intFromPtr(ap_stacks[i]) + (8 << 20);
-        apic.get_register_ptr(apic.RegisterId.esr, u32).* = 0;
-        icr_high.*.dest = i;
-        var l = icr_low.*;
-        l.delivery = .init;
-        l.trigger_mode = .level;
-        l.assert = true;
-        icr_low.* = l;
+        apic.write_register(.esr, @bitCast(@as(u32, 0)));
+        init_icr.assert = true;
+        init_icr.dest = id;
+        apic.write_register(.icr, init_icr);
         pause();
-        while (apic.get_register_ptr(apic.RegisterId.icr).* & (1 << 12) != 0) {
+        while (apic.read_register(.icr).pending) {
             pause();
         }
-        apic.get_register_ptr(apic.RegisterId.icr + 1).* = (apic.get_register_ptr(apic.RegisterId.icr + 1).* & 0x00ffffff) | (i << 24);
-        apic.get_register_ptr(apic.RegisterId.icr + 1).* = (apic.get_register_ptr(apic.RegisterId.icr).* & 0xfff00000) | 0x00008500;
-        while (apic.get_register_ptr(apic.RegisterId.icr).* & (1 << 12) != 0) {
+        init_icr.assert = false;
+        apic.write_register(.icr, init_icr);
+        while (apic.read_register(.icr).pending) {
             pause();
         }
         delay_unsafe(10000000);

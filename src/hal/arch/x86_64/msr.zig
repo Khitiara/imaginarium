@@ -44,11 +44,7 @@ inline fn isKnownMsr(msr: Msr) bool {
     } else false;
 }
 
-pub fn write(comptime msr: Msr, value: MsrValueType(msr)) void {
-    if (!isKnownMsr(msr)) {
-        @compileError("Unknown MSR " ++ std.fmt.comptimePrint("0x{X}", .{@intFromEnum(msr)}));
-    }
-
+pub fn write_unsafe(msr: u32, value: u64) void {
     const valueBytes: u64 = @bitCast(value);
     const low = @as(u32, @truncate(valueBytes));
     const high = @as(u32, @truncate(valueBytes >> 32));
@@ -57,25 +53,36 @@ pub fn write(comptime msr: Msr, value: MsrValueType(msr)) void {
         :
         : [low] "{eax}" (low),
           [high] "{edx}" (high),
-          [msr] "{ecx}" (@intFromEnum(msr)),
+          [msr] "{ecx}" (msr),
     );
 }
 
-pub fn read(comptime msr: Msr) MsrValueType(msr) {
+pub fn write(comptime msr: Msr, value: MsrValueType(msr)) void {
     if (!isKnownMsr(msr)) {
-        @compileError("Unknown MSR " ++ std.fmt.comptimePrint("0x{X}", @intFromEnum(msr)));
+        @compileError("Unknown MSR " ++ std.fmt.comptimePrint("0x{X}", .{@intFromEnum(msr)}));
     }
 
+    write_unsafe(@intFromEnum(msr), @bitCast(value));
+}
+
+pub fn read_unsafe(msr: u32) u64 {
     var low: u32 = undefined;
     var high: u32 = undefined;
 
     asm volatile ("rdmsr"
         : [low] "={eax}" (low),
           [high] "={edx}" (high),
-        : [msr] "{ecx}" (@intFromEnum(msr)),
+        : [msr] "{ecx}" (msr),
     );
 
-    return @bitCast([2]u32{ low, high });
+    return (@as(u64, high) << 32) | low;
+}
+
+pub fn read(comptime msr: Msr) MsrValueType(msr) {
+    if (!isKnownMsr(msr)) {
+        @compileError("Unknown MSR " ++ std.fmt.comptimePrint("0x{X}", @intFromEnum(msr)));
+    }
+    return @bitCast(read_unsafe(@intFromEnum(msr)));
 }
 
 test {
