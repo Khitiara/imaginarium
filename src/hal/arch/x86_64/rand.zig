@@ -23,6 +23,8 @@ pub fn rdrand() u32 {
         \\ 1:  rdrand %[r]
         \\     jnc 1b
         : [r] "=r" (-> u32),
+        :
+        : "ss"
     );
 }
 

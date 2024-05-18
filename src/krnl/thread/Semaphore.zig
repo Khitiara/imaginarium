@@ -2,7 +2,7 @@ const dispatcher = @import("../dispatcher/dispatcher.zig");
 
 header: dispatcher.DispatcherObject = .{ .kind = .semaphore },
 available: usize,
-spinlock: @import("util").SpinLock,
+spinlock: dispatcher.SpinLockIRQL = .{ .set_irql = .dispatch },
 
 const Semaphore = @This();
 

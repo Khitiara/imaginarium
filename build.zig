@@ -4,6 +4,8 @@ const Target = std.Target;
 const DiskImage = @import("build/disk_image.zig");
 const LazyPath = std.Build.LazyPath;
 
+var named_modules: std.StringArrayHashMap(*std.Build.Module) = undefined;
+
 fn target_features(query: *Target.Query) !void {
     query.cpu_model = .{ .explicit = std.Target.Cpu.Model.generic(query.cpu_arch.?) };
     switch (query.cpu_arch.?) {
@@ -36,8 +38,12 @@ fn installFrom(b: *std.Build, dep: *std.Build.Step, group_step: *std.Build.Step,
     group_step.dependOn(&s.step);
 }
 
+fn name_module(name: []const u8, module: *std.Build.Module) void {
+    named_modules.putNoClobber(name, module) catch @panic("OOM");
+}
+
 fn addImportFromTable(module: *std.Build.Module, name: []const u8) void {
-    if (module.owner.modules.get(name)) |d| {
+    if (named_modules.get(name)) |d| {
         module.addImport(name, d);
     }
 }
@@ -147,7 +153,7 @@ fn usr(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, o
 
     // cant create an object compile step from an existing module so get the root module of the object step
     // and add that manually to the modules map
-    b.modules.put("usr", &usr_imports.root_module) catch @panic("OOM");
+    name_module("usr", &usr_imports.root_module);
 
     const usrstep = b.step("usr", "usermode kernel services");
 
@@ -214,6 +220,7 @@ fn img(b: *std.Build, arch: Target.Cpu.Arch, krnlstep: *std.Build.Step, elf: Laz
 }
 
 pub fn build(b: *std.Build) !void {
+    named_modules = std.StringArrayHashMap(*std.Build.Module).init(b.allocator);
     const arch = b.option(Target.Cpu.Arch, "arch", "The CPU architecture to build for") orelse .x86_64;
     var selected_target: Target.Query = .{
         .abi = .none,
@@ -231,14 +238,15 @@ pub fn build(b: *std.Build) !void {
     options.addOption(bool, "rsdp_search_bios", true);
 
     const optsModule = options.createModule();
-    b.modules.put("config", optsModule) catch @panic("OOM");
+    name_module("config", optsModule);
 
     const zuid_dep = b.dependency("zuid", .{});
-    b.modules.put("zuid", zuid_dep.module("zuid")) catch @panic("OOM");
+    name_module("zuid", zuid_dep.module("zuid"));
 
     const util = b.addModule("util", .{
         .root_source_file = b.path("src/util/util.zig"),
     });
+    name_module("util", util);
     addImportFromTable(util, "config");
     addImportFromTable(util, "zuid");
 

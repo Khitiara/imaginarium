@@ -61,7 +61,7 @@ pub const Rsdp = union(enum) {
                 return .{ .v1 = v1_ptr };
             },
             2 => {
-                if (@import("builtin").target.cpu.arch == .x86) return error.xsdt_on_32bit;
+                if (@import("builtin").cpu.arch == .x86) return error.xsdt_on_32bit;
                 const v2_ptr: *align(1) const Rsdp2 = @ptrCast(ptr);
                 // log.debug("{}", .{v2_ptr});
                 try v2_ptr.verify_checksum();

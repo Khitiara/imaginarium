@@ -14,4 +14,5 @@ comptime {
         \\     xorq %rbp, %rbp
         \\     jmp __kstart2
     );
+    // asm(@embedFile("ap_trampoline.S"));
 }

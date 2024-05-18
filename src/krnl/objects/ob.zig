@@ -1,11 +1,11 @@
 const Thread = @import("../thread/Thread.zig");
-const WaitBlock = @import("../dispatcher/dispatcher.zig").WaitBlock;
+const dispatcher = @import("../dispatcher/dispatcher.zig");
+const WaitBlock = dispatcher.WaitBlock;
 const util = @import("util");
 const queue = util.queue;
 const zuid = @import("zuid");
 const std = @import("std");
 const atomic = std.atomic;
-const hal = @import("hal");
 
 pub const ObjectKind = enum(u7) {
     semaphore,
@@ -39,7 +39,7 @@ pub const Object = struct {
     id: zuid.Uuid = zuid.null_uuid,
     /// max-value means the object is unnamed
     name_idx: u32 = std.math.maxInt(u32),
-    wait_lock: hal.SpinLock = .{},
+    wait_lock: dispatcher.SpinLockIRQL = .{ .set_irql = .passive },
     wait_queue: queue.DoublyLinkedList(WaitBlock, "wait_queue") = .{},
     /// kernel-mode users can copy a pointer using this refcount, thereby avoiding
     /// the need to potentially allocate in the handle table

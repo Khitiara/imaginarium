@@ -144,8 +144,8 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
             l.local_dispatcher_lock.lock();
             defer l.local_dispatcher_lock.unlock();
             if (l.local_dispatcher_queue.dequeue()) |queued| {
-                const tr = queued.lock.lock();
-                defer queued.lock.unlock(tr);
+                queued.lock.lock();
+                defer queued.lock.unlock();
                 std.debug.assert(queued.state == .assigned);
                 queued.state = .standby;
                 l.standby_thread = queued;

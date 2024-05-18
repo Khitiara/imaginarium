@@ -52,7 +52,7 @@ pub const Affinity = struct {
 };
 
 header: ob.Object,
-lock: hal.SpinLock = .{},
+lock: dispatcher.SpinLockIRQL = .{ .set_irql = .dispatch },
 wait_type: WaitType = undefined,
 wait_list: queue.DoublyLinkedList(dispatcher.WaitBlock, "thread_wait_list") = .{},
 state: State = .init,

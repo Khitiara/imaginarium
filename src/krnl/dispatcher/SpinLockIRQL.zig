@@ -10,7 +10,7 @@ irql: dispatcher.InterruptRequestPriority = undefined,
 set_irql: dispatcher.InterruptRequestPriority,
 
 pub fn lock(self: anytype) void {
-    self.irql = ints.fetch_set_irql(self.set_irql);
+    self.irql = ints.fetch_set_irql(self.set_irql, .raise);
 
     asm volatile (
         \\  1:  lock bts $0, %[key]
@@ -22,7 +22,7 @@ pub fn lock(self: anytype) void {
         \\  3:
         :
         : [key] "*p" (&self.key),
-        : "memory"
+        : "ss", "memory"
     );
 
     // while (self.key.bitSet(0, .acquire) == 1) {
@@ -32,5 +32,5 @@ pub fn lock(self: anytype) void {
 
 pub fn unlock(self: anytype) void {
     _ = @atomicStore(u8, &self.key, 0, .release);
-    ints.set_irql(self.irql);
+    ints.set_irql(self.irql, .lower);
 }
