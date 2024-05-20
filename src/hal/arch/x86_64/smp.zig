@@ -59,6 +59,8 @@ var _cb: *const fn (std.mem.Allocator) void = undefined;
 const vmm = @import("vmm.zig");
 var bspid: u8 = undefined;
 
+const log = std.log.scoped(.@"hal.smp");
+
 pub fn init(comptime cb: fn (std.mem.Allocator, std.mem.Allocator) std.mem.Allocator.Error!void) std.mem.Allocator.Error!void {
     bspid = apic.get_lapic_id();
     const alloc = vmm.raw_page_allocator.allocator();
@@ -66,12 +68,14 @@ pub fn init(comptime cb: fn (std.mem.Allocator, std.mem.Allocator) std.mem.Alloc
     var raw_ap_stacks = try alloc.alloc([8 << 20]u8, apic.processor_count - 1);
     ap_stacks = try gpa.alloc(*[8 << 20]u8, apic.processor_count);
     var stk: usize = 0;
-    for (0..apic.processor_count) |i| {
-        if (apic.lapic_ids[i] == bspid) {
+    for (0..apic.processor_count, apic.lapic_ids[0..apic.processor_count]) |i, id| {
+        if (id == bspid) {
             ap_stacks[i] = @ptrCast(ext("__bootstrap_stack_bottom"));
-        } else {
+        } else if (apic.lapic_enabled[id] or apic.lapic_online_capable[id]) {
             ap_stacks[i] = &raw_ap_stacks[stk];
             stk += 1;
+        } else {
+            log.debug("processor {d} (lapic id {d}) is not usable", .{ i, id });
         }
     }
     try cb(alloc, gpa);

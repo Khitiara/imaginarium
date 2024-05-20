@@ -5,13 +5,9 @@ const hal = @import("hal");
 const smp = @import("../smp.zig");
 const arch = hal.arch;
 const apic = hal.apic;
-const InterruptRequestPriority = dispatcher.InterruptRequestPriority;
+const InterruptRequestPriority = hal.InterruptRequestPriority;
+const InterruptVector = hal.InterruptVector;
 const lcb = smp.lcb;
-
-pub const InterruptVector = packed struct(u8) {
-    vector: u4,
-    level: InterruptRequestPriority,
-};
 
 pub inline fn handle_interrupt(handler: fn (*arch.SavedRegisterState) void) fn (*arch.SavedRegisterState) callconv(.Win64) void {
     return struct {
@@ -19,7 +15,7 @@ pub inline fn handle_interrupt(handler: fn (*arch.SavedRegisterState) void) fn (
             const is_root_interrupt: bool = lcb().frame == null;
             defer if (is_root_interrupt) dispatch_interrupt_tail(frame);
             lcb().frame = lcb().frame orelse frame;
-            const vector: InterruptVector = @bitCast(@intFromEnum(frame.interrupt_number));
+            const vector: InterruptVector = frame.vector.vector;
             set_irql(vector.level, .raise);
             @call(.always_inline, handler, .{frame});
         }
@@ -73,26 +69,6 @@ pub inline fn set_irql(level: InterruptRequestPriority, op: IrqlOp) void {
 inline fn set_irql_internal(level: InterruptRequestPriority, op: IrqlOp) InterruptRequestPriority {
     _ = fetch_set_irql(level, op);
     return level;
-}
-
-var lasts: [14]u8 = .{0} ** 14;
-var vectors_lock: util.SpinLock = .{};
-pub fn allocate_vector(level: InterruptRequestPriority) !InterruptVector {
-    if (level == .passive) {
-        return error.cannot_allocate_passive_interrupt;
-    }
-    const idx = @intFromEnum(level) - 2;
-    const restore = vectors_lock.lock();
-    defer vectors_lock.unlock(restore);
-
-    while (lasts[idx] < 0x10) {
-        const l: u4 = @truncate(@atomicRmw(u8, &lasts[idx], .Add, 1, .acq_rel));
-        const v: InterruptVector = .{ .vector = l, .level = level };
-        if (arch.is_vector_free(@bitCast(v))) {
-            return v;
-        }
-    }
-    return error.out_of_vectors;
 }
 
 /// progresses downward through the IRQL levels and addresses each in turn if needed

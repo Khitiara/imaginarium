@@ -6,11 +6,14 @@ const msr = @import("../arch/x86_64/msr.zig");
 pub var x2apic_support: ?bool = null;
 pub var x2apic_enabled: bool = false;
 
+const log = std.log.scoped(.@"apic.x2apic");
+
 pub inline fn supports_x2apic() bool {
     if (x2apic_support) |s| {
         return s;
     }
-    const s = cpuid.cpuid(.type_fam_model_stepping_features, {}).features.x2apic;
+    const s = cpuid.cpuid(.type_fam_model_stepping_features, {}).features2.x2apic;
+    log.debug("x2apic support: {}", .{s});
     x2apic_support = s;
     return s;
 }
@@ -29,7 +32,10 @@ pub inline fn check_enable_x2apic() bool {
 
 fn enable_x2apic() void {
     var base = msr.read(.apic_base);
-    base.apic_global_enable = true;
+    if (!base.apic_global_enable) {
+        base.apic_global_enable = true;
+        msr.write(.apic_base, base);
+    }
     base.x2apic_enable = true;
     msr.write(.apic_base, base);
     x2apic_enabled = true;

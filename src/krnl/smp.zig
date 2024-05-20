@@ -21,7 +21,7 @@ pub const LocalControlBlock = struct {
     syscall_stack: usize = undefined,
     local_dispatcher_queue: queue.PriorityQueue(Thread, "scheduler_hook", "priority", Thread.Priority) = .{},
     local_dispatcher_lock: dispatcher.SpinLockIRQL = .{ .set_irql = .dispatch },
-    irql: dispatcher.InterruptRequestPriority = .passive,
+    irql: hal.InterruptRequestPriority = .passive,
     dpc_queue: queue.PriorityQueue(dispatcher.Dpc, "hook", "priority", dispatcher.Dpc.Priority) = .{},
     dpc_lock: dispatcher.SpinLockIRQL = .{ .set_irql = .dpc },
     frame: ?*arch.SavedRegisterState = null,

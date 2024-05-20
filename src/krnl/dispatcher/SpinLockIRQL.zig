@@ -2,12 +2,13 @@
 
 const std = @import("std");
 const atomic = std.atomic;
+const hal = @import("hal");
 const dispatcher = @import("dispatcher.zig");
 const ints = dispatcher.interrupts;
 
 key: u8 = 0,
-irql: dispatcher.InterruptRequestPriority = undefined,
-set_irql: dispatcher.InterruptRequestPriority,
+irql: hal.InterruptRequestPriority = undefined,
+set_irql: hal.InterruptRequestPriority,
 
 pub fn lock(self: anytype) void {
     self.irql = ints.fetch_set_irql(self.set_irql, .raise);

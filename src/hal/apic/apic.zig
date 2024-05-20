@@ -1,7 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const cpuid = @import("../arch/x86_64/cpuid.zig");
-const x2apic = @import("x2apic.zig");
+pub const x2apic = @import("x2apic.zig");
 
 pub const DeliveryMode = enum(u3) {
     fixed = 0,
@@ -125,8 +125,6 @@ pub const LvtErrorEntry = packed struct(u32) {
 pub const RegisterId = enum(u7) {
     id = 0x02,
     version = 0x03,
-    // pub const apr: u7 = 0x09;
-    // pub const ppr: u7 = 0x0A;
     eoi = 0x0B,
     isr = 0x10,
     tmr = 0x18,
@@ -159,9 +157,36 @@ pub inline fn RegisterType(comptime reg: RegisterId) type {
 
 pub const RegisterSlice = *align(16) volatile [0x40]extern struct { item: u32 align(16) };
 
+pub const AcpiPolarity = enum(u2) {
+    default,
+    active_high,
+    reserved,
+    active_low,
+};
+pub const AcpiTrigger = enum(u2) {
+    default,
+    edge_triggered,
+    reserved,
+    level_triggered,
+};
+
+pub const LapicNmiPin = packed struct(u8) {
+    pin: enum(u2) {
+        none,
+        lint0,
+        lint1,
+    },
+    polarity: AcpiPolarity,
+    trigger: AcpiTrigger,
+    _: u2 = 0,
+};
+
 pub var lapic_ptr: RegisterSlice = undefined;
-pub var lapic_ids: [256]u8 = undefined;
-pub var lapic_indices: [256]u8 = undefined;
+pub var lapic_ids: [255]u8 = undefined;
+pub var lapic_indices: [255]u8 = undefined;
+pub var lapic_enabled: [255]bool = undefined;
+pub var lapic_online_capable: [255]bool = undefined;
+pub var lapic_nmi_pins: [255]LapicNmiPin = undefined;
 pub var processor_count: u8 = 0;
 pub var ioapics_buf = [_]?IOApic{null} ** @import("config").max_ioapics;
 pub var ioapics_count: u8 = 0;
@@ -204,6 +229,7 @@ inline fn get_register_ptr(reg: u7, comptime T: type) *align(16) volatile T {
 }
 
 pub const IOApic = struct {
+    id: u8,
     phys_addr: usize,
     gsi_base: u32,
 };

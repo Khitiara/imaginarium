@@ -34,7 +34,7 @@ pub const BrandFlushCountId = packed struct(u32) {
     apic_id: u8,
 };
 
-pub const CpuFeatures = packed struct(u64) {
+pub const CpuFeatures = packed struct(u32) {
     fpu: bool,
     vme: bool,
     dbg: bool,
@@ -67,6 +67,10 @@ pub const CpuFeatures = packed struct(u64) {
     tm1: bool,
     ia64: bool,
     pbe: bool,
+};
+
+pub const CpuFeatures2 = packed struct(u32) {
+
     sse3: bool,
     pclmul: bool,
     dtes64: bool,
@@ -263,7 +267,8 @@ pub inline fn CpuidOutputType(comptime leaf: Leaf, comptime subleaf: Subleaf(lea
         .type_fam_model_stepping_features => extern struct {
             type_fam_model_stepping: TypeFamModelStepping,
             brand_flush_count_id: BrandFlushCountId,
-            features: CpuFeatures align(4),
+            features2: CpuFeatures2,
+            features: CpuFeatures,
         },
         .extended_address_info => extern struct {
             address_size_info: packed struct(u32) {

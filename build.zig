@@ -232,9 +232,11 @@ pub fn build(b: *std.Build) !void {
     const optimize = b.standardOptimizeOption(.{});
 
     const max_ioapics = b.option(u32, "max_ioapics", "maximum number of ioapics supported (default 5)") orelse 5;
+    const max_hpets = b.option(u32, "max_hpets", "maximum number of HPET blocks supported (default 1)") orelse 1;
 
     const options = b.addOptions();
     options.addOption(u32, "max_ioapics", max_ioapics);
+    options.addOption(u32, "max_hpets", max_hpets);
     options.addOption(bool, "rsdp_search_bios", true);
 
     const optsModule = options.createModule();
@@ -253,11 +255,27 @@ pub fn build(b: *std.Build) !void {
     const krnlstep, const elf, const debug = try krnl(b, arch, target, optimize);
     const imgstep, const imgFile = try img(b, arch, krnlstep, elf, debug);
 
+    var cpu_flags = try std.ArrayList([]const u8).initCapacity(b.allocator, 8);
+    cpu_flags.appendSliceAssumeCapacity(&.{ "qemu64", "+la57", "+invtsc", "+pdpe1gb", "+rdrand", "+arat", "+rdseed" });
+
     const qemu = b.addSystemCommand(&.{
         b.fmt("qemu-system-{s}", .{@tagName(arch)}),
         "-drive",
     });
     qemu.addPrefixedFileArg("format=raw,file=", imgFile);
+
+    if (b.option(bool, "qemu-no-accel", "disable native accel for qemu") != true) {
+        switch (b.graph.host.result.os.tag) {
+            .windows => qemu.addArgs(&.{ "-accel", "whpx" }),
+            .linux => {
+                qemu.addArgs(&.{ "-accel", "kvm" });
+                cpu_flags.appendAssumeCapacity("+x2apic");
+            },
+            .macos => qemu.addArgs(&.{ "-accel", "hvf" }),
+            else => {},
+        }
+    }
+
     qemu.addArgs(&.{
         "-d",
         "int,cpu_reset",
@@ -268,19 +286,10 @@ pub fn build(b: *std.Build) !void {
         "-M",
         "type=q35,smm=off,hpet=on", // q35 has HPET by default afaik but better safe than sorry
         "-cpu",
-        "qemu64,la57,invtsc,pdpe1gb,rdrand",
+        try std.mem.join(b.allocator, ",", try cpu_flags.toOwnedSlice()),
         "-m",
         "4G",
     });
-
-    if (b.option(bool, "qemu-no-accel", "disable native accel for qemu") != true) {
-        switch (b.graph.host.result.os.tag) {
-            .windows => qemu.addArgs(&.{ "-accel", "whpx" }),
-            .linux => qemu.addArgs(&.{ "-accel", "kvm" }),
-            .macos => qemu.addArgs(&.{ "-accel", "hvf" }),
-            else => {},
-        }
-    }
 
     qemu.setCwd(b.path("test"));
     qemu.stdio = .inherit;

@@ -2,6 +2,7 @@ pub const sdt = @import("sdt.zig");
 pub const rsdp = @import("rsdp.zig");
 pub const madt = @import("madt.zig");
 pub const mcfg = @import("mcfg.zig");
+pub const hpet = @import("hpet.zig");
 const std = @import("std");
 const zuid = @import("zuid");
 
@@ -41,6 +42,7 @@ pub fn load_sdt_tableptr(table: *align(1) const anyopaque, expect_sig: ?sdt.Sign
                 switch (t.signature) {
                     .APIC => madt.read_madt(@ptrCast(t)),
                     .MCFG => mcfg.set_table(@ptrCast(t)),
+                    .HPET => hpet.read_hpet(@ptrCast(t)),
                     inline .RSDT, .XSDT => |s| log.err("Self-referential {s} ACPI root table, points to {s}", .{ @tagName(sig), @tagName(s) }),
                     else => |s| {
                         log.debug("Got ACPI table with signature {s}", .{std.mem.toBytes(s)});

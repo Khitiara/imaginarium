@@ -46,6 +46,12 @@ const MadtEntryHeader = extern struct {
     length: u8,
 };
 
+pub const MadtInterruptSourceFlags = packed struct(u16) {
+    polarity: apic.AcpiPolarity,
+    trigger: apic.AcpiTrigger,
+    _: u12 = 0,
+};
+
 fn MadtEntryPayload(comptime t: MadtEntryType) type {
     return switch (t) {
         .local_apic => extern struct {
@@ -57,6 +63,12 @@ fn MadtEntryPayload(comptime t: MadtEntryType) type {
                 online_capable: bool,
                 _: u30,
             },
+        },
+        .local_nmi => extern struct {
+            header: MadtEntryHeader align(4),
+            processor_uid: u8,
+            flags: MadtInterruptSourceFlags align(1),
+            pin: u8,
         },
         .local_apic_addr_override => extern struct {
             header: MadtEntryHeader align(4),
@@ -73,28 +85,21 @@ fn MadtEntryPayload(comptime t: MadtEntryType) type {
             bus: u8,
             source: u8,
             gsi: u32,
-            flags: packed struct(u8) {
-                polarity: enum(u2) {
-                    default,
-                    active_high,
-                    reserved,
-                    active_low,
-                },
-                trigger: enum(u2) {
-                    default,
-                    edge_triggered,
-                    reserved,
-                    level_triggered,
-                },
-                _: u12 = 0,
-            },
+            flags: MadtInterruptSourceFlags align(1),
         },
         else => void,
     };
 }
 
 pub fn read_madt(ptr: *align(1) const Madt) void {
+    var lapic_uids: [255]u8 = undefined;
+    var uid_nmi_pins: [255]apic.LapicNmiPin = undefined;
     log.info("APIC MADT table loaded at {*}", .{ptr});
+    @memset(&apic.lapic_nmi_pins, .{
+        .pin = .none,
+        .polarity = .default,
+        .trigger = .default,
+    });
     var lapic_ptr: usize = ptr.lapic_addr;
     const entries_base_ptr = @as([*]const u8, @ptrCast(ptr))[@sizeOf(Madt)..ptr.header.length];
     var indexer = WindowStructIndexer(MadtEntryHeader){ .buf = entries_base_ptr };
@@ -104,16 +109,23 @@ pub fn read_madt(ptr: *align(1) const Madt) void {
         switch (hdr.type) {
             .local_apic => {
                 const payload = @as(*align(1) const MadtEntryPayload(.local_apic), @ptrCast(hdr));
-                apic.lapic_ids[apic.processor_count] = payload.local_apic_id;
-                apic.lapic_indices[payload.local_apic_id] = apic.processor_count;
-                apic.processor_count += 1;
+                assert(hdr.length == 8);
+                const idx = @atomicRmw(u8, &apic.processor_count, .Add, 1, .monotonic);
+                lapic_uids[idx] = payload.processor_uid;
+                apic.lapic_ids[idx] = payload.local_apic_id;
+                apic.lapic_indices[payload.local_apic_id] = idx;
+                apic.lapic_enabled[payload.local_apic_id] = payload.flags.enabled;
+                apic.lapic_online_capable[payload.local_apic_id] = payload.flags.online_capable;
             },
             .io_apic => {
                 const payload = @as(*align(1) const MadtEntryPayload(.io_apic), @ptrCast(hdr));
                 assert(hdr.length == 12);
 
-                apic.ioapics_buf[apic.ioapics_count] = .{ .phys_addr = payload.ioapic_addr, .gsi_base = payload.gsi_base };
-                apic.ioapics_count += 1;
+                apic.ioapics_buf[@atomicRmw(u8, &apic.ioapics_count, .Add, 1, .monotonic)] = .{
+                    .id = payload.ioapic_id,
+                    .phys_addr = payload.ioapic_addr,
+                    .gsi_base = payload.gsi_base,
+                };
             },
             .local_apic_addr_override => {
                 const payload = @as(*align(1) const MadtEntryPayload(.local_apic_addr_override), @ptrCast(hdr));
@@ -121,7 +133,24 @@ pub fn read_madt(ptr: *align(1) const Madt) void {
 
                 lapic_ptr = payload.lapic_addr;
             },
-
+            .local_nmi => {
+                const payload = @as(*align(1) const MadtEntryPayload(.local_nmi), @ptrCast(hdr));
+                assert(hdr.length == 6);
+                const info: apic.LapicNmiPin = .{
+                    .pin = switch (payload.pin) {
+                        0 => .lint0,
+                        1 => .lint1,
+                        else => .none,
+                    },
+                    .trigger = payload.flags.trigger,
+                    .polarity = payload.flags.polarity,
+                };
+                if (payload.processor_uid == 0xFF) {
+                    @memset(&uid_nmi_pins, info);
+                } else {
+                    uid_nmi_pins[payload.processor_uid] = info;
+                }
+            },
             else => {
                 log.debug("Found MADT payload {x}", .{hdr.type});
             },
@@ -129,7 +158,10 @@ pub fn read_madt(ptr: *align(1) const Madt) void {
 
         indexer.advance(hdr.length);
     }
-    apic.lapic_ptr = @ptrFromInt(lapic_ptr);
+    for (lapic_uids[0..apic.processor_count], apic.lapic_ids[0..apic.processor_count]) |uid, id| {
+        apic.lapic_nmi_pins[id] = uid_nmi_pins[uid];
+    }
+    apic.lapic_ptr = @import("../arch/arch.zig").ptr_from_physaddr(apic.RegisterSlice, lapic_ptr);
 }
 
 test {

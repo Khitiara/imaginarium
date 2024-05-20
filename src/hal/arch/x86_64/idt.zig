@@ -9,7 +9,7 @@ pub const GateType = enum(u4) {
     _,
 };
 
-pub const Interrupt = enum(u8) {
+pub const Exception = enum(u8) {
     divide_by_zero = 0x00,
     debug = 0x01,
     nmi = 0x02,
@@ -37,15 +37,22 @@ pub const Interrupt = enum(u8) {
     vmm_communication_exception = 0x1D,
     security = 0x1E,
     _,
+};
+
+pub const Interrupt = packed union {
+    exception: Exception,
+    vector: @import("../../hal.zig").InterruptVector,
+    int: u8,
+
     pub fn has_error_code(self: Interrupt) bool {
-        return switch (self) {
+        return switch (self.exception) {
             .double_fault, .invalid_tss, .segment_not_present, .general_protection_fault, .page_fault, .security => true,
             else => false,
         };
     }
 
     pub fn is_exception(self: Interrupt) bool {
-        return @intFromEnum(self) < 0x20;
+        return self.int < 0x20;
     }
 };
 
@@ -160,7 +167,7 @@ pub fn InterruptFrame(ErrorCode: type) type {
         fs: descriptors.Selector align(8),
         gs: descriptors.Selector align(8),
         registers: SavedRegisters align(8),
-        interrupt_number: Interrupt align(8),
+        vector: Interrupt align(8),
         error_code: ErrorCode,
         rip: usize,
         cs: descriptors.Selector align(8),
@@ -178,7 +185,7 @@ pub fn InterruptFrame(ErrorCode: type) type {
                 \\  rip={x:16}  fs={x:16}  gs={x:16} flg={x:16}
                 \\  cr0={x:0>8}         cr2={x:0>16} cr3={x:0>16} cr4={x:0>8}
             , .{
-                @intFromEnum(self.interrupt_number),
+                @as(u8, @bitCast(self.vector)),
                 self.error_code,
                 self.cs.rpl,
                 self.registers.rax,
@@ -276,9 +283,9 @@ comptime {
         \\ .type __isr_common, @function;
         \\ __isr_common:
     ++ isr_setup
-    // movsbq offsetOf(interrupt_number)(%rsp), %rdx ; all the pushes we made will place rsp regscnt bytes below the intnum
+    // movsbq offsetOf(vector)(%rsp), %rdx ; all the pushes we made will place rsp regscnt bytes below the intnum
     // which we need in rdx for the indexed callq below
-    ++ "\n     movsbq   " ++ std.fmt.comptimePrint("{d}", .{@offsetOf(RawInterruptFrame, "interrupt_number")}) ++ "(%rsp), %rdx\n" ++
+    ++ "\n     movsbq   " ++ std.fmt.comptimePrint("{d}", .{@offsetOf(RawInterruptFrame, "vector")}) ++ "(%rsp), %rdx\n" ++
         \\     movq     %rsp, %rcx # rsp points to the bottom of the interrupt frame struct at this point so put that address in rcx
         \\     callq    *__isrs(, %rdx, 8)
         \\ .global __iret__;
@@ -305,7 +312,7 @@ fn make_handler(comptime int: Interrupt) RawHandler {
     // to make the frame size consistent we push 0 if there is no error code
     var code: []const u8 = if (int.has_error_code()) "" else "pushq $0\n";
     // push the error code
-    code = code ++ std.fmt.comptimePrint("pushq ${d}\n", .{@intFromEnum(int)});
+    code = code ++ std.fmt.comptimePrint("pushq ${d}\n", .{int.int});
     // and jump into __isr_common (defined above)
     code = code ++ "jmp __isr_common\n";
     // the string passed to asm has to be a comptime constant so just make a const here
@@ -318,7 +325,7 @@ fn make_handler(comptime int: Interrupt) RawHandler {
         comptime {
             // idk if this is strictly required but i was having a bit of a panic not being able to find the dang thing
             // in the disassembly, and at least with this i can confirm it works
-            @export(handler, .{ .name = std.fmt.comptimePrint("__isr_{x:0>2}", .{@intFromEnum(int)}), .linkage = .strong });
+            @export(handler, .{ .name = std.fmt.comptimePrint("__isr_{x:0>2}", .{@as(u8, @bitCast(int))}), .linkage = .strong });
         }
     }.handler;
 }
@@ -328,15 +335,15 @@ fn make_handler(comptime int: Interrupt) RawHandler {
 pub const raw_handlers: [256]RawHandler = blk: {
     var result: [256]RawHandler = undefined;
     for (0..256) |i| {
-        result[i] = make_handler(@enumFromInt(i));
+        result[i] = make_handler(.{ .int = i });
     }
     break :blk result;
 };
 
 var vectors = blk: {
     var v1 = std.StaticBitSet(256).initEmpty();
-    v1.setRangeValue(.{.start = 0x0, .end = 0x1F}, true);
-    v1.setRangeValue(.{.start = 0xFE, .end = 0xFF}, true);
+    v1.setRangeValue(.{ .start = 0x0, .end = 0x1F }, true);
+    v1.setRangeValue(.{ .start = 0xFE, .end = 0xFF }, true);
     break :blk v1;
 };
 
@@ -344,13 +351,38 @@ pub fn is_vector_free(vector: u8) bool {
     return !vectors.isSet(vector);
 }
 
+const hal = @import("../../hal.zig");
+const InterruptRequestPriority = hal.InterruptRequestPriority;
+const SpinLock = hal.SpinLock;
+const InterruptVector = hal.InterruptVector;
+
+var lasts: [14]u8 = .{0} ** 14;
+var vectors_lock: SpinLock = .{};
+pub fn allocate_vector(level: InterruptRequestPriority) !InterruptVector {
+    if (level == .passive) {
+        return error.cannot_allocate_passive_interrupt;
+    }
+    const idx = @intFromEnum(level) - 2;
+    const r = vectors_lock.lock();
+    defer vectors_lock.unlock(r);
+
+    while (lasts[idx] < 0x10) {
+        const l: u4 = @truncate(@atomicRmw(u8, &lasts[idx], .Add, 1, .acq_rel));
+        const v: InterruptVector = .{ .vector = l, .level = level };
+        if (is_vector_free(@bitCast(v))) {
+            return v;
+        }
+    }
+    return error.out_of_vectors;
+}
+
 /// handler can be a pointer to any function which takes *InterruptFrame(SomeErrorCodeType) as its only parameter
 pub fn add_handler(int: Interrupt, handler: anytype, typ: GateType, dpl: u2, ist: u3) void {
     // put a descriptor in the IDT pointing to the raw handler for the specified vector
-    idt[@intFromEnum(int)] = InterruptGateDescriptor.init(@intFromPtr(raw_handlers[@intFromEnum(int)]), ist, typ, dpl);
+    idt[int.int] = InterruptGateDescriptor.init(@intFromPtr(raw_handlers[int.int]), ist, typ, dpl);
     // and put the managed isr into the function pointer array so __isr_common calls into it
-    __isrs[@intFromEnum(int)] = @ptrCast(handler);
-    vectors.set(@intFromEnum(int));
+    __isrs[int.int] = @ptrCast(handler);
+    vectors.set(int.int);
 }
 
 /// disable maskable interrupts

@@ -29,10 +29,10 @@ fn disable_8259pic() void {
 }
 
 fn unhandled_interrupt(frame: *idt.InterruptFrame(u64)) callconv(.Win64) noreturn {
-    if (std.enums.tagName(idt.Interrupt, frame.interrupt_number)) |name| {
-        log.err("unhandled interrupt: 0x{X: <2} ({s}) --- {}", .{ @intFromEnum(frame.interrupt_number), name, frame });
+    if (std.enums.tagName(idt.Exception, frame.vector.exception)) |name| {
+        log.err("unhandled interrupt: 0x{X: <2} ({s}) --- {}", .{ @intFromEnum(frame.vector.exception), name, frame });
     } else {
-        log.err("unhandled interrupt: 0x{X: <2} --- {}", .{ @intFromEnum(frame.interrupt_number), frame });
+        log.err("unhandled interrupt: 0x{X: <2} --- {}", .{ @intFromEnum(frame.vector.exception), frame });
     }
 
     @panic("UNHANDLED EXCEPTION");
@@ -50,8 +50,8 @@ pub fn init() void {
     disable_8259pic();
     log.info("setting up idt", .{});
     for (0..256) |i| {
-        idt.add_handler(@enumFromInt(i), &unhandled_interrupt, .interrupt, 0, 0);
+        idt.add_handler(.{ .int = @truncate(i) }, &unhandled_interrupt, .interrupt, 0, 0);
     }
-    idt.add_handler(.breakpoint, &breakpoint, .interrupt, 0, 0);
-    idt.add_handler(@enumFromInt(0xFF), &spurious, .interrupt, 0, 0);
+    idt.add_handler(.{ .exception = .breakpoint }, &breakpoint, .interrupt, 0, 0);
+    idt.add_handler(.{ .int = @truncate(0xFF) }, &spurious, .interrupt, 0, 0);
 }
