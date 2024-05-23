@@ -23,8 +23,8 @@ pub fn SmpUtil(comptime Wrapper: type, comptime LocalControlBlock: type, comptim
         break :blk o;
     };
     return struct {
-        pub const LocalControlBlockPointer = *addrspace(.gs) LocalControlBlock;
-        pub const lcb: *addrspace(.gs) LocalControlBlock = @ptrFromInt(8);
+        pub const LocalControlBlockPointer = *addrspace(.gs) const *LocalControlBlock;
+        pub const lcb: LocalControlBlockPointer = @ptrFromInt(offset);
 
         pub fn setup(base_linear_addr: usize) void {
             msr.write(.gs_base, base_linear_addr);
@@ -35,10 +35,8 @@ pub fn SmpUtil(comptime Wrapper: type, comptime LocalControlBlock: type, comptim
             msr.write(.fs_base, linear_addr);
         }
 
-        pub fn lcb_ptr() LocalControlBlock {
-            return asm ("movq %gs:" ++ std.fmt.comptimePrint("{d}", .{offset}) ++ ", %[out]"
-                : [out] "=r" (-> LocalControlBlock),
-            );
+        pub fn lcb_ptr() *LocalControlBlock {
+            return lcb.*;
         }
     };
 }

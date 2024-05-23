@@ -21,8 +21,6 @@ pub const ObjectKind = enum(u7) {
     }
 };
 
-pub var ob_page_alloc: std.mem.Allocator = undefined;
-
 pub const ObNamespace = zuid.deserialize("2d7e52f8-0d27-4a40-a967-828c2900c33c");
 
 pub const ObjectRef = opaque {

@@ -46,7 +46,7 @@ fn init(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator, wait_for_aps: boo
     log.debug("NOTE: addr 0x0000000000000008 in flat addressing is 0x{x:0>16}", .{@as(*usize, @ptrFromInt(8)).*});
     p.syscall_stack = stack_top;
 
-    p.idle_thread = try Thread.init(gpa, page_alloc, idle_thread_id);
+    p.idle_thread = try Thread.init(gpa, idle_thread_id);
     try p.idle_thread.setup_stack(page_alloc, @import("dispatcher/idle.zig").idle, null);
     if (wait_for_aps) {
         arch.smp.wait_for_all_aps();
@@ -61,7 +61,6 @@ pub fn set_tls_base(thread: *const Thread) void {
 pub var initial_tls: []const u8 = undefined;
 
 pub fn allocate_lcbs(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator) !void {
-    @import("objects/ob.zig").ob_page_alloc = page_alloc;
     try @import("own_elf.zig").get_tls_size(&krnl_tls_len, &initial_tls);
 
     lcbs = try page_alloc.alignedAlloc(LcbWrapper, 1 << 12, apic.processor_count);

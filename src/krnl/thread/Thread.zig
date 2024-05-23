@@ -71,7 +71,7 @@ const vtable: ob.ObjectFunctions = .{
 
 fn ob_deinit(o: *const ob.Object, alloc: std.mem.Allocator) void {
     const t: *@This() = @constCast(@fieldParentPtr("header", o));
-    t.deinit(alloc, ob.ob_page_alloc);
+    t.deinit(alloc);
 }
 
 fn ob_signal(o: *ob.Object) void {
@@ -97,8 +97,8 @@ pub fn init2(alloc: std.mem.Allocator, tls_block: []u8, tls_ptr: usize, id: zuid
     return self;
 }
 
-pub fn init(alloc: std.mem.Allocator, page_alloc: std.mem.Allocator, id: zuid.Uuid) !*@This() {
-    const tls = try page_alloc.alignedAlloc(u8, 1 << 12, smp.krnl_tls_len + 8);
+pub fn init(alloc: std.mem.Allocator, id: zuid.Uuid) !*@This() {
+    const tls = try alloc.alignedAlloc(u8, 1 << 12, smp.krnl_tls_len + 8);
     return try init2(alloc, tls, @intFromPtr(&tls[smp.krnl_tls_len]), id);
 }
 
@@ -139,7 +139,7 @@ pub fn setup_stack(self: *@This(), allocator: std.mem.Allocator, thread_start: *
     frame.gs = arch.x86_64.gdt.selectors.kernel_data;
 }
 
-pub fn deinit(self: *@This(), allocator: std.mem.Allocator, page_alloc: std.mem.Allocator) void {
-    page_alloc.free(self.tls);
+pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
+    allocator.free(self.tls);
     allocator.free(self.stack);
 }
