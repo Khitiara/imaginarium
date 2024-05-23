@@ -63,6 +63,7 @@ export fn __kstart2(ldr_info: *bootelf.BootelfData) callconv(arch.cc) noreturn {
                 for (ename) |c| {
                     arch.x86_64.serial.writeout(0xE9, c);
                 }
+                debug.print_stack_trace(log, @errorReturnTrace().?);
             },
         }
     };
@@ -110,13 +111,18 @@ noinline fn main(ldr_info: *bootelf.BootelfData) !void {
 
     // log.debug("ap_trampoline: {*}", .{arch.x86_64.smp.ap_trampoline});
 
-    const ap_trampoline_length = @intFromPtr(arch.x86_64.smp.ap_end) - @intFromPtr(arch.x86_64.smp.ap_start);
-    const ap_trampoline_start = @as([*]const u8, @ptrCast(arch.x86_64.smp.ap_start));
+    const ext = util.extern_address;
+
+    const ap_trampoline_length = ext("__ap_trampoline_end") - ext("__ap_trampoline_begin");
+    const ap_trampoline_start = @as([*]const u8, @ptrFromInt(ext("__ap_trampoline_begin")));
 
     log.debug("ap_trampoline: {*} (len {X})", .{ ap_trampoline_start, ap_trampoline_length });
 
     try debug.dump_hex(ap_trampoline_start[0..ap_trampoline_length]);
     debug.dump_stack_trace(log, null);
+
+    log.info("{}", .{@import("builtin").target});
+
     puts("STOP");
     while (true) {}
 }

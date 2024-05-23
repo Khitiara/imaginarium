@@ -12,4 +12,6 @@ bootelf/bootelf
 zuid/.github/
 
 listing.txt
+syms.txt
+readelf.txt
 agony.*

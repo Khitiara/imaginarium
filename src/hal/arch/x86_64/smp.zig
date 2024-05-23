@@ -6,9 +6,6 @@ const std = @import("std");
 
 const ext = util.extern_address;
 
-pub const ap_start = ext("__ap_trampoline_begin");
-pub const ap_end = ext("__ap_trampoline_end");
-
 const pause = std.atomic.spinLoopHint;
 
 const ptr_from_physaddr = @import("pmm.zig").ptr_from_physaddr;
@@ -32,7 +29,10 @@ pub fn SmpUtil(comptime Wrapper: type, comptime LocalControlBlock: type, comptim
         pub fn setup(base_linear_addr: usize) void {
             msr.write(.gs_base, base_linear_addr);
             msr.write(.kernel_gs_base, base_linear_addr);
-            asm volatile ("swapgs" ::: "memory");
+        }
+
+        pub fn set_tls(linear_addr: usize) void {
+            msr.write(.fs_base, linear_addr);
         }
 
         pub fn lcb_ptr() LocalControlBlock {
@@ -61,7 +61,7 @@ var bspid: u8 = undefined;
 
 const log = std.log.scoped(.@"hal.smp");
 
-pub fn init(comptime cb: fn (std.mem.Allocator, std.mem.Allocator) std.mem.Allocator.Error!void) std.mem.Allocator.Error!void {
+pub fn init(comptime cb: anytype) @typeInfo(@TypeOf(cb)).Fn.return_type.? {
     bspid = apic.get_lapic_id();
     const alloc = vmm.raw_page_allocator.allocator();
     const gpa = vmm.gpa.allocator();
@@ -70,7 +70,7 @@ pub fn init(comptime cb: fn (std.mem.Allocator, std.mem.Allocator) std.mem.Alloc
     var stk: usize = 0;
     for (0..apic.processor_count, apic.lapic_ids[0..apic.processor_count]) |i, id| {
         if (id == bspid) {
-            ap_stacks[i] = @ptrCast(ext("__bootstrap_stack_bottom"));
+            ap_stacks[i] = @ptrFromInt(ext("__bootstrap_stack_bottom"));
         } else if (apic.lapic_enabled[id] or apic.lapic_online_capable[id]) {
             ap_stacks[i] = &raw_ap_stacks[stk];
             stk += 1;
@@ -78,11 +78,14 @@ pub fn init(comptime cb: fn (std.mem.Allocator, std.mem.Allocator) std.mem.Alloc
             log.debug("processor {d} (lapic id {d}) is not usable", .{ i, id });
         }
     }
-    try cb(alloc, gpa);
+    return try cb(alloc, gpa);
 }
 
 pub fn start_aps(cb: *const fn (std.mem.Allocator) void) !void {
     _cb = cb;
+
+    const ap_start = ext("__ap_trampoline_begin");
+    const ap_end = ext("__ap_trampoline_end");
 
     const lnd_ofs = @intFromPtr(ext("_ap_land")) - @intFromPtr(ap_start);
     const stk_ofs = @intFromPtr(ext("_ap_stk")) - @intFromPtr(ap_start);

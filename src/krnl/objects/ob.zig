@@ -21,6 +21,8 @@ pub const ObjectKind = enum(u7) {
     }
 };
 
+pub var ob_page_alloc: std.mem.Allocator = undefined;
+
 pub const ObNamespace = zuid.deserialize("2d7e52f8-0d27-4a40-a967-828c2900c33c");
 
 pub const ObjectRef = opaque {
@@ -36,7 +38,7 @@ pub const ObjectRef = opaque {
 
 pub const Object = struct {
     kind: ObjectKind,
-    id: zuid.Uuid = zuid.null_uuid,
+    id: zuid.Uuid align(8) = zuid.null_uuid,
     /// max-value means the object is unnamed
     name_idx: u32 = std.math.maxInt(u32),
     wait_lock: dispatcher.SpinLockIRQL = .{ .set_irql = .passive },

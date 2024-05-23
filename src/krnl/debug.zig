@@ -63,7 +63,7 @@ pub fn dump_hex(bytes: []const u8) !void {
     var chunks = std.mem.window(u8, bytes, 16, 16);
     while (chunks.next()) |window| {
         // 1. Print the address.
-        const address = (@intFromPtr(bytes.ptr) + 0x10 * (chunks.index orelse 0) / 16) - 0x10;
+        const address = (@intFromPtr(bytes.ptr) + 0x10 * (try std.math.divCeil(usize, chunks.index orelse bytes.len, 16))) - 0x10;
         // We print the address in lowercase and the bytes in uppercase hexadecimal to distinguish them more.
         // Also, make sure all lines are aligned by padding the address.
         try writer.print("{x:0>[1]}  ", .{ address, @sizeOf(usize) * 2 });

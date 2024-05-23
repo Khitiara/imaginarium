@@ -35,9 +35,6 @@ const memory = @import("../../memory.zig");
 const std = @import("std");
 
 // the base virtual address of the initial memory layout. should always be -2G but only set it once in the linkerscript
-const stage1_base = ext("__base");
-
-var kernel_phys_end = ext("__kernel_end");
 pub var kernel_size: usize = undefined;
 
 // the number of physical address bits
@@ -48,6 +45,7 @@ var phys_addr_width: u8 = undefined;
 // once the pmm is set up and we can allocate page tables
 // the vmm will lazily identity map all of physical memory at a new virtual base address
 pub var phys_mapping_base: isize = undefined;
+var phys_mapping_base_unsigned: usize = undefined;
 var phys_mapping_limit: usize = 1 << 31;
 
 // the set of physical sizes we can maybe use. the set of powers of 2 from 1 << 12 (4096) to 1 << 52 (a very big number) inclusive
@@ -72,9 +70,10 @@ const log = std.log.scoped(.pmm);
 
 // initialize the pmm. takes the physical address width and the memory map
 pub fn init(paddrwidth: u8, memmap: []memory.MemoryMapEntry) void {
-    phys_mapping_base = @bitCast(@intFromPtr(stage1_base));
-    log.debug("initial physical mapping base 0x{X}", .{@as(usize, @bitCast(phys_mapping_base))});
-    kernel_size = std.mem.alignForwardLog2(@intFromPtr(kernel_phys_end) - @as(usize, @bitCast(phys_mapping_base)), 24);
+    phys_mapping_base_unsigned = @intFromPtr(@extern(*u64, .{ .name = "__base" }));
+    phys_mapping_base = @bitCast(phys_mapping_base_unsigned);
+    log.debug("initial physical mapping base 0x{X}", .{phys_mapping_base_unsigned});
+    kernel_size = std.mem.alignForwardLog2(@intFromPtr(@extern(*u64, .{ .name = "__kernel_end" })) - phys_mapping_base_unsigned, 24);
     log.debug("kernel physical end 0x{X}", .{kernel_size});
     // set our global physical address width
     phys_addr_width = paddrwidth;
@@ -123,6 +122,7 @@ pub fn init(paddrwidth: u8, memmap: []memory.MemoryMapEntry) void {
 // this allows the use of the full physical memory not just the first 2G that bootelf maps
 // current plan is to map all of physmem at -1 << 45 (ffff_e..._...._....)
 pub fn enlarge_mapped_physical(memmap: []memory.MemoryMapEntry, new_base: isize) void {
+    phys_mapping_base_unsigned = @bitCast(new_base);
     phys_mapping_base = new_base;
     const old_limit = phys_mapping_limit;
     phys_mapping_limit = @as(usize, 1) << @intCast(phys_addr_width);
@@ -141,14 +141,14 @@ pub fn enlarge_mapped_physical(memmap: []memory.MemoryMapEntry, new_base: isize)
 pub fn ptr_from_physaddr(Ptr: type, paddr: usize) Ptr {
     // if the phys addr is 0 and the pointer is optional then its null. used mainly in the pmm to mark the end of the
     // free block lists
-    if (paddr == 0 and @as(std.builtin.TypeId, @typeInfo(Ptr)) == .Optional) {
+    if (@as(std.builtin.TypeId, @typeInfo(Ptr)) == .Optional and paddr == 0) {
         return null;
     }
-    return @ptrFromInt(paddr +% @as(usize, @bitCast(phys_mapping_base)));
+    return @ptrFromInt(paddr +% phys_mapping_base_unsigned);
 }
 
 pub fn physaddr_from_ptr(ptr: anytype) usize {
-    return @intFromPtr(ptr) -% @as(usize, @bitCast(phys_mapping_base));
+    return @intFromPtr(ptr) -% phys_mapping_base_unsigned;
 }
 
 // allocate a block from physical memory by index

@@ -160,6 +160,8 @@ const RawInterruptFrame = InterruptFrame(u64);
 
 pub fn InterruptFrame(ErrorCode: type) type {
     return extern struct {
+        gs_base: usize,
+        fs_base: usize,
         cr4: crs(.cr4),
         cr3: crs(.cr3),
         cr2: crs(.cr2),
@@ -178,12 +180,13 @@ pub fn InterruptFrame(ErrorCode: type) type {
         pub fn format(self: *const @This(), comptime _: []const u8, _: std.fmt.FormatOptions, fmt: anytype) !void {
             try fmt.print(
                 \\v={x:0>2} e={x:0>16} cpl={d}
-                \\  rax={x:16} rbx={x:16} rcx={x:16} rdx={x:16}
-                \\  rsi={x:16} rdi={x:16} rbp={x:16} rsp={x:16}
-                \\  r08={x:16} r09={x:16} r10={x:16} r11={x:16}
-                \\  r12={x:16} r13={x:16} r14={x:16} r15={x:16}
-                \\  rip={x:16}  fs={x:16}  gs={x:16} flg={x:16}
-                \\  cr0={x:0>8}         cr2={x:0>16} cr3={x:0>16} cr4={x:0>8}
+                \\     rax={x:16} rbx={x:16} rcx={x:16} rdx={x:16}
+                \\     rsi={x:16} rdi={x:16} rbp={x:16} rsp={x:16}
+                \\     r08={x:16} r09={x:16} r10={x:16} r11={x:16}
+                \\     r12={x:16} r13={x:16} r14={x:16} r15={x:16}
+                \\     rip={x:16}  fs={x:16}  gs={x:16} flg={x:16}
+                \\     cr0={x:0>8}         cr2={x:0>16} cr3={x:0>16} cr4={x:0>8}
+                \\  fsbase={x:16}                   gsbase={x:16}
             , .{
                 @as(u8, @bitCast(self.vector)),
                 self.error_code,
@@ -212,6 +215,8 @@ pub fn InterruptFrame(ErrorCode: type) type {
                 @as(u64, @bitCast(self.cr2)),
                 @as(u64, @bitCast(self.cr3)),
                 @as(u64, @bitCast(self.cr4)),
+                self.fs_base,
+                self.gs_base,
             });
         }
     };
@@ -251,6 +256,14 @@ comptime {
         \\     pushq    %rax
         \\     mov      %cr4, %rax
         \\     pushq    %rax
+        \\     movq     $0xC0000100, %rcx
+        \\     rdmsr
+        \\     pushq    %rax
+        \\     movl     %edx, 4(%rsp)
+        \\     movq     $0xC0000101, %rcx
+        \\     rdmsr
+        \\     pushq    %rax
+        \\     movl     %edx, 4(%rsp)
         \\     swapgs   # we saved the gs register selector so its safe to swap in the kernel gs base
     ;
 
@@ -292,7 +305,7 @@ comptime {
         \\ .type __iret__, @function;
         \\ __iret__:
         \\     swapgs   # and swap back out the kernel gs so we dont override it
-        \\     add      $32, %rsp # skip the control registers
+        \\     add      $48, %rsp # skip the control registers
         \\     popq     %rax # pop fs and gs segment selectors
         \\     mov      %rax, %fs
         \\     popq     %rax

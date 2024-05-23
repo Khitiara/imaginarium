@@ -61,6 +61,8 @@ affinity: Affinity = .{},
 scheduler_hook: queue.Node = .{},
 saved_state: SavedThreadState = undefined,
 stack: []const u8 = undefined,
+tls: []const u8,
+tls_ptr: usize,
 
 const vtable: ob.ObjectFunctions = .{
     .deinit = &ob_deinit,
@@ -69,7 +71,7 @@ const vtable: ob.ObjectFunctions = .{
 
 fn ob_deinit(o: *const ob.Object, alloc: std.mem.Allocator) void {
     const t: *@This() = @constCast(@fieldParentPtr("header", o));
-    t.deinit(alloc);
+    t.deinit(alloc, ob.ob_page_alloc);
 }
 
 fn ob_signal(o: *ob.Object) void {
@@ -77,7 +79,7 @@ fn ob_signal(o: *ob.Object) void {
     _ = t;
 }
 
-pub fn init(alloc: std.mem.Allocator, id: zuid.Uuid) !*@This() {
+pub fn init2(alloc: std.mem.Allocator, tls_block: []u8, tls_ptr: usize, id: zuid.Uuid) !*@This() {
     const self = try alloc.create(@This());
     self.* = .{
         .header = .{
@@ -86,8 +88,18 @@ pub fn init(alloc: std.mem.Allocator, id: zuid.Uuid) !*@This() {
             .vtable = &vtable,
         },
         .priority = .p1,
+        .tls = tls_block,
+        .tls_ptr = tls_ptr,
     };
+    @memset(tls_block, 0);
+    @memcpy(tls_block[tls_block.len - smp.krnl_tls_len - 8 ..][0..smp.initial_tls.len], smp.initial_tls);
+    @as(*align(1) *u8, @ptrCast(&tls_block[smp.krnl_tls_len])).* = &tls_block[smp.krnl_tls_len];
     return self;
+}
+
+pub fn init(alloc: std.mem.Allocator, page_alloc: std.mem.Allocator, id: zuid.Uuid) !*@This() {
+    const tls = try page_alloc.alignedAlloc(u8, 1 << 12, smp.krnl_tls_len + 8);
+    return try init2(alloc, tls, @intFromPtr(&tls[smp.krnl_tls_len]), id);
 }
 
 pub fn set_state(self: *@This(), expect: State, state: State) void {
@@ -127,6 +139,7 @@ pub fn setup_stack(self: *@This(), allocator: std.mem.Allocator, thread_start: *
     frame.gs = arch.x86_64.gdt.selectors.kernel_data;
 }
 
-pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
+pub fn deinit(self: *@This(), allocator: std.mem.Allocator, page_alloc: std.mem.Allocator) void {
+    page_alloc.free(self.tls);
     allocator.free(self.stack);
 }

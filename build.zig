@@ -13,8 +13,6 @@ fn target_features(query: *Target.Query) !void {
             const Features = std.Target.x86.Feature;
             // zig needs floats of some sort, but we dont want to use simd in kernel
             query.cpu_features_add.addFeature(@intFromEnum(Features.soft_float));
-            query.cpu_features_add.addFeature(@intFromEnum(Features.bmi));
-            query.cpu_features_add.addFeature(@intFromEnum(Features.bmi2));
             query.cpu_features_add.addFeature(@intFromEnum(Features.rdrnd));
             query.cpu_features_add.addFeature(@intFromEnum(Features.rdseed));
 
@@ -68,11 +66,13 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
         .optimize = optimize,
         .code_model = .kernel,
         .pic = false,
+        .use_llvm = true,
         .use_lld = true,
         .strip = false,
-        .single_threaded = true,
+        // .single_threaded = true,
         .omit_frame_pointer = false,
     });
+    exe.pie = false;
     // exe.want_lto = false;
     b.verbose_llvm_ir = "agony.ir";
     b.verbose_llvm_bc = "agony.bc";
@@ -237,6 +237,7 @@ pub fn build(b: *std.Build) !void {
     const options = b.addOptions();
     options.addOption(u32, "max_ioapics", max_ioapics);
     options.addOption(u32, "max_hpets", max_hpets);
+    options.addOption(usize, "max_elf_size", 1 << 30);
     options.addOption(bool, "rsdp_search_bios", true);
 
     const optsModule = options.createModule();

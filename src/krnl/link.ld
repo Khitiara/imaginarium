@@ -7,14 +7,15 @@ PHDRS
   stk       PT_LOAD FLAGS((1 << 2) | (1 << 1) /* Readable | Writeable  */);
   data      PT_LOAD FLAGS((1 << 2) | (1 << 1) /* Readable | Writeable  */);
   rodata    PT_LOAD FLAGS((1 << 2)            /* Readable */);
+  tls       PT_TLS  FLAGS((1 << 2) | (1 << 1) /* Readable | Writeable  */);
 }
 
-__base          = -2048M; /* ok, why isnt G an allowed suffix in linkerscript lmao */
 
 SECTIONS
 {
-
-    . = __base + 0x100000;
+    . = -2048M; /* ok, why isnt G an allowed suffix in linkerscript lmao */
+    __base          = .;
+    . += 0x100000;
 
     __kernel_begin = .;
     __kernel_text_begin = .;
@@ -46,6 +47,22 @@ SECTIONS
     .data . : {
         *(.data*)
     } :data
+
+    . = ALIGN(4K);
+    __tls_start__ = .;
+    __tls_data_start__ = .;
+    .tdata . : {
+        *(.tdata*)
+    } : tls
+    __tls_data_end__ = .;
+
+    . = ALIGN(4K);
+
+    .tbss (NOLOAD) : {
+        *(.tbss*)
+    } : tls
+    __tls_end__ = .;
+    . = ALIGN(4K);
 
     .bss (NOLOAD) : {
         *(.bss*)

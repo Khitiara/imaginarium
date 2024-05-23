@@ -45,7 +45,7 @@ pub fn append(self: *DiskImage, file: LazyPath) void {
 }
 
 pub fn getOutput(self: *const DiskImage) std.Build.LazyPath {
-    return .{ .generated = &self.output_file };
+    return .{ .generated = .{ .file = &self.output_file } };
 }
 
 fn make(step: *Step, prog_node: *std.Progress.Node) !void {

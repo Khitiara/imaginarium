@@ -97,6 +97,7 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
                     frame.* = stby.saved_state.registers;
                     l.current_thread = stby;
                     stby.set_state(.standby, .running);
+                    smp.set_tls_base(stby);
 
                     // grab the lock a bit early to put the old running thread into the queue
                     l.local_dispatcher_lock.lock();
@@ -128,6 +129,7 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
                 defer l.local_dispatcher_lock.unlock();
                 l.current_thread = stby;
                 stby.set_state(.standby, .running);
+                smp.set_tls_base(stby);
                 // and set up the LCB to restore the saved register state of the thread
                 // the caller should have the lcb already set up with a frame pointer
                 frame.* = stby.saved_state.registers;
@@ -157,6 +159,7 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
                 if (l.current_thread == null) {
                     l.current_thread = l.idle_thread;
                     l.idle_thread.set_state(.assigned, .running);
+                    smp.set_tls_base(l.idle_thread);
                     frame.* = l.idle_thread.saved_state.registers;
                 }
                 return;

@@ -124,8 +124,9 @@ pub fn map_range(base_phys: usize, base_linear: isize, length: usize) !void {
 // as this function uses the pmm to allocate physical pages for the created page tables and thus if
 // the target physical memory is unallocated any created page tables may end up in the mapped region,
 // though in some cases e.g. the sequentially mapped region at base -1 << 45 this may be acceptable behavior
-pub fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSize) !void {
-    // log.debug("mapping {x:0>16} to {x:0>16} ({})", .{@as(usize, @bitCast(linear_addr)), phys_addr, page_size});
+pub noinline fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSize) !void {
+    const lin_unsigned: usize = @bitCast(linear_addr);
+    // log.debug("mapping {x:0>16} to {x:0>16} ({s})", .{ lin_unsigned, phys_addr, @tagName(page_size) });
     // this method takes a physical address meaning the block is already mapped
     const alignment: u8 = switch (page_size) {
         .normal => 12,
@@ -133,15 +134,15 @@ pub fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSize) !void
         .huge => 30,
     };
     // double check the alignment of the addresses we got
-    if (!std.mem.isAlignedLog2(@bitCast(linear_addr), alignment)) {
-        log.err("linear address 0x{X} misaligned for {s} page", .{ @as(usize, @bitCast(linear_addr)), @tagName(page_size) });
+    if (!std.mem.isAlignedLog2(lin_unsigned, alignment)) {
+        log.err("linear address 0x{X} misaligned for {s} page", .{ lin_unsigned, @tagName(page_size) });
         return error.misaligned_page_linear_addr;
     }
     if (!std.mem.isAlignedLog2(phys_addr, alignment)) {
         log.err("physical address 0x{X} misaligned for {s} page", .{ phys_addr, @tagName(page_size) });
         return error.misaligned_page_physical_addr;
     }
-    const split: SplitPagingAddr = @bitCast(linear_addr);
+    const split: SplitPagingAddr = @bitCast(lin_unsigned);
     const pml4: Table(entries.PML45E) = if (using_5_level_paging) b: {
         const pml5 = try get_or_create_root_table();
         var entry: *entries.PML45E = &pml5[@as(u9, @bitCast(split.pml4))];
@@ -175,7 +176,7 @@ pub fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSize) !void
         // gigabyte pages are supported
         var entry: *entries.PDPTE = &pdpt[split.directory];
         if (entry.present) {
-            log.debug("huge page already mapped for 0x{X}", .{@as(usize, @bitCast(linear_addr))});
+            log.debug("huge page already mapped for 0x{X}", .{lin_unsigned});
             return error.address_already_mapped;
         }
         entry.* = @bitCast(@as(usize, 0));
@@ -190,7 +191,7 @@ pub fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSize) !void
         // log.debug("no huge page support, mapping a directory of large pages instead", .{});
         // no 1g page support so recurse and map 512 large pages. the higher level tables should all short-circuit here.
         for (0..512) |table| {
-            const new_addr = @as(isize, @bitCast(@as(usize, @bitCast(linear_addr)) + (table << 21)));
+            const new_addr = @as(isize, @bitCast(lin_unsigned + (table << 21)));
             try map_page(phys_addr + (table << 21), new_addr, .large);
         }
         return;
@@ -211,7 +212,7 @@ pub fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSize) !void
     if (page_size == .large) {
         var entry: *entries.PDE = &directory[split.table];
         if (entry.present) {
-            log.debug("large page already mapped for 0x{X}", .{@as(usize, @bitCast(linear_addr))});
+            log.debug("large page already mapped for 0x{X}", .{lin_unsigned});
             return error.address_already_mapped;
         }
         // log.debug("agony and sorrow {X} {X}", .{ phys_addr, phys_addr >> 21 });
