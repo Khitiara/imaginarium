@@ -23,7 +23,7 @@ pub fn SmpUtil(comptime Wrapper: type, comptime LocalControlBlock: type, comptim
         break :blk o;
     };
     return struct {
-        pub const LocalControlBlockPointer = *addrspace(.gs) const *LocalControlBlock;
+        pub const LocalControlBlockPointer = *addrspace(.gs) allowzero const *LocalControlBlock;
         pub const lcb: LocalControlBlockPointer = @ptrFromInt(offset);
 
         pub fn setup(base_linear_addr: usize) void {
