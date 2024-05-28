@@ -1,0 +1,18 @@
+.{
+    .name = "bootelf",
+    .version = "0.0.0",
+
+    .dependencies = .{
+        .nasm = .{
+            .url = "https://github.com/andrewrk/nasm/archive/b5f62392d56baf6aa02567f28e0da70664609262.tar.gz",
+            .hash = "122004fa7e2ff0b3d472049743358f8fdf065cdf63bc0e5e3d54c6bb8d81d93e40da",
+        },
+    },
+    .paths = .{
+        "*.asm",
+        "LICENSE",
+        "readme.md",
+        "build.zig",
+        "build.zig.zon",
+    },
+}

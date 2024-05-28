@@ -12,8 +12,13 @@ pub fn make_bootelf(b: *std.Build) !std.Build.LazyPath {
     }
 
     const this_dep = b.dependencyFromBuildZig(@This(), .{});
+    var make = if (b.graph.host.result.os.tag != .windows) blk: {
+        const nasm = this_dep.builder.dependency("nasm", .{ .target = @as([]const u8, "native") });
+        const nasm_exe = nasm.artifact("nasm");
 
-    var make = b.addSystemCommand(&.{"nasm"});
+        break :blk b.addRunArtifact(nasm_exe);
+    } else b.addSystemCommand(&.{"nasm"});
+
     make.extra_file_dependencies = &.{
         "bootelf/framebuffer.asm",
         "bootelf/elf_load.asm",
