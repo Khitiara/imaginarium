@@ -1,14 +1,4 @@
-file paths are a null-terminated sequence of non-null bytes with the following structure:
-  - the sequence starts with one of the following utf8 strings
-      - `/:/` for device-relative paths
-      - `/?/` for kernel objects
-      - `/*/` for the efi boot partition
-      - `/!/` for the root file system (and by extension any mounted file system)
-  - path components are separated by the `/` character encoded as its UTF8 single byte 0x2F
-  - directories in canonical form are written with a trailing `/` but are recognized by the OS without it
-  - CASE SENSITIVE - only the byte strings are compared!
-  - while the overwhelming majority of file paths are anticipated to be valid UTF8 or even ASCII strings,
-      paths being valid UTF8 strings is NOT REQUIRED and CANNOT be relied on
+file paths are paths (see objects.txt) whose first segment is `/!`, `/:`, or `/*`
 a file system entry may be:
   - a regular file
   - a directory
@@ -27,3 +17,9 @@ the directory `/!/imaginarium/` exists on every system and contains primary OS b
   specified in the boot protocol docs. system config files, despite being normal files with known format, should
   still be accessed by user code through the configuration APIs in the usermode kernel services for the system
   component being configured.
+
+`/?` is the name of the root object directory, which is held statically by the object manager subsystem
+`/!` is an alias for the file-system object `/?/RootFs`
+`/*` is an alias for the file-system object `/?/EfiFs` if it exists
+`/:/uuid` is an alias for the file-system object `/?/FileSystems/uuid` whose parent device object should be
+    `/?/Devices/uuid` (the device may be a pseudo-device for a partition which forwards io to the root disk object)

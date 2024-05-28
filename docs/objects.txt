@@ -1,0 +1,39 @@
+- kernel object tree
+  - object types:
+    - directory (contains objects)
+    - file (open file handle, has ref to FS)
+    - filesystem (mounted file system on a device)
+    - device (any connected device, may be open or closed)
+    - driver (a driver capable of performing IO on one or more kinds of devices)
+    - socket (open socket)
+    - symlink (link to other object)
+    - futex (synchronization)
+    - semaphore (synchronization)
+    - section (memory-mapped file data)
+    - process
+    - thread
+    - security principal
+  - objects *may* optionally expose a function for locating sub-objects. used to implement directory and symlink
+
+object paths:
+  - a path is a null-terminated string of nonzero bytes that begins with 0x2F, the ascii character `/`
+  - a path may be split into segments, each beginning with a `/` and proceeding up to but excluding the next `/`
+  - a path whose first segment is one of `/?`, `/!`, `/:`, or `/*` is an absolute path
+  - CASE SENSITIVE - only the byte strings are compared!
+  - while the overwhelming majority of file paths are anticipated to be valid UTF8 or even ASCII strings,
+      paths being valid UTF8 strings is NOT REQUIRED and CANNOT be relied on
+  - an object path is an absolute path whose first segment is `/?`
+  - the object manager holds a static root directory object which `/?` refers to
+  - an object type which exposes a `resolve` function which is referred to by the root segment of a path
+      will have that function called with the rest of the path
+    - e.g. the path `/?/RootFs/some/path` is resolved as follows:
+      1. the first segment of the path is `/?` so this is an object path. `resolve` is called on the
+          root object directory and passed path `/RootFs/some/path`
+      2. the root object directory has an object named `/RootFs` of type SymbolicLink, which has a `resolve` function.
+          `resolve` is called on the rootfs object and passed `/some/path`
+      3. the rootfs symlink's `resolve` function constructs the path `/?/FileSystems/uuid/some/path` and recurses to
+          resolve that path
+      4. steps 1 and 2 are repeated until reaching the object `/?/FileSystems/uuid` of type FileSystem has its
+          `resolve` function called and passed `/some/path`
+      5. the FileSystem object's `resolve` function interprets `/some/path` as a file path and enters the io/fs
+          subsystem by calling into the appropriate drivers
