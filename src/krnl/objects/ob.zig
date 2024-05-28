@@ -74,6 +74,7 @@ pub const Object = struct {
 };
 
 pub const ObjectFunctions = struct {
-    deinit: *const fn (*const Object, std.mem.Allocator) void,
-    signal: *const fn (*Object) void,
+    deinit: *const fn (self: *const Object, alloc: std.mem.Allocator) void,
+    signal: *const fn (self: *Object) void,
+    resolve: ?*const fn (self: *Object, alloc: std.mem.Allocator, path: [:0]const u8, options: *anyopaque) void = null,
 };
