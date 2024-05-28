@@ -36,7 +36,7 @@ pub const ObjectRef = opaque {
 
 pub const Object = struct {
     kind: ObjectKind,
-    id: zuid.Uuid align(8) = zuid.null_uuid,
+    id: zuid.Uuid align(8),
     /// max-value means the object is unnamed
     name_idx: u32 = std.math.maxInt(u32),
     wait_lock: dispatcher.SpinLockIRQL = .{ .set_irql = .passive },
