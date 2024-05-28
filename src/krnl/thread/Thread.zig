@@ -60,7 +60,7 @@ priority: Priority,
 affinity: Affinity = .{},
 scheduler_hook: queue.Node = .{},
 saved_state: SavedThreadState = undefined,
-stack: []const u8 = undefined,
+stack: ?[]const u8 = null,
 tls: []const u8,
 tls_ptr: usize,
 
@@ -127,9 +127,10 @@ pub fn setup_stack(self: *@This(), allocator: std.mem.Allocator, thread_start: *
     // to initialize necessary selectors, stack, etc to enter ring 0
     frame.rip = @intFromPtr(thread_start);
     frame.registers.rcx = @intFromPtr(param);
-    self.stack = try allocator.alignedAlloc(u8, 1 << 12, 1 << 12);
-    @memset(@constCast(self.stack[self.stack.len - (2 * @sizeOf(usize)) ..]), 0);
-    frame.rsp = @intFromPtr(self.stack.ptr) + self.stack.len;
+    const stk = try allocator.alignedAlloc(u8, 1 << 12, 1 << 12);
+    self.stack = stk;
+    @memset(@constCast(stk[stk.len - (3 * @sizeOf(usize)) ..]), 0);
+    frame.rsp = @intFromPtr(stk.ptr) + stk.len;
     frame.rsp -= 2 * @sizeOf(usize);
     frame.eflags = arch.x86_64.flags();
     frame.eflags.interrupt_enable = true;
@@ -140,6 +141,9 @@ pub fn setup_stack(self: *@This(), allocator: std.mem.Allocator, thread_start: *
 }
 
 pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
+    if (self.stack) |stk| {
+        allocator.free(stk);
+        self.stack = null;
+    }
     allocator.free(self.tls);
-    allocator.free(self.stack);
 }
