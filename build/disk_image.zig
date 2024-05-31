@@ -48,7 +48,7 @@ pub fn getOutput(self: *const DiskImage) std.Build.LazyPath {
     return .{ .generated = .{ .file = &self.output_file } };
 }
 
-fn make(step: *Step, prog_node: *std.Progress.Node) !void {
+fn make(step: *Step, prog_node: std.Progress.Node) anyerror!void {
     const b = step.owner;
     const self: *DiskImage = @fieldParentPtr("step", step);
 

@@ -36,7 +36,7 @@ fn cancel_impl(alloc: std.mem.Allocator, wait: *WaitBlock, from_waitall_finish: 
 /// that processor is responsible for offloading it elsewhere if needed
 /// final version will use DPC to get onto other processors when scheduling there
 pub fn schedule(thread: *Thread, processor: ?u8) void {
-    const l: *smp.LocalControlBlock = lcb();
+    const l: *smp.LocalControlBlock = lcb.*;
     const target = processor orelse thread.affinity.last_processor;
     if (l.apic_id != target) {
         // TODO trampoline into a DPC on the target processor
@@ -76,7 +76,7 @@ pub fn signal_wait_block(alloc: std.mem.Allocator, thread: *Thread, block: *Wait
 }
 
 pub fn dispatch(frame: *arch.SavedRegisterState) void {
-    const l: *smp.LocalControlBlock = lcb();
+    const l: *smp.LocalControlBlock = lcb.*;
     // TODO: cross-processor thread scheduling fun times
     // for now, just check if the current thread is lower prio then the head of the queue
     while (true) {

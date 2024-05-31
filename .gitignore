@@ -3,6 +3,7 @@
 **/.vs/
 
 # Zig Stuff
+.zig-cache/
 zig-cache/
 zig-out/
 

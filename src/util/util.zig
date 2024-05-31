@@ -5,6 +5,9 @@ pub const trie = @import("trie.zig");
 pub const sentinel_bit_set = @import("sentinel_bit_set.zig");
 pub const extern_address = @import("externs.zig").extern_address;
 pub const queue = @import("queue.zig");
+pub const multi_bounded_array = @import("multi_bounded_array.zig");
+pub const MultiBoundedArray = multi_bounded_array.MultiBoundedArray;
+pub const MultiBoundedArrayAligned = multi_bounded_array.MultiBoundedArrayAligned;
 
 const std = @import("std");
 const lower_string = std.ascii.lowerString;

@@ -18,17 +18,29 @@ const smp = @import("smp.zig");
 
 const log = std.log.default;
 
+pub const tty: std.io.tty.Config = .no_color;
+
 fn logFn(
     comptime message_level: std.log.Level,
     comptime scope: @TypeOf(.enum_literal),
     comptime format: []const u8,
     args: anytype,
 ) void {
+    tty.setColor(debug.SerialWriter.writer(), switch (message_level) {
+        .debug => .dim,
+        .err => .red,
+        .warn => .yellow,
+        .info => .reset,
+    }) catch unreachable;
+    tty.setColor(debug.SerialWriter.writer(), .bold) catch unreachable;
     puts(util.upper_string_comptime(message_level.asText()));
+    tty.setColor(debug.SerialWriter.writer(), .reset) catch unreachable;
     if (scope != .default) {
+        tty.setColor(debug.SerialWriter.writer(), .dim) catch unreachable;
         puts(" (");
         puts(util.lower_string_comptime(@tagName(scope)));
         puts(")");
+        tty.setColor(debug.SerialWriter.writer(), .reset) catch unreachable;
     }
     puts(": ");
     debug.SerialWriter.writer().print(format, args) catch unreachable;
@@ -57,37 +69,25 @@ pub const std_options: std.Options = .{
 /// as well as entering the final infinite loop if everything worked successfully
 export fn __kstart2(ldr_info: *bootelf.BootelfData) callconv(arch.cc) noreturn {
     main(ldr_info) catch |e| {
-        switch (e) {
-            inline else => |e2| {
-                const ename = @errorName(e2);
-                for (ename) |c| {
-                    arch.x86_64.serial.writeout(0xE9, c);
-                }
-                debug.print_stack_trace(log, @errorReturnTrace().?);
-            },
-        }
+        std.builtin.panicUnwrapError(@errorReturnTrace(), e);
     };
-    while (true) {
-        asm volatile ("hlt");
-    }
 }
 
-noinline fn main(ldr_info: *bootelf.BootelfData) !void {
+noinline fn main(ldr_info: *bootelf.BootelfData) !noreturn {
     const bootelf_magic_check = ldr_info.magic == bootelf.magic;
     std.debug.assert(bootelf_magic_check);
 
     try arch.platform_init(ldr_info.memory_map());
-    debug.dump_stack_trace(log, null);
     try arch.smp.init(smp.allocate_lcbs);
 
-    const current_apic_id = cpuid.cpuid(.type_fam_model_stepping_features, {}).brand_flush_count_id.apic_id;
+    const current_apic_id = hal.apic.get_lapic_id();
 
     log.info("local apic id {d}", .{current_apic_id});
     log.info("acpi oem id {s}", .{&arch.x86_64.oem_id});
 
     if (ldr_info.framebuffer.base == 0) {
         log.warn("graphics-mode framebuffer not found by bootelf", .{});
-        return;
+        return error.no_framebuffer;
     }
 
     log.info("graphics-mode framebuffer located at 0x{X:0>16}..{X:0>16}, {d}x{d}, hblank {d}", .{
@@ -119,12 +119,14 @@ noinline fn main(ldr_info: *bootelf.BootelfData) !void {
     log.debug("ap_trampoline: {*} (len {X})", .{ ap_trampoline_start, ap_trampoline_length });
 
     try debug.dump_hex(ap_trampoline_start[0..ap_trampoline_length]);
-    debug.dump_stack_trace(log, null);
+    // debug.dump_stack_trace(log, null);
 
-    log.info("{}", .{@import("builtin").target});
+    // log.info("{}", .{@import("builtin").target});
 
     puts("STOP");
-    while (true) {}
+    while (true) {
+        asm volatile ("hlt");
+    }
 }
 
 test {

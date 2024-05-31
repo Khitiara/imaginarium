@@ -23,7 +23,7 @@ pub fn SmpUtil(comptime Wrapper: type, comptime LocalControlBlock: type, comptim
         break :blk o;
     };
     return struct {
-        pub const LocalControlBlockPointer = *addrspace(.gs) allowzero const *LocalControlBlock;
+        pub const LocalControlBlockPointer = *allowzero addrspace(.gs) const *LocalControlBlock;
         pub const lcb: LocalControlBlockPointer = @ptrFromInt(offset);
 
         pub fn setup(base_linear_addr: usize) void {
@@ -33,10 +33,6 @@ pub fn SmpUtil(comptime Wrapper: type, comptime LocalControlBlock: type, comptim
 
         pub fn set_tls(linear_addr: usize) void {
             msr.write(.fs_base, linear_addr);
-        }
-
-        pub fn lcb_ptr() *LocalControlBlock {
-            return lcb.*;
         }
     };
 }
@@ -63,13 +59,13 @@ pub fn init(comptime cb: anytype) @typeInfo(@TypeOf(cb)).Fn.return_type.? {
     bspid = apic.get_lapic_id();
     const alloc = vmm.raw_page_allocator.allocator();
     const gpa = vmm.gpa.allocator();
-    var raw_ap_stacks = try alloc.alloc([8 << 20]u8, apic.processor_count - 1);
-    ap_stacks = try gpa.alloc(*[8 << 20]u8, apic.processor_count);
+    var raw_ap_stacks = try alloc.alloc([8 << 20]u8, apic.lapics.len - 1);
+    ap_stacks = try gpa.alloc(*[8 << 20]u8, apic.lapics.len);
     var stk: usize = 0;
-    for (0..apic.processor_count, apic.lapic_ids[0..apic.processor_count]) |i, id| {
+    for (apic.lapics.items(.id), 0..) |id, i| {
         if (id == bspid) {
             ap_stacks[i] = @ptrFromInt(ext("__bootstrap_stack_bottom"));
-        } else if (apic.lapic_enabled[id] or apic.lapic_online_capable[id]) {
+        } else if (apic.lapics.items(.enabled)[i] or apic.lapics.items(.online_capable)[i]) {
             ap_stacks[i] = &raw_ap_stacks[stk];
             stk += 1;
         } else {

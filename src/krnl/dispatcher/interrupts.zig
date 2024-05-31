@@ -12,9 +12,9 @@ const lcb = smp.lcb;
 pub inline fn handle_interrupt(handler: fn (*arch.SavedRegisterState) void) fn (*arch.SavedRegisterState) callconv(.Win64) void {
     return struct {
         fn f(frame: *arch.SavedRegisterState) callconv(.Win64) void {
-            const is_root_interrupt: bool = lcb().frame == null;
+            const is_root_interrupt: bool = lcb.*.frame == null;
             defer if (is_root_interrupt) dispatch_interrupt_tail(frame);
-            lcb().frame = lcb().frame orelse frame;
+            lcb.*.frame = lcb.*.frame orelse frame;
             const vector: InterruptVector = frame.vector.vector;
             set_irql(vector.level, .raise);
             @call(.always_inline, handler, .{frame});
@@ -31,8 +31,8 @@ pub noinline fn enter_scheduling() void {
 
 fn enter_thread_ctx_1(frame: *arch.SavedRegisterState) callconv(.Win64) void {
     std.log.debug("entering thread frame, RIP=0x{x:0>16}", .{frame.rip});
-    lcb().current_thread.?.saved_state.registers = frame.*;
-    std.log.debug("returning to thread {}", .{lcb().current_thread.?.header.id});
+    lcb.*.current_thread.?.saved_state.registers = frame.*;
+    std.log.debug("returning to thread {}", .{lcb.*.current_thread.?.header.id});
 }
 
 pub noinline fn enter_thread_ctx() void {
@@ -48,7 +48,7 @@ pub const IrqlOp = enum {
 pub inline fn fetch_set_irql(level: InterruptRequestPriority, op: IrqlOp) InterruptRequestPriority {
     const restore = arch.get_and_disable_interrupts();
     defer arch.restore_interrupt_state(restore);
-    const l = lcb();
+    const l = lcb.*;
     defer {
         if (switch (op) {
             .any => true,
@@ -76,14 +76,14 @@ inline fn set_irql_internal(level: InterruptRequestPriority, op: IrqlOp) Interru
 /// is guaranteed to correctly handle
 fn dispatch_interrupt_tail(frame: *arch.SavedRegisterState) void {
     arch.enable_interrupts();
-    var level = smp.lcb().irql;
+    var level = smp.lcb.*.irql;
     // higher IRQLs do processing through ISRs rather than fixed logic. loop through to process each IRQL in turn
     while (@intFromEnum(level) > @intFromEnum(InterruptRequestPriority.dpc)) : (level = set_irql_internal(level.lower(), .lower)) {}
 
     // IRQL:DPC
     {
         // TODO: run any queued DPCs
-        set_irql(lcb().irql.lower(), .lower);
+        set_irql(lcb.*.irql.lower(), .lower);
     }
 
     // IRQL:DISPATCH
@@ -92,12 +92,12 @@ fn dispatch_interrupt_tail(frame: *arch.SavedRegisterState) void {
         // from kernel-mode code which is setting a new thread when one previously did not
         // exist, e.g. during startup. if the frame in the LCB is null, the frame in our
         // function parameter should still be correct
-        if (lcb().frame) |f| {
+        if (lcb.*.frame) |f| {
             frame.* = f.*;
-            lcb().frame = null;
+            lcb.*.frame = null;
         }
         dispatcher.scheduler.dispatch(frame);
-        set_irql(lcb().irql.lower(), .lower);
+        set_irql(lcb.*.irql.lower(), .lower);
     }
-    std.debug.assert(lcb().irql == .passive);
+    std.debug.assert(lcb.*.irql == .passive);
 }

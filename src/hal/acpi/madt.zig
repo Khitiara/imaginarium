@@ -91,15 +91,10 @@ fn MadtEntryPayload(comptime t: MadtEntryType) type {
     };
 }
 
-pub fn read_madt(ptr: *align(1) const Madt) void {
-    var lapic_uids: [255]u8 = undefined;
-    var uid_nmi_pins: [255]apic.LapicNmiPin = undefined;
+pub fn read_madt(ptr: *align(1) const Madt) !void {
+    apic.lapics = try apic.Lapics.init(0);
+    var uid_nmi_pins: [256]apic.LapicNmiPin = undefined;
     log.info("APIC MADT table loaded at {*}", .{ptr});
-    @memset(&apic.lapic_nmi_pins, .{
-        .pin = .none,
-        .polarity = .default,
-        .trigger = .default,
-    });
     var lapic_ptr: usize = ptr.lapic_addr;
     const entries_base_ptr = @as([*]const u8, @ptrCast(ptr))[@sizeOf(Madt)..ptr.header.length];
     var indexer = WindowStructIndexer(MadtEntryHeader){ .buf = entries_base_ptr };
@@ -110,12 +105,18 @@ pub fn read_madt(ptr: *align(1) const Madt) void {
             .local_apic => {
                 const payload = @as(*align(1) const MadtEntryPayload(.local_apic), @ptrCast(hdr));
                 assert(hdr.length == 8);
-                const idx = @atomicRmw(u8, &apic.processor_count, .Add, 1, .monotonic);
-                lapic_uids[idx] = payload.processor_uid;
-                apic.lapic_ids[idx] = payload.local_apic_id;
+                const idx = try apic.lapics.append(.{
+                    .id = payload.local_apic_id,
+                    .enabled = payload.flags.enabled,
+                    .online_capable = payload.flags.online_capable,
+                    .uid = payload.processor_uid,
+                    .nmi_pins = .{
+                        .pin = .none,
+                        .polarity = .default,
+                        .trigger = .default,
+                    },
+                });
                 apic.lapic_indices[payload.local_apic_id] = idx;
-                apic.lapic_enabled[payload.local_apic_id] = payload.flags.enabled;
-                apic.lapic_online_capable[payload.local_apic_id] = payload.flags.online_capable;
             },
             .io_apic => {
                 const payload = @as(*align(1) const MadtEntryPayload(.io_apic), @ptrCast(hdr));
@@ -158,8 +159,8 @@ pub fn read_madt(ptr: *align(1) const Madt) void {
 
         indexer.advance(hdr.length);
     }
-    for (lapic_uids[0..apic.processor_count], apic.lapic_ids[0..apic.processor_count]) |uid, id| {
-        apic.lapic_nmi_pins[id] = uid_nmi_pins[uid];
+    for(apic.lapics.items(.uid), apic.lapics.items(.nmi_pins)) |uid, *pins| {
+        pins.* = uid_nmi_pins[uid];
     }
     apic.lapic_ptr = @import("../arch/arch.zig").ptr_from_physaddr(apic.RegisterSlice, lapic_ptr);
 }

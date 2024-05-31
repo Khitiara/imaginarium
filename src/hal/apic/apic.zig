@@ -182,12 +182,19 @@ pub const LapicNmiPin = packed struct(u8) {
 };
 
 pub var lapic_ptr: RegisterSlice = undefined;
-pub var lapic_ids: [255]u8 = undefined;
+
+pub const Lapic = struct {
+    id: u8,
+    enabled: bool,
+    online_capable: bool,
+    uid: u8,
+    nmi_pins: LapicNmiPin,
+};
+
+pub const Lapics = @import("util").MultiBoundedArray(Lapic, 255);
+pub var lapics: Lapics = undefined;
+
 pub var lapic_indices: [255]u8 = undefined;
-pub var lapic_enabled: [255]bool = undefined;
-pub var lapic_online_capable: [255]bool = undefined;
-pub var lapic_nmi_pins: [255]LapicNmiPin = undefined;
-pub var processor_count: u8 = 0;
 pub var ioapics_buf = [_]?IOApic{null} ** @import("config").max_ioapics;
 pub var ioapics_count: u8 = 0;
 

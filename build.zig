@@ -297,7 +297,7 @@ pub fn build(b: *std.Build) !void {
 
     if (b.option(bool, "debugcon", "output ports to stdio") orelse true) {
         qemu.addArg("-debugcon");
-        qemu.addArg("file:aaa.txt");
+        qemu.addArg("file:aaa.ansi");
     }
     switch (parseQemuGdbOption(b.option([]const u8, "gdb", "use gdb with qemu"))) {
         .none => {},

@@ -14,31 +14,6 @@ pub usingnamespace switch (@import("builtin").cpu.arch) {
         pub fn phys_mem_base() isize {
             return undefined;
         }
-
-        pub const acpi_types: AcpiPerArchTypes = .{
-            .MsiAddressRegister = packed struct(u32) {
-                _1: u2 = 0,
-                dm: enum(u1) {
-                    physical = 0,
-                    logical = 1,
-                },
-                rh: enum(u1) {
-                    direct = 0,
-                    indirect = 1,
-                },
-                _2: u8 = 0,
-                destination_id: u8,
-                _3: u12 = 0xFEE,
-            },
-            .MsiDataRegister = packed struct(u64) {
-                vector: u8,
-                delivery_mode: apic.DeliveryMode,
-                _1: u3 = 0,
-                assert: bool,
-                trigger_mode: apic.TriggerMode,
-                _2: u48 = 0,
-            },
-        };
     },
     .x86_64 => struct {
         pub const x86_64 = @import("x86_64/x86_64.zig");
@@ -64,6 +39,31 @@ pub usingnamespace switch (@import("builtin").cpu.arch) {
         pub fn phys_mem_base() isize {
             return x86_64.pmm.phys_mapping_base;
         }
+
+        pub const acpi_types: AcpiPerArchTypes = .{
+            .MsiAddressRegister = packed struct(u32) {
+                _1: u2 = 0,
+                dm: enum(u1) {
+                    physical = 0,
+                    logical = 1,
+                    },
+                rh: enum(u1) {
+                    direct = 0,
+                    indirect = 1,
+                    },
+                _2: u8 = 0,
+                destination_id: u8,
+                _3: u12 = 0xFEE,
+                },
+            .MsiDataRegister = packed struct(u64) {
+                vector: u8,
+                delivery_mode: apic.DeliveryMode,
+                _1: u3 = 0,
+                assert: bool,
+                trigger_mode: apic.TriggerMode,
+                _2: u48 = 0,
+                },
+        };
     },
     else => |arch| @compileError("Unsupported architecture " ++ @tagName(arch)),
 };

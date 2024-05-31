@@ -10,6 +10,7 @@ pub const GlobalSdtLoadError = error{
     invalid_global_table_signature,
     unexpected_global_table_signature,
     invalid_global_table_alignment,
+    Overflow,
 };
 
 pub const GlobalSdtError = GlobalSdtLoadError || rsdp.RsdpError;
@@ -40,7 +41,7 @@ pub fn load_sdt_tableptr(table: *align(1) const anyopaque, expect_sig: ?sdt.Sign
             for (slice) |e| {
                 const t = ptr_from_physaddr(*align(1) const sdt.SystemDescriptorTableHeader, e);
                 switch (t.signature) {
-                    .APIC => madt.read_madt(@ptrCast(t)),
+                    .APIC => try madt.read_madt(@ptrCast(t)),
                     .MCFG => mcfg.set_table(@ptrCast(t)),
                     .HPET => hpet.read_hpet(@ptrCast(t)),
                     inline .RSDT, .XSDT => |s| log.err("Self-referential {s} ACPI root table, points to {s}", .{ @tagName(sig), @tagName(s) }),
