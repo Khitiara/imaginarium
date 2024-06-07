@@ -1,4 +1,4 @@
-const hal = @import("hal");
+const hal = @import("root").hal;
 
 pub const FramebufferInfo = extern struct {
     base: usize,

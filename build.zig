@@ -51,13 +51,6 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
     LazyPath,
     ?LazyPath,
 } {
-    const hal = b.createModule(.{
-        .root_source_file = b.path("src/hal/hal.zig"),
-    });
-    addImportFromTable(hal, "config");
-    addImportFromTable(hal, "util");
-    addImportFromTable(hal, "zuid");
-
     const exe_name = "imaginarium.krnl.b";
     const exe = b.addExecutable(.{
         .name = "imaginarium.elf",
@@ -72,6 +65,7 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
         // .single_threaded = true,
         .omit_frame_pointer = false,
     });
+    exe.build_id = .uuid;
     exe.pie = false;
     // exe.want_lto = false;
     b.verbose_llvm_ir = "agony.ir";
@@ -82,9 +76,8 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
 
     const exe_module = &exe.root_module;
     // exe_module.dwarf_format = .@"64";
-    exe_module.addImport("hal", hal);
 
-    exe.addAssemblyFile(b.path(b.fmt("src/hal/arch/{s}/ap_trampoline.S", .{@tagName(arch)})));
+    exe.addAssemblyFile(b.path(b.fmt("src/krnl/hal/arch/{s}/ap_trampoline.S", .{@tagName(arch)})));
 
     addImportFromTable(exe_module, "util");
     addImportFromTable(exe_module, "config");

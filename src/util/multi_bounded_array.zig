@@ -68,7 +68,14 @@ pub fn MultiBoundedArrayAligned(
                     .alignment = alignment,
                 };
             }
-            break :blk @Type(.{ .Struct = .{ .layout = .auto, .fields = &flds, .is_tuple = false, .decls = &.{} } });
+            break :blk @Type(.{
+                .Struct = .{
+                    .layout = .auto,
+                    .fields = &flds,
+                    .is_tuple = false,
+                    .decls = &.{},
+                },
+            });
         };
 
         bufs: Buffers = undefined,

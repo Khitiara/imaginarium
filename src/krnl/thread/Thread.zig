@@ -1,7 +1,7 @@
 const dispatcher = @import("../dispatcher/dispatcher.zig");
 const ob = @import("../objects/ob.zig");
 const util = @import("util");
-const hal = @import("hal");
+const hal = @import("root").hal;
 const arch = hal.arch;
 const std = @import("std");
 const queue = util.queue;
@@ -55,6 +55,7 @@ header: ob.Object,
 lock: dispatcher.SpinLockIRQL = .{ .set_irql = .dispatch },
 wait_type: WaitType = undefined,
 wait_list: queue.DoublyLinkedList(dispatcher.WaitBlock, "thread_wait_list") = .{},
+join: dispatcher.WaitHandle = .{},
 state: State = .init,
 priority: Priority,
 affinity: Affinity = .{},
@@ -64,28 +65,12 @@ stack: ?[]const u8 = null,
 tls: []const u8,
 tls_ptr: usize,
 
-const vtable: ob.ObjectFunctions = .{
-    .deinit = &ob_deinit,
-    .signal = &ob_signal,
-};
-
-fn ob_deinit(o: *const ob.Object, alloc: std.mem.Allocator) void {
-    const t: *@This() = @constCast(@fieldParentPtr("header", o));
-    t.deinit(alloc);
-}
-
-fn ob_signal(o: *ob.Object) void {
-    const t: *@This() = @constCast(@fieldParentPtr("header", o));
-    _ = t;
-}
-
 pub fn init2(alloc: std.mem.Allocator, tls_block: []u8, tls_ptr: usize, id: zuid.Uuid) !*@This() {
     const self = try alloc.create(@This());
     self.* = .{
         .header = .{
             .kind = .thread,
             .id = id,
-            .vtable = &vtable,
         },
         .priority = .p1,
         .tls = tls_block,

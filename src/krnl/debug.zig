@@ -1,5 +1,5 @@
 const std = @import("std");
-const hal = @import("hal");
+const hal = @import("root").hal;
 const arch = hal.arch;
 const puts = arch.puts;
 

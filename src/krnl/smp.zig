@@ -1,6 +1,6 @@
 const Thread = @import("thread/Thread.zig");
 const dispatcher = @import("dispatcher/dispatcher.zig");
-const hal = @import("hal");
+const hal = @import("root").hal;
 const arch = hal.arch;
 const apic = hal.apic;
 const std = @import("std");

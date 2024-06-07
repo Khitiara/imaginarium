@@ -1,12 +1,12 @@
-const arch = @import("arch.zig");
+const arch = @import("../arch/arch.zig");
 const serial = arch.serial;
 
 pub const msi = @import("msi.zig");
 pub const pcie = @import("pcie.zig");
 
 const IoLocation = struct {
-    const config_address: u16 = 0xCF8;
-    const config_data: u16 = 0xCFC;
+    pub const config_address: u16 = 0xCF8;
+    pub const config_data: u16 = 0xCFC;
 };
 
 pub const ConfigAddress = packed struct(u32) {

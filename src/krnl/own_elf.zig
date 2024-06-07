@@ -1,7 +1,7 @@
 const std = @import("std");
 const elf = std.elf;
 const config = @import("config");
-const hal = @import("hal");
+const hal = @import("root").hal;
 const arch = hal.arch;
 
 var elf_stream: std.io.FixedBufferStream([]const u8) = undefined;

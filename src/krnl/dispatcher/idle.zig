@@ -1,4 +1,4 @@
-const hal = @import("hal");
+const hal = @import("root").hal;
 const arch = hal.arch;
 const interrupts = @import("interrupts.zig");
 

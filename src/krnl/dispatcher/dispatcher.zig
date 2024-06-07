@@ -8,10 +8,7 @@ pub const Dpc = @import("Dpc.zig");
 pub const SpinLockIRQL = @import("SpinLockIRQL.zig");
 
 pub const WaitBlock = @import("WaitBlock.zig");
+pub const WaitHandle = @import("WaitHandle.zig");
 
 var global_dispatcher_lock: SpinLockIRQL = .{ .set_irql = .dispatch };
 var dispatch_queue: queue.PriorityQueue(Thread, "scheduler_hook", "priority", Thread.Priority) = .{};
-
-test {
-    _ = interrupts.irql_map;
-}

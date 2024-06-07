@@ -2,7 +2,7 @@ const std = @import("std");
 
 const bootelf = @import("bootelf.zig");
 
-const hal = @import("hal");
+pub const hal = @import("hal/hal.zig");
 const util = @import("util");
 
 const arch = hal.arch;
