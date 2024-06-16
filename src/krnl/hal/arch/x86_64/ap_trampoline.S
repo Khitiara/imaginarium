@@ -25,7 +25,7 @@ _trampoline_16:
     movw    %ax, %ss
     movl    $0x368, %eax
     movl    %eax, %cr4
-    movl    (0x8000 + (_ap_cr3 - ap_trampoline)), %eax
+    movl    (0x8000 + (_ap_cr3_ - ap_trampoline)), %eax
     movl    %eax, %cr3
     movl    $0x0C0000080, %ecx
     rdmsr
@@ -44,21 +44,21 @@ _trampoline_64:
     movw    %ax, %fs
     movw    %ax, %gs
     pushq   $16
-    pushq   (0x8000 + (_ap_stk - ap_trampoline))
+    pushq   (0x8000 + (_ap_stk_ - ap_trampoline))
     pushfq
     pushq   $8
-    pushq   (0x8000 + (_ap_land - ap_trampoline))
+    pushq   (0x8000 + (_ap_land_ - ap_trampoline))
     iretq
 .balign 16
 .global _ap_cr3
-_ap_cr3:
+_ap_cr3_:
     .4byte   0, 0
 .balign 16
 .global _ap_stk
-_ap_stk:
+_ap_stk_:
     .4byte   0, 0
 .balign 16
 .global _ap_land
-_ap_land:
+_ap_land_:
     .4byte   0, 0
 .section text

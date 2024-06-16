@@ -237,82 +237,85 @@ comptime {
     for (@typeInfo(SavedRegisters).Struct.fields) |reg| {
         // prepend to push and append to pop - earlier fields in the struct must be pushed later so prepend
         // matches the semantics required due to the stack pushing downward
-        push = "\n    pushq     %" ++ reg.name ++ push;
+        push = "\n     pushq     %" ++ reg.name ++ push;
         // and append to pop since it must reverse the push order
-        pop = pop ++ "    popq      %" ++ reg.name ++ "\n";
-        // each register is 8 bytes so we add 8 here
+        pop = pop ++ "     popq      %" ++ reg.name ++ "\n";
     }
 
     const isr_setup: []const u8 = push ++ // push all the saved registers
-        \\     mov      %gs, %rax # push the fs and gs segment selectors
-        \\     pushq    %rax
-        \\     mov      %fs, %rax
-        \\     pushq    %rax
-        \\     mov      %cr0, %rax # and the control registers
-        \\     pushq    %rax
-        \\     mov      %cr2, %rax
-        \\     pushq    %rax
-        \\     mov      %cr3, %rax
-        \\     pushq    %rax
-        \\     mov      %cr4, %rax
-        \\     pushq    %rax
-        \\     movq     $0xC0000100, %rcx
-        \\     rdmsr
-        \\     pushq    %rax
-        \\     movl     %edx, 4(%rsp)
-        \\     movq     $0xC0000101, %rcx
-        \\     rdmsr
-        \\     pushq    %rax
-        \\     movl     %edx, 4(%rsp)
-        \\     swapgs   # we saved the gs register selector so its safe to swap in the kernel gs base
+        \\      mov      %gs, %rax # push the fs and gs segment selectors
+        \\      pushq    %rax
+        \\      mov      %fs, %rax
+        \\      pushq    %rax
+        \\      mov      %cr0, %rax # and the control registers
+        \\      pushq    %rax
+        \\      mov      %cr2, %rax
+        \\      pushq    %rax
+        \\      mov      %cr3, %rax
+        \\      pushq    %rax
+        \\      mov      %cr4, %rax
+        \\      pushq    %rax
+        \\      movq     $0xC0000100, %rcx
+        \\      rdmsr
+        \\      pushq    %rax
+        \\      movl     %edx, 4(%rsp)
+        \\      movq     $0xC0000101, %rcx
+        \\      rdmsr
+        \\      pushq    %rax
+        \\      movl     %edx, 4(%rsp)
+        \\      swapgs   # we saved the gs register selector so its safe to swap in the kernel gs base
     ;
 
     const fake_isr: []const u8 =
-        \\ .global __isr_spoof__;
-        \\ .type __isr_spoof__, @function;
-        \\ __isr__spoof__:
-        \\     pushq    %rcx # push the handler address. this will be right above the frame
-        \\     movq     %ss, %rcx
-        \\     pushq    %rcx # normal interrupt frame things
-        \\     movq     %rsp, %rcx
-        \\     addq     $8, %rcx
-        \\     pushq    %rcx
-        \\     pushfq
-        \\     movq     %cs, %rcx
-        \\     pushq    %rcx
-        \\     pushq    %rdx
-        \\     pushq    $0 # no error code
-        \\     pushq    $0x20 # use vector 0x20 to set the IRQL if the handler uses the normal bits
+        \\  .global __isr_spoof__;
+        \\  .type __isr_spoof__, @function;
+        \\  __isr__spoof__:
+        \\      pushq    %rcx # push the handler address. this will be right above the frame
+        \\      movq     %ss, %rcx
+        \\      pushq    %rcx # normal interrupt frame things
+        \\      movq     %rsp, %rcx
+        \\      addq     $8, %rcx
+        \\      pushq    %rcx
+        \\      pushfq
+        \\      movq     %cs, %rcx
+        \\      pushq    %rcx
+        \\      pushq    %rdx
+        \\      pushq    $0 # no error code
+        \\      pushq    $0x20 # use vector 0x20 to set the IRQL if the handler uses the normal bits
     ++ isr_setup
     // movq sizeOf(interrupt_frame)(%rsp), %rdx ; all the pushes we made will place the target handler to just above the frame
-    ++ "\n     movq   " ++ std.fmt.comptimePrint("{d}", .{@sizeOf(RawInterruptFrame)}) ++ "(%rsp), %rdx\n" ++
-        \\     movq     %rsp, %rcx # rsp points to the bottom of the interrupt frame struct at this point so put that address in rcx
-        \\     callq    *%rdx
-        \\     jmp      __iret__
+    ++ "\n      movq   " ++ std.fmt.comptimePrint("{d}", .{@sizeOf(RawInterruptFrame)}) ++ "(%rsp), %rdx\n" ++
+        \\      movq     %rsp, %rcx # rsp points to the bottom of the interrupt frame struct at this point so put that address in rcx
+        \\      callq    *%rdx
+        \\      jmp      __iret__
     ;
 
     const code: []const u8 =
-        \\ .global __isr_common;
-        \\ .type __isr_common, @function;
-        \\ __isr_common:
+        \\  .global __isr_common;
+        \\  .type __isr_common, @function;
+        \\  __isr_common:
     ++ isr_setup
     // movsbq offsetOf(vector)(%rsp), %rdx ; all the pushes we made will place rsp regscnt bytes below the intnum
     // which we need in rdx for the indexed callq below
-    ++ "\n     movsbq   " ++ std.fmt.comptimePrint("{d}", .{@offsetOf(RawInterruptFrame, "vector")}) ++ "(%rsp), %rdx\n" ++
-        \\     movq     %rsp, %rcx # rsp points to the bottom of the interrupt frame struct at this point so put that address in rcx
-        \\     callq    *__isrs(, %rdx, 8)
-        \\ .global __iret__;
-        \\ .type __iret__, @function;
-        \\ __iret__:
-        \\     swapgs   # and swap back out the kernel gs so we dont override it
-        \\     add      $48, %rsp # skip the control registers
-        \\     popq     %rax # pop fs and gs segment selectors
-        \\     mov      %rax, %fs
-        \\     popq     %rax
-        \\     mov      %rax, %gs
-    ++ pop ++ // pop all the saved registers
-        \\     add      $16, %rsp
-        \\     iretq    # and return from interrupt
+    ++ "\n      movsbq   " ++ std.fmt.comptimePrint("{d}", .{@offsetOf(RawInterruptFrame, "vector")}) ++ "(%rsp), %rdx\n" ++
+        \\      movq     %rsp, %rcx # rsp points to the bottom of the interrupt frame struct at this point so put that address in rcx
+        \\      callq    *__isrs(, %rdx, 8)
+        \\  .global __iret__;
+        \\  .type __iret__, @function;
+        \\  __iret__:
+        \\      swapgs   # and swap back out the kernel gs so we dont override it
+        \\      add      $48, %rsp # skip the control registers
+        \\      popq     %rax # pop fs and gs segment selectors
+        \\      mov      %rax, %fs
+        \\      popq     %rax
+        \\      mov      %rax, %gs
+    ++ pop ++ // pop all the saved normal registers
+        \\      add      $8, %rsp
+        \\      movl     4(%rsp), %edx # pop FS_BASE
+        \\      popq     %rax
+        \\      movq     $0xC0000100, %rcx
+        \\      wrmsr
+        \\      iretq    # and return from interrupt
     ;
     asm (fake_isr ++ "\n" ++ code);
 }

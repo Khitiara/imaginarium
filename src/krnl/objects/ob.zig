@@ -3,6 +3,7 @@ const dispatcher = @import("../dispatcher/dispatcher.zig");
 const WaitBlock = dispatcher.WaitBlock;
 const util = @import("util");
 const queue = util.queue;
+const io = @import("../io.zig");
 const zuid = @import("zuid");
 const std = @import("std");
 const atomic = std.atomic;
@@ -20,15 +21,18 @@ pub const ObjectKind = enum(u7) {
     directory,
     semaphore,
     thread,
-    interrupt,
+    // interrupt,
     device,
     driver,
     _,
 
     pub inline fn ObjectType(self: ObjectKind) type {
         return switch (self) {
+            .directory => Directory,
             .thread => Thread,
             .semaphore => Thread.Semaphore,
+            .device => io.Device,
+            .driver => io.Driver,
         };
     }
 };
@@ -99,7 +103,11 @@ pub const Ref = opaque {
         switch (h.kind) {
             inline else => |typ| {
                 const T: type = typ.ObjectType();
-                return T.resolve(try h.ptr_assert(T), alloc, path, options);
+                if(@hasDecl(T, "resolve")) {
+                    return T.resolve(h.ptr_assert(T) catch unreachable, alloc, path, options);
+                } else {
+                    std.debug.panic("resolve undefined for {s}", .{@tagName(typ)});
+                }
             },
         }
     }
@@ -107,7 +115,7 @@ pub const Ref = opaque {
 
 pub const Object = struct {
     kind: ObjectKind,
-    id: zuid.Uuid align(8),
+    id: zuid.UUID align(8),
     /// kernel-mode users can copy a pointer using this refcount, thereby avoiding
     /// the need to potentially allocate in the handle table
     pointer_count: atomic.Value(u64) = atomic.Value(u64).init(0),

@@ -2,7 +2,7 @@ const std = @import("std");
 
 const bootelf = @import("bootelf.zig");
 
-pub const hal = @import("hal/hal.zig");
+const hal = @import("hal/hal.zig");
 const util = @import("util");
 
 const arch = hal.arch;
@@ -59,7 +59,7 @@ pub const os = struct {
 pub const std_options: std.Options = .{
     .logFn = logFn,
     .log_level = .debug,
-    // .crypto_always_getrandom = true,
+    .crypto_always_getrandom = true,
     .cryptoRandomSeed = arch.x86_64.rand.fill_secure,
 };
 
@@ -113,8 +113,8 @@ noinline fn main(ldr_info: *bootelf.BootelfData) !noreturn {
 
     const ext = util.extern_address;
 
-    const ap_trampoline_length = ext("__ap_trampoline_end") - ext("__ap_trampoline_begin");
-    const ap_trampoline_start = @as([*]const u8, @ptrFromInt(ext("__ap_trampoline_begin")));
+    const ap_trampoline_length = ext("__ap_trampoline_end__") - ext("__ap_trampoline_begin__");
+    const ap_trampoline_start = @as([*]const u8, @ptrFromInt(ext("__ap_trampoline_begin__")));
 
     log.debug("ap_trampoline: {*} (len {X})", .{ ap_trampoline_start, ap_trampoline_length });
 

@@ -1,7 +1,7 @@
 const dispatcher = @import("../dispatcher/dispatcher.zig");
 const ob = @import("../objects/ob.zig");
 const util = @import("util");
-const hal = @import("root").hal;
+const hal = @import("../hal/hal.zig");
 const arch = hal.arch;
 const std = @import("std");
 const queue = util.queue;
@@ -65,7 +65,7 @@ stack: ?[]const u8 = null,
 tls: []const u8,
 tls_ptr: usize,
 
-pub fn init2(alloc: std.mem.Allocator, tls_block: []u8, tls_ptr: usize, id: zuid.Uuid) !*@This() {
+pub fn init2(alloc: std.mem.Allocator, tls_block: []u8, tls_ptr: usize, id: zuid.UUID) !*@This() {
     const self = try alloc.create(@This());
     self.* = .{
         .header = .{
@@ -76,13 +76,15 @@ pub fn init2(alloc: std.mem.Allocator, tls_block: []u8, tls_ptr: usize, id: zuid
         .tls = tls_block,
         .tls_ptr = tls_ptr,
     };
-    @memset(tls_block, 0);
-    @memcpy(tls_block[tls_block.len - smp.krnl_tls_len - 8 ..][0..smp.initial_tls.len], smp.initial_tls);
-    @as(*align(1) *u8, @ptrCast(&tls_block[smp.krnl_tls_len])).* = &tls_block[smp.krnl_tls_len];
+    if(smp.krnl_tls_len > 0) {
+        @memset(tls_block, 0);
+        @memcpy(tls_block[tls_block.len - smp.krnl_tls_len - 8 ..][0..smp.initial_tls.len], smp.initial_tls);
+        @as(*align(1) *u8, @ptrCast(&tls_block[smp.krnl_tls_len])).* = &tls_block[smp.krnl_tls_len];
+    }
     return self;
 }
 
-pub fn init(alloc: std.mem.Allocator, id: zuid.Uuid) !*@This() {
+pub fn init(alloc: std.mem.Allocator, id: zuid.UUID) !*@This() {
     const tls = try alloc.alignedAlloc(u8, 1 << 12, smp.krnl_tls_len + 8);
     return try init2(alloc, tls, @intFromPtr(&tls[smp.krnl_tls_len]), id);
 }

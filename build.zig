@@ -64,13 +64,14 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
         .strip = false,
         // .single_threaded = true,
         .omit_frame_pointer = false,
+        .zig_lib_dir = b.path("zig-std/lib"),
     });
     exe.build_id = .uuid;
     exe.pie = false;
     // exe.want_lto = false;
     b.verbose_llvm_ir = "agony.ir";
     b.verbose_llvm_bc = "agony.bc";
-    const ir = exe.getEmittedLlvmIr();
+    // const ir = exe.getEmittedLlvmIr();
     // exe.export_memory = true;
     exe.entry = .disabled;
 
@@ -101,7 +102,7 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
 
     const krnloutdir = b.fmt("{s}/krnl/", .{@tagName(arch)});
     installFrom(b, &objcopy.step, krnlstep, objcopy.getOutput(), krnloutdir, b.dupe(exe_name));
-    installFrom(b, &exe.step, krnlstep, ir, "agony", "something.ir");
+    // installFrom(b, &exe.step, krnlstep, ir, "agony", "something.ir");
     if (objcopy.getOutputSeparatedDebug()) |dbg| {
         installFrom(b, &objcopy.step, krnlstep, dbg, krnloutdir, try std.mem.concat(b.allocator, u8, &.{ exe_name, ".debug" }));
     }
@@ -186,9 +187,8 @@ fn parseQemuGdbOption(v: ?[]const u8) QemuGdbOption {
     }
 }
 
-const bootelf = @import("bootelf");
 fn img(b: *std.Build, arch: Target.Cpu.Arch, krnlstep: *std.Build.Step, elf: LazyPath, symbols: ?LazyPath) !struct { *std.Build.Step, LazyPath } {
-    const ldr_img = try bootelf.make_bootelf(b);
+    const ldr_img = b.dependency("bootelf", .{}).namedWriteFiles("bootelf").getDirectory().path(b, "bootelf.bin");
     const disk_image = DiskImage.create(b, .{
         .basename = "drive.bin",
     });

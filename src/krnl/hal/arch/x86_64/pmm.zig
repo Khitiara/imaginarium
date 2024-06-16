@@ -70,10 +70,10 @@ const log = std.log.scoped(.pmm);
 
 // initialize the pmm. takes the physical address width and the memory map
 pub fn init(paddrwidth: u8, memmap: []memory.MemoryMapEntry) void {
-    phys_mapping_base_unsigned = @intFromPtr(@extern(*u64, .{ .name = "__base" }));
+    phys_mapping_base_unsigned = @intFromPtr(@extern(*u64, .{ .name = "__base__" }));
     phys_mapping_base = @bitCast(phys_mapping_base_unsigned);
     log.debug("initial physical mapping base 0x{X}", .{phys_mapping_base_unsigned});
-    kernel_size = std.mem.alignForwardLog2(@intFromPtr(@extern(*u64, .{ .name = "__kernel_end" })) - phys_mapping_base_unsigned, 24);
+    kernel_size = std.mem.alignForwardLog2(@intFromPtr(@extern(*u64, .{ .name = "__kernel_end__" })) - phys_mapping_base_unsigned, 24);
     log.debug("kernel physical end 0x{X}", .{kernel_size});
     // set our global physical address width
     phys_addr_width = paddrwidth;

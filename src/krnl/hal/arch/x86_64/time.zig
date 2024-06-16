@@ -17,6 +17,11 @@ pub fn init_timing() void {
         tsc_ratio = .{ .numerator = freqs.numerator, .denominator = freqs.denominator };
     }
     log.debug("TSC frequency information: {d} * {d} / {d} (itsc: {})", .{ freqs.core_freq, freqs.numerator, freqs.denominator, itsc });
+
+    if(freqs.denominator == 0 or freqs.numerator == 0) {
+        const freqs2 = cpuid.cpuid(.freq_2, {});
+        log.debug("CORE frequency information: core base {d}, core max {d}, bus ref {d}", .{ freqs2.core_base, freqs2.core_max, freqs2.bus_reference });
+    }
 }
 
 pub inline fn rdtsc() u64 {

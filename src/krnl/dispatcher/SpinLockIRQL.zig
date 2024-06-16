@@ -2,7 +2,7 @@
 
 const std = @import("std");
 const atomic = std.atomic;
-const hal = @import("root").hal;
+const hal = @import("../hal/hal.zig");
 const dispatcher = @import("dispatcher.zig");
 const ints = dispatcher.interrupts;
 

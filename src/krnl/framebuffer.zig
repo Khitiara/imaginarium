@@ -1,4 +1,4 @@
-const hal = @import("root").hal;
+const hal = @import("hal/hal.zig");
 const arch = hal.arch;
 const std = @import("std");
 

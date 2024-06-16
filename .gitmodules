@@ -1,0 +1,3 @@
+[submodule "zig-std"]
+	path = zig-std
+	url = git@github.com:Khitiara/zig.git

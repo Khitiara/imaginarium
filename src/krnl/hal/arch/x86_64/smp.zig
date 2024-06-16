@@ -64,7 +64,7 @@ pub fn init(comptime cb: anytype) @typeInfo(@TypeOf(cb)).Fn.return_type.? {
     var stk: usize = 0;
     for (apic.lapics.items(.id), 0..) |id, i| {
         if (id == bspid) {
-            ap_stacks[i] = @ptrFromInt(ext("__bootstrap_stack_bottom"));
+            ap_stacks[i] = @ptrFromInt(ext("__bootstrap_stack_bottom__"));
         } else if (apic.lapics.items(.enabled)[i] or apic.lapics.items(.online_capable)[i]) {
             ap_stacks[i] = &raw_ap_stacks[stk];
             stk += 1;
@@ -78,12 +78,12 @@ pub fn init(comptime cb: anytype) @typeInfo(@TypeOf(cb)).Fn.return_type.? {
 pub fn start_aps(cb: *const fn (std.mem.Allocator) void) !void {
     _cb = cb;
 
-    const ap_start = ext("__ap_trampoline_begin");
-    const ap_end = ext("__ap_trampoline_end");
+    const ap_start = ext("__ap_trampoline_begin__");
+    const ap_end = ext("__ap_trampoline_end__");
 
-    const lnd_ofs = @intFromPtr(ext("_ap_land")) - @intFromPtr(ap_start);
-    const stk_ofs = @intFromPtr(ext("_ap_stk")) - @intFromPtr(ap_start);
-    const cr3_ofs = @intFromPtr(ext("_ap_cr3")) - @intFromPtr(ap_start);
+    const lnd_ofs = @intFromPtr(ext("_ap_land_")) - @intFromPtr(ap_start);
+    const stk_ofs = @intFromPtr(ext("_ap_stk_")) - @intFromPtr(ap_start);
+    const cr3_ofs = @intFromPtr(ext("_ap_cr3_")) - @intFromPtr(ap_start);
 
     const ap_trampoline = ptr_from_physaddr([*]u8, 0x8000);
     @memcpy(ap_trampoline, ap_start[0..(@intFromPtr(ap_end) - @intFromPtr(ap_start))]);

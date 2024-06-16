@@ -298,9 +298,9 @@ pub inline fn CpuidOutputType(comptime leaf: Leaf, comptime subleaf: Subleaf(lea
             _: u32 = 0,
         },
         .freq_2 => extern struct {
-            core_base: u16 align(32),
-            core_max: u16 align(32),
-            bus_reference: u16 align(32),
+            core_base: u16 align(4),
+            core_max: u16 align(4),
+            bus_reference: u16 align(4),
             _: u32 = 0,
         },
         .capabilities => extern struct {

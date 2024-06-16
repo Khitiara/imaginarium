@@ -1,6 +1,6 @@
 const Thread = @import("thread/Thread.zig");
 const dispatcher = @import("dispatcher/dispatcher.zig");
-const hal = @import("root").hal;
+const hal = @import("hal/hal.zig");
 const arch = hal.arch;
 const apic = hal.apic;
 const std = @import("std");
@@ -9,7 +9,7 @@ const queue = util.queue;
 const zuid = @import("zuid");
 const atomic = std.atomic;
 
-pub const idle_thread_id = zuid.null_uuid;
+pub const idle_thread_id = zuid.UUID.nul;
 const log = std.log.scoped(.smp);
 
 pub const LocalControlBlock = struct {
@@ -81,14 +81,14 @@ pub fn allocate_lcbs(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator) !voi
     log.debug("APIC {x}, idx {x}, base 0x{x:0>16}->0x{x:0>16}", .{ id, idx, base, base + @offsetOf(LcbWrapper, "lcb") });
     set_lcb_base(base);
     try init(page_alloc, gpa, false);
-    const tls = try gpa.alloc(u8, krnl_tls_len + 8);
-    const tls_ptr = @intFromPtr(&tls[krnl_tls_len]);
-    hal_smp.set_tls(tls_ptr);
-    @memset(tls, 0);
-    @memcpy(tls[tls.len - krnl_tls_len - 8 ..][0..initial_tls.len], initial_tls);
-    @as(*align(1) *u8, @ptrCast(&tls[krnl_tls_len])).* = &tls[krnl_tls_len];
+    const tls, const tls_ptr = if (krnl_tls_len > 0) blk: {
+        const t = try gpa.alloc(u8, krnl_tls_len + 8);
+        const tp = @intFromPtr(&t[krnl_tls_len]);
+        hal_smp.set_tls(tp);
+        break :blk .{ t, tp };
+    } else .{ &.{}, 0 };
     // try @import("debug.zig").dump_hex(tls);
-    const t: *Thread = try Thread.init2(gpa, tls, tls_ptr, zuid.new.v4());
+    const t: *Thread = try Thread.init2(gpa, tls, tls_ptr, zuid.UUID.new.v4());
     t.stack = arch.smp.get_local_krnl_stack();
     lcb.*.current_thread = t;
     dispatcher.interrupts.enter_thread_ctx();

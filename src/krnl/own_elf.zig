@@ -1,7 +1,7 @@
 const std = @import("std");
 const elf = std.elf;
 const config = @import("config");
-const hal = @import("root").hal;
+const hal = @import("hal/hal.zig");
 const arch = hal.arch;
 
 var elf_stream: std.io.FixedBufferStream([]const u8) = undefined;
@@ -17,7 +17,9 @@ pub fn get_tls_size(size: *usize, initial_state: *[]const u8) !void {
             break phdr;
         }
     } else {
-        return error.no_tls_segment;
+        size.* = 0;
+        initial_state.* = &.{};
+        return;
     };
 
     size.* = tls_hdr.p_memsz;
@@ -27,6 +29,8 @@ pub fn get_tls_size(size: *usize, initial_state: *[]const u8) !void {
     const bytes = start[0..init_len];
     @memcpy(bytes, slice[tls_hdr.p_offset..][0..tls_hdr.p_filesz]);
     std.log.debug("initial tls at {*}, len {x}", .{ start, init_len });
-    try @import("debug.zig").dump_hex(bytes);
+    if(init_len > 0) {
+        try @import("debug.zig").dump_hex(bytes);
+    }
     initial_state.* = bytes;
 }
