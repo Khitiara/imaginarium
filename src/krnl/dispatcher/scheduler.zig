@@ -78,6 +78,16 @@ pub fn signal_wait_block(thread: *Thread, block: *WaitBlock) void {
 pub fn dispatch(frame: *arch.SavedRegisterState) void {
     const l: *smp.LocalControlBlock = lcb.*;
     // TODO: cross-processor thread scheduling fun times
+
+    // if we need to yield the thread then do that
+    if (l.force_yield) if (l.current_thread) |thread| {
+        smp.lcb.*.local_dispatcher_lock.lock();
+        defer smp.lcb.*.local_dispatcher_lock.unlock();
+        thread.set_state(.running, .assigned);
+        smp.lcb.*.local_dispatcher_queue.add(thread);
+    };
+    l.force_yield = false;
+
     // for now, just check if the current thread is lower prio then the head of the queue
     while (true) {
         if (l.standby_thread) |stby| {
