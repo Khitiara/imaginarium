@@ -48,30 +48,48 @@ pub fn schedule(thread: *Thread, processor: ?u8) void {
     l.local_dispatcher_queue.add(thread);
 }
 
-pub fn signal_wait_block(thread: *Thread, block: *WaitBlock) void {
+pub fn signal_wait_block(block: *WaitBlock) void {
+    const thread = block.thread;
     {
-        thread.lock.lock();
-        defer thread.lock.unlock();
+        // grab the wait lock
+        thread.wait_lock.lock();
+        defer thread.wait_lock.unlock();
         switch (thread.wait_type) {
             .all => {
+                // remove the block from the list
                 thread.wait_list.remove(block);
+                {
+                    // remove it from its handle's wait queue
+                    block.target.wait_lock.lock();
+                    defer block.target.wait_lock.unlock();
+                    block.target.wait_queue.remove(block);
+                }
+                // and destroy it
                 WaitBlock.pool.destroy(block);
-                if (thread.wait_list.impl.len != 0) return;
+                // if the thread is waiting on other stuff then return
+                if (thread.wait_list.length() != 0) return;
             },
             .any => {
+                // waiting on anything and something finished, clear the list and go
+                // clear returns the raw linked list but removes the tracking by the
+                // list struct so we can use it to iterate and free
                 var n = thread.wait_list.clear();
-                if (n) {
-                    while (n) |node| {
-                        n = node.next;
-                        WaitBlock.pool.destroy(node);
+                while (n) |node| {
+                    n = thread.WaitListType.ref_from_optional_node(node.thread_wait_list.next);
+                    {
+                        // remove it from its handle's wait queue
+                        node.target.wait_lock.lock();
+                        defer node.target.wait_lock.unlock();
+                        node.target.wait_queue.remove(node);
                     }
-                } else {
-                    @panic("Thread signalled to end WaitAny with nothing in wait list!");
+                    // and destroy the node
+                    WaitBlock.pool.destroy(node);
                 }
             },
         }
-        thread.set_state(.blocked, .ready);
     }
+    // if we got here then either it was a waitany or theres nothing left for the thread to wait on
+    thread.set_state(.blocked, .ready);
     schedule(thread, null);
 }
 

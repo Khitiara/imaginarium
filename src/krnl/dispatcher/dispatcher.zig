@@ -28,8 +28,8 @@ pub inline fn wait_for_single_object(handle: WaitHandle) !void {
 
 pub fn wait_for_multiple_objects(targets: []*WaitHandle, mode: Thread.WaitType) !void {
     if (@atomicRmw(?*Thread, &smp.lcb.*.current_thread, .Xchg, null, .acq_rel)) |thread| {
-        thread.lock.lock();
-        defer thread.lock.unlock();
+        thread.wait_lock.lock();
+        defer thread.wait_lock.unlock();
 
         thread.set_state(.running, .blocked);
         thread.wait_type = mode;

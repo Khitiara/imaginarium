@@ -37,7 +37,7 @@ pub const SavedThreadState = struct {
 };
 
 pub const WaitType = enum {
-    any,
+    await_ny,
     all,
 };
 
@@ -52,9 +52,9 @@ pub const Affinity = struct {
 };
 
 header: ob.Object,
-lock: dispatcher.SpinLockIRQL = .{ .set_irql = .dispatch },
+wait_lock: dispatcher.SpinLockIRQL = .{ .set_irql = .dispatch },
 wait_type: WaitType = undefined,
-wait_list: queue.DoublyLinkedList(dispatcher.WaitBlock, "thread_wait_list") = .{},
+wait_list: WaitListType = .{},
 join: dispatcher.WaitHandle = .{},
 state: State = .init,
 priority: Priority,
@@ -64,6 +64,8 @@ saved_state: SavedThreadState = undefined,
 stack: ?[]const u8 = null,
 tls: []const u8,
 tls_ptr: usize,
+
+const WaitListType = queue.DoublyLinkedList(dispatcher.WaitBlock, "thread_wait_list");
 
 pub fn init2(alloc: std.mem.Allocator, tls_block: []u8, tls_ptr: usize, id: zuid.UUID) !*@This() {
     const self = try alloc.create(@This());
