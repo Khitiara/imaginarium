@@ -21,3 +21,26 @@ pub fn yield() *Thread {
     smp.lcb.*.force_yield = true;
     interrupts.enter_scheduling();
 }
+
+pub fn wait_for_multiple_objects(targets: []*WaitHandle, mode: Thread.WaitType) !void {
+    if (@atomicRmw(?*Thread, &smp.lcb.*.current_thread, .Xchg, null, .acq_rel)) |thread| {
+        thread.lock.lock();
+        defer thread.lock.unlock();
+
+        thread.set_state(.running, .blocked);
+        thread.wait_type = mode;
+        for (targets) |wait_handle| {
+            wait_handle.wait_lock.lock();
+            defer wait_handle.wait_lock.unlock();
+
+            const block: *WaitBlock = try WaitBlock.pool.create();
+            block.thread = thread;
+            block.target = wait_handle;
+            wait_handle.wait_queue.add_back(block);
+            thread.wait_list.add_back(block);
+        }
+    } else {
+        @panic("Wait with no thread current");
+    }
+}
+

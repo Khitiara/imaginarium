@@ -19,13 +19,16 @@ pub const LocalControlBlock = struct {
     standby_thread: ?*Thread = null,
     idle_thread: *Thread = undefined,
     syscall_stack: usize = undefined,
-    local_dispatcher_queue: queue.PriorityQueue(Thread, "scheduler_hook", "priority", Thread.Priority) = .{},
+    local_dispatcher_queue: LocalDispatcherQueueType = .{},
     local_dispatcher_lock: dispatcher.SpinLockIRQL = .{ .set_irql = .dispatch },
     force_yield: bool = false,
     irql: hal.InterruptRequestPriority = .passive,
-    dpc_queue: queue.PriorityQueue(dispatcher.Dpc, "hook", "priority", dispatcher.Dpc.Priority) = .{},
+    dpc_queue: DpcQueueType = .{},
     dpc_lock: dispatcher.SpinLockIRQL = .{ .set_irql = .dpc },
     frame: ?*arch.SavedRegisterState = null,
+
+    pub const LocalDispatcherQueueType = queue.PriorityQueue(Thread, "scheduler_hook", "priority", Thread.Priority);
+    pub const DpcQueueType = queue.PriorityQueue(dispatcher.Dpc, "hook", "priority", dispatcher.Dpc.Priority);
 };
 
 const LcbWrapper = struct {
@@ -47,7 +50,7 @@ fn init(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator, wait_for_aps: boo
     const p: *LocalControlBlock = lcb.*;
     const base = arch.x86_64.msr.read(.gs_base);
     log.debug("in smp init, block gs:0x0000000000000008->0x{x:0>16} (gs_base 0x{x:0>16}), stack at {*}", .{ @intFromPtr(lcb.*), base, stack_slice });
-    log.debug("NOTE: addr 0x0000000000000008 in flat addressing is 0x{x:0>16}", .{@as(*usize, @ptrFromInt(8)).*});
+    // log.debug("NOTE: addr 0x0000000000000008 in flat addressing is 0x{x:0>16}", .{@as(*usize, @ptrFromInt(8)).*});
     p.syscall_stack = stack_top;
 
     p.idle_thread = try Thread.init(gpa, idle_thread_id);
@@ -75,8 +78,6 @@ pub fn allocate_lcbs(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator) !voi
                 .apic_id = apic.lapics.items(.id)[i],
             },
         };
-        // @memset(l.lcb.tls_block, 0);
-        // @memcpy(l.lcb.tls_block, initial_bit);
     }
 
     const id = apic.get_lapic_id();
