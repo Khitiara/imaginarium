@@ -53,12 +53,12 @@ pub fn signal_wait_block(thread: *Thread, block: *WaitBlock) void {
         thread.lock.lock();
         defer thread.lock.unlock();
         switch (thread.wait_type) {
-            .All => {
+            .all => {
                 thread.wait_list.remove(block);
                 WaitBlock.pool.destroy(block);
                 if (thread.wait_list.impl.len != 0) return;
             },
-            .Any => {
+            .any => {
                 var n = thread.wait_list.clear();
                 if (n) {
                     while (n) |node| {

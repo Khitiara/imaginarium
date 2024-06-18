@@ -22,6 +22,10 @@ pub fn yield() *Thread {
     interrupts.enter_scheduling();
 }
 
+pub inline fn wait_for_single_object(handle: WaitHandle) !void {
+    try wait_for_multiple_objects(&.{handle}, .all);
+}
+
 pub fn wait_for_multiple_objects(targets: []*WaitHandle, mode: Thread.WaitType) !void {
     if (@atomicRmw(?*Thread, &smp.lcb.*.current_thread, .Xchg, null, .acq_rel)) |thread| {
         thread.lock.lock();

@@ -37,8 +37,8 @@ pub const SavedThreadState = struct {
 };
 
 pub const WaitType = enum {
-    Any,
-    All,
+    any,
+    all,
 };
 
 pub const Affinity = struct {
