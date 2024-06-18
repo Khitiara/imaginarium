@@ -9,4 +9,5 @@ thread_wait_list: queue.DoublyLinkedNode,
 thread: *Thread,
 target: *dispatcher.WaitHandle,
 
-pub var pool: std.heap.MemoryPool(@This()) = undefined;
+pub const Pool = std.heap.MemoryPool(@This());
+pub var pool: Pool = undefined;

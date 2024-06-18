@@ -38,6 +38,9 @@ pub const lcb = hal_smp.lcb;
 pub var krnl_tls_len: usize = undefined;
 
 fn init(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator, wait_for_aps: bool) !void {
+    dispatcher.WaitBlock.pool = dispatcher.WaitBlock.Pool.init(gpa);
+    dispatcher.Dpc.pool = dispatcher.Dpc.Pool.init(gpa);
+
     const stack_slice = try page_alloc.alignedAlloc(u8, 4096, 8192);
     const stack_top = @intFromPtr(stack_slice.ptr) + 8192;
     const p: *LocalControlBlock = lcb.*;

@@ -88,16 +88,20 @@ pub fn Queue(comptime T: type, comptime field_name: []const u8) type {
     return struct {
         impl: UntypedQueue = .{},
 
-        inline fn length(self: *const @This()) usize {
+        pub inline fn length(self: *const @This()) usize {
             return self.impl.len;
         }
 
-        inline fn node_from_ref(ref: *T) *Node {
+        pub inline fn node_from_ref(ref: *T) *Node {
             return &@field(ref, field_name);
         }
 
-        inline fn ref_from_node(node: *Node) *T {
+        pub inline fn ref_from_node(node: *Node) *T {
             return @fieldParentPtr(field_name, node);
+        }
+
+        pub inline fn ref_from_optional_node(node: ?*Node) ?*T {
+            return @fieldParentPtr(field_name, node orelse return null);
         }
 
         pub fn append(self: *@This(), item: *T) void {
@@ -174,12 +178,16 @@ pub fn PriorityQueue(comptime T: type, comptime node_field_name: []const u8, com
         tails: Tails = Tails.initFill(null),
         len: usize = 0,
 
-        inline fn node_from_ref(ref: *T) *Node {
+        pub inline fn node_from_ref(ref: *T) *Node {
             return &@field(ref, node_field_name);
         }
 
-        inline fn ref_from_node(node: *Node) *T {
+        pub inline fn ref_from_node(node: *Node) *T {
             return @fieldParentPtr(node_field_name, node);
+        }
+
+        pub inline fn ref_from_optional_node(node: ?*Node) ?*T {
+            return @fieldParentPtr(node_field_name, node orelse return null);
         }
 
         inline fn node_prio(node: *Node) P {
@@ -367,16 +375,20 @@ pub fn DoublyLinkedList(comptime T: type, comptime field_name: []const u8) type 
     return struct {
         impl: UntypedDoublyLinkedList = .{},
 
-        inline fn length(self: *const @This()) usize {
+        pub inline fn length(self: *const @This()) usize {
             return self.impl.len;
         }
 
-        inline fn node_from_ref(ref: *T) *DoublyLinkedNode {
+        pub inline fn node_from_ref(ref: *T) *DoublyLinkedNode {
             return &@field(ref, field_name);
         }
 
-        inline fn ref_from_node(node: *DoublyLinkedNode) *T {
+        pub inline fn ref_from_node(node: *DoublyLinkedNode) *T {
             return @fieldParentPtr(field_name, node);
+        }
+
+        pub inline fn ref_from_optional_node(node: ?*DoublyLinkedNode) ?*T {
+            return @fieldParentPtr(field_name, node orelse return null);
         }
 
         pub fn add_back(self: *@This(), item: *T) void {
