@@ -48,14 +48,14 @@ pub fn schedule(thread: *Thread, processor: ?u8) void {
     l.local_dispatcher_queue.add(thread);
 }
 
-pub fn signal_wait_block(alloc: std.mem.Allocator, thread: *Thread, block: *WaitBlock) void {
+pub fn signal_wait_block(thread: *Thread, block: *WaitBlock) void {
     {
-        const key = thread.lock.lock();
-        defer thread.lock.unlock(key);
+        thread.lock.lock();
+        defer thread.lock.unlock();
         switch (thread.wait_type) {
             .All => {
                 thread.wait_list.remove(block);
-                alloc.destroy(block);
+                WaitBlock.pool.destroy(block);
                 if (thread.wait_list.impl.len != 0) return;
             },
             .Any => {
@@ -63,7 +63,7 @@ pub fn signal_wait_block(alloc: std.mem.Allocator, thread: *Thread, block: *Wait
                 if (n) {
                     while (n) |node| {
                         n = node.next;
-                        alloc.destroy(node);
+                        WaitBlock.pool.destroy(node);
                     }
                 } else {
                     @panic("Thread signalled to end WaitAny with nothing in wait list!");
