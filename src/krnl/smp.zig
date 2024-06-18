@@ -85,7 +85,7 @@ pub fn allocate_lcbs(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator) !voi
     log.debug("APIC {x}, idx {x}, base 0x{x:0>16}->0x{x:0>16}", .{ id, idx, base, base + @offsetOf(LcbWrapper, "lcb") });
     set_lcb_base(base);
     try init(page_alloc, gpa, false);
-    const tls, const tls_ptr = if (krnl_tls_len > 0) blk: {
+    const tls: []u8, const tls_ptr = if (krnl_tls_len > 0) blk: {
         const t = try gpa.alloc(u8, krnl_tls_len + 8);
         const tp = @intFromPtr(&t[krnl_tls_len]);
         hal_smp.set_tls(tp);

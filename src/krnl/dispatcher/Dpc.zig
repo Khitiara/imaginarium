@@ -9,7 +9,11 @@ pub const Pool = std.heap.MemoryPool(Dpc);
 pub var pool: Pool = undefined;
 
 priority: Priority,
-procid: u8,
 hook: util.queue.Node,
 routine: DpcFn,
 args: [3]?*anyopaque,
+
+pub fn run(self: *const Dpc) void {
+    // could just do this normally but the concat on args feels more readable imo
+    @call(.auto, self.routine, .{self} ++ util.tuple_from_array(self.args));
+}

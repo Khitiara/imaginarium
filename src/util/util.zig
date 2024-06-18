@@ -36,6 +36,18 @@ pub inline fn CopyPtrAttrs(
     });
 }
 
+pub inline fn ArrayTuple(comptime Arr: type) type {
+    return std.meta.Tuple(&(.{std.meta.Elem(Arr)} ** @typeInfo(Arr).Array.len));
+}
+
+pub inline fn tuple_from_array(arr: anytype) ArrayTuple(@TypeOf(arr)) {
+    var t: ArrayTuple(@TypeOf(arr)) = undefined;
+    inline for(arr, 0..) |elem, i| {
+        t[i] = elem;
+    }
+    return t;
+}
+
 pub inline fn PriorityEnum(comptime levels: comptime_int) type {
     var arr: [levels]std.builtin.Type.EnumField = undefined;
     for (0..levels) |l| {

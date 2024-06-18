@@ -76,13 +76,22 @@ inline fn set_irql_internal(level: InterruptRequestPriority, op: IrqlOp) Interru
 /// is guaranteed to correctly handle
 fn dispatch_interrupt_tail(frame: *arch.SavedRegisterState) void {
     arch.enable_interrupts();
-    var level = smp.lcb.*.irql;
+    var level = lcb.*.irql;
     // higher IRQLs do processing through ISRs rather than fixed logic. loop through to process each IRQL in turn
     while (@intFromEnum(level) > @intFromEnum(InterruptRequestPriority.dpc)) : (level = set_irql_internal(level.lower(), .lower)) {}
 
     // IRQL:DPC
     {
-        // TODO: run any queued DPCs
+        var node = blk: {
+            lcb.*.dpc_lock.lock();
+            defer lcb.*.dpc_lock.unlock();
+            break :blk lcb.*.dpc_queue.clear();
+        };
+        while (node) |dpc| {
+            node = smp.LocalControlBlock.DpcQueueType.ref_from_optional_node(dpc.hook.next);
+            dpc.run();
+            dispatcher.Dpc.pool.destroy(dpc);
+        }
         set_irql(lcb.*.irql.lower(), .lower);
     }
 
