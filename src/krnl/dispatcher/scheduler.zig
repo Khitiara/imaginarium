@@ -96,6 +96,7 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
                     cur.set_state(.running, .assigned);
                     frame.* = stby.saved_state.registers;
                     l.current_thread = stby;
+                    stby.affinity.last_processor = l.apic_id;
                     stby.set_state(.standby, .running);
                     smp.set_tls_base(stby);
 
