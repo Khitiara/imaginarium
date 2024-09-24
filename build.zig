@@ -201,7 +201,7 @@ fn img(b: *std.Build, arch: Target.Cpu.Arch, krnlstep: *std.Build.Step, elf: Laz
     const step = b.step("img", "create bootable disk image for the target");
     installFrom(b, &disk_image.step, step, disk_image.getOutput(), b.fmt("{s}/img", .{@tagName(arch)}), disk_image.basename);
 
-    const copyToTestDir = b.addNamedWriteFiles("copy_to_test_dir");
+    const copyToTestDir = b.addUpdateSourceFiles();
     copyToTestDir.step.dependOn(&disk_image.step);
     copyToTestDir.step.dependOn(krnlstep);
     copyToTestDir.addCopyFileToSource(disk_image.getOutput(), "test/drive.bin");

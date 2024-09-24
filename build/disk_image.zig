@@ -48,7 +48,7 @@ pub fn getOutput(self: *const DiskImage) std.Build.LazyPath {
     return .{ .generated = .{ .file = &self.output_file } };
 }
 
-fn make(step: *Step, prog_node: std.Progress.Node) anyerror!void {
+fn make(step: *Step, opts: Step.MakeOptions) anyerror!void {
     const b = step.owner;
     const self: *DiskImage = @fieldParentPtr("step", step);
 
@@ -72,7 +72,7 @@ fn make(step: *Step, prog_node: std.Progress.Node) anyerror!void {
         return;
     }
 
-    prog_node.setEstimatedTotalItems(self.sources.items.len);
+    opts.progress_node.setEstimatedTotalItems(self.sources.items.len);
 
     const digest = man.final();
     const cache_path = "o" ++ fs.path.sep_str ++ digest;
@@ -104,7 +104,7 @@ fn make(step: *Step, prog_node: std.Progress.Node) anyerror!void {
         const read = try fs.openFileAbsolute(full_src_path, .{});
         defer read.close();
         try write.writeFileAll(read, .{});
-        prog_node.completeOne();
+        opts.progress_node.completeOne();
     }
 
     try step.writeManifest(&man);

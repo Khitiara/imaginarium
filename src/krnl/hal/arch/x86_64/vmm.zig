@@ -50,8 +50,8 @@ pub fn init(memmap: []memory.MemoryMapEntry) !void {
     phys_mapping_range_bits = if (paging.using_5_level_paging) @min(paging.features.maxphyaddr, 48) else @min(paging.features.maxphyaddr, 39);
     log.debug("phys mapping range of {d} bits", .{phys_mapping_range_bits});
     try paging.map_range(0, idmap_base, @as(usize, 1) << phys_mapping_range_bits);
-    log.info("mapping bottom {X} at 0x{X}", .{ pmm.kernel_size, @as(usize, @bitCast(@as(isize, -1 << 31))) });
-    try paging.map_range(0, -1 << 31, pmm.kernel_size);
+    // log.info("mapping bottom {X} at 0x{X}", .{ pmm.kernel_size, @as(usize, @bitCast(@as(isize, -1 << 31))) });
+    // try paging.map_range(0, -1 << 31, pmm.kernel_size);
     log.info("mapping bottom 4M at 0", .{});
     try paging.map_range(0, 0, 1 << 22);
     // dump_paging_debug();
