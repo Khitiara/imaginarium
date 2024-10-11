@@ -41,7 +41,7 @@ next_phdr:
   dec ebp
   jnz do_phdr
 
-  mov ecx, bootelf
-  mov dword[rcx], 0xb007e1f ; Bootelf version 0
+  mov edi, bootelf
+  mov dword[rdi], 0xb007e1f ; Bootelf version 0
 
   jmp [rbx + elf_entry]

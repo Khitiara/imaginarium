@@ -28,7 +28,7 @@ fn disable_8259pic() void {
     serial.io_wait();
 }
 
-fn unhandled_interrupt(frame: *idt.InterruptFrame(u64)) callconv(.Win64) noreturn {
+fn unhandled_interrupt(frame: *idt.InterruptFrame(u64)) callconv(.SysV) noreturn {
     if (std.enums.tagName(idt.Exception, frame.vector.exception)) |name| {
         log.err("unhandled interrupt: 0x{X: <2} ({s}) --- {}", .{ @intFromEnum(frame.vector.exception), name, frame });
     } else {
@@ -38,9 +38,9 @@ fn unhandled_interrupt(frame: *idt.InterruptFrame(u64)) callconv(.Win64) noretur
     @panic("UNHANDLED EXCEPTION");
 }
 
-fn spurious(_: *idt.InterruptFrame(u64)) callconv(.Win64) void {}
+fn spurious(_: *idt.InterruptFrame(u64)) callconv(.SysV) void {}
 
-fn breakpoint(frame: *idt.InterruptFrame(u64)) callconv(.Win64) void {
+fn breakpoint(frame: *idt.InterruptFrame(u64)) callconv(.SysV) void {
     std.log.debug("breakpoint: {}", .{frame});
 }
 

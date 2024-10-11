@@ -92,7 +92,7 @@ pub const InterruptGateDescriptor = packed struct(u128) {
 };
 
 const RawHandler = *const fn () callconv(.Naked) void;
-const InterruptHandler = *const fn (*RawInterruptFrame) callconv(.Win64) void;
+const InterruptHandler = *const fn (*RawInterruptFrame) callconv(.SysV) void;
 
 pub const SelectorIndexCode = packed struct(u64) {
     pub const Entry = union(enum) {
@@ -285,7 +285,7 @@ comptime {
     ++ isr_setup
     // movq sizeOf(interrupt_frame)(%rsp), %rdx ; all the pushes we made will place the target handler to just above the frame
     ++ "\n      movq   " ++ std.fmt.comptimePrint("{d}", .{@sizeOf(RawInterruptFrame)}) ++ "(%rsp), %rdx\n" ++
-        \\      movq     %rsp, %rcx # rsp points to the bottom of the interrupt frame struct at this point so put that address in rcx
+        \\      movq     %rsp, %rdi # rsp points to the bottom of the interrupt frame struct at this point so put that address in rdi
         \\      callq    *%rdx
         \\      jmp      __iret__
     ;
@@ -298,7 +298,7 @@ comptime {
     // movsbq offsetOf(vector)(%rsp), %rdx ; all the pushes we made will place rsp regscnt bytes below the intnum
     // which we need in rdx for the indexed callq below
     ++ "\n      movsbq   " ++ std.fmt.comptimePrint("{d}", .{@offsetOf(RawInterruptFrame, "vector")}) ++ "(%rsp), %rdx\n" ++
-        \\      movq     %rsp, %rcx # rsp points to the bottom of the interrupt frame struct at this point so put that address in rcx
+        \\      movq     %rsp, %rdi # rsp points to the bottom of the interrupt frame struct at this point so put that address in rdi
         \\      callq    *__isrs(, %rdx, 8)
         \\  .global __iret__;
         \\  .type __iret__, @function;

@@ -9,9 +9,9 @@ const InterruptRequestPriority = hal.InterruptRequestPriority;
 const InterruptVector = hal.InterruptVector;
 const lcb = smp.lcb;
 
-pub inline fn handle_interrupt(handler: fn (*arch.SavedRegisterState) void) fn (*arch.SavedRegisterState) callconv(.Win64) void {
+pub inline fn handle_interrupt(handler: fn (*arch.SavedRegisterState) void) fn (*arch.SavedRegisterState) callconv(.SysV) void {
     return struct {
-        fn f(frame: *arch.SavedRegisterState) callconv(.Win64) void {
+        fn f(frame: *arch.SavedRegisterState) callconv(.SysV) void {
             const is_root_interrupt: bool = lcb.*.frame == null;
             defer if (is_root_interrupt) dispatch_interrupt_tail(frame);
             lcb.*.frame = lcb.*.frame orelse frame;
@@ -29,7 +29,7 @@ pub noinline fn enter_scheduling() void {
     arch.x86_64.idt.spoof_isr(&enter_scheduling_2);
 }
 
-fn enter_thread_ctx_1(frame: *arch.SavedRegisterState) callconv(.Win64) void {
+fn enter_thread_ctx_1(frame: *arch.SavedRegisterState) callconv(.SysV) void {
     std.log.debug("entering thread frame, RIP=0x{x:0>16}", .{frame.rip});
     lcb.*.current_thread.?.saved_state.registers = frame.*;
     std.log.debug("returning to thread {{{s}}}", .{lcb.*.current_thread.?.header.id});
