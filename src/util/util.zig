@@ -7,6 +7,8 @@ pub const queue = @import("queue.zig");
 pub const multi_bounded_array = @import("multi_bounded_array.zig");
 pub const MultiBoundedArray = multi_bounded_array.MultiBoundedArray;
 pub const MultiBoundedArrayAligned = multi_bounded_array.MultiBoundedArrayAligned;
+// pub const unwrapArgumentTuple = @import("unwrapArgumentTuple.zig");
+// pub const errMarshal = @import("errmarshal.zig");
 
 const std = @import("std");
 const lower_string = std.ascii.lowerString;
@@ -167,4 +169,6 @@ test {
     _ = lower_string_comptime;
     _ = checksum.add_checksum;
     _ = signExtend;
+    // _ = unwrapArgumentTuple;
+    // std.testing.refAllDecls(errMarshal);
 }
