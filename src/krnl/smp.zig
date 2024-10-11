@@ -39,7 +39,7 @@ pub var lcbs: []LcbWrapper = undefined;
 const hal_smp = arch.smp.SmpUtil(LcbWrapper, LocalControlBlock, &.{ "lcb", "self" });
 pub const lcb = hal_smp.lcb;
 
-pub var krnl_tls_len: usize = undefined;
+pub const krnl_tls_len: usize = 0;
 
 fn init(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator, wait_for_aps: bool) !void {
     dispatcher.WaitBlock.pool = dispatcher.WaitBlock.Pool.init(gpa);
@@ -61,14 +61,14 @@ fn init(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator, wait_for_aps: boo
     }
 }
 
-pub fn set_tls_base(thread: *const Thread) void {
-    hal_smp.set_tls(thread.tls_ptr);
-}
+// pub fn set_tls_base(thread: *const Thread) void {
+//     hal_smp.set_tls(thread.tls_ptr);
+// }
 
-pub var initial_tls: []const u8 = undefined;
+// pub var initial_tls: []const u8 = undefined;
 
 pub fn allocate_lcbs(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator) !void {
-    try @import("own_elf.zig").get_tls_size(&krnl_tls_len, &initial_tls);
+    // try @import("own_elf.zig").get_tls_size(&krnl_tls_len, &initial_tls);
 
     lcbs = try page_alloc.alignedAlloc(LcbWrapper, 1 << 12, apic.lapics.len);
     for (lcbs, 0..) |*l, i| {

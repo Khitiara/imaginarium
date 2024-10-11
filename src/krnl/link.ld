@@ -7,7 +7,7 @@ PHDRS
   stk       PT_LOAD FLAGS((1 << 2) | (1 << 1) /* Readable | Writeable  */);
   data      PT_LOAD FLAGS((1 << 2) | (1 << 1) /* Readable | Writeable  */);
   rodata    PT_LOAD FLAGS((1 << 2)            /* Readable */);
-  tls       PT_TLS  FLAGS((1 << 2) | (1 << 1) /* Readable | Writeable  */);
+  /*tls       PT_TLS  FLAGS((1 << 2) | (1 << 1) );*/
 }
 
 
@@ -48,6 +48,7 @@ SECTIONS
         *(.data*)
     } :data
 
+/*
     . = ALIGN(4K);
     __tls_start__ = .;
     __tls_data_start__ = .;
@@ -60,6 +61,7 @@ SECTIONS
         *(.tbss*)
     } : tls
     __tls_end__ = .;
+ */
 
     . = ALIGN(4K);
 

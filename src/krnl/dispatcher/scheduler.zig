@@ -97,7 +97,7 @@ inline fn set_running(l: *smp.LocalControlBlock, thread: *Thread, expected: Thre
     l.current_thread = thread;
     thread.set_state(expected, .running);
     frame.* = thread.saved_state.registers;
-    smp.set_tls_base(thread);
+    // smp.set_tls_base(thread);
 }
 
 pub fn dispatch(frame: *arch.SavedRegisterState) void {
