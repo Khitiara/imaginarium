@@ -141,7 +141,7 @@ pub fn enlarge_mapped_physical(memmap: []memory.MemoryMapEntry, new_base: isize)
 pub fn ptr_from_physaddr(Ptr: type, paddr: usize) Ptr {
     // if the phys addr is 0 and the pointer is optional then its null. used mainly in the pmm to mark the end of the
     // free block lists
-    if (@as(std.builtin.TypeId, @typeInfo(Ptr)) == .Optional and paddr == 0) {
+    if (@as(std.builtin.TypeId, @typeInfo(Ptr)) == .optional and paddr == 0) {
         return null;
     }
     return @ptrFromInt(paddr +% phys_mapping_base_unsigned);

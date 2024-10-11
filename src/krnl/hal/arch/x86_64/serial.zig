@@ -115,17 +115,17 @@ pub fn in_serial(port: u16, comptime reg: Register) RegisterContentsRead(reg) {
 
 inline fn safe_port_type(T: type) void {
     switch (@typeInfo(T)) {
-        .Union => |u| if (u.layout == .@"packed") {
+        .@"union" => |u| if (u.layout == .@"packed") {
             inline for (u.fields) |f| {
                 safe_port_type(f.type);
             }
             return;
         },
-        .Struct => |s| if (s.layout == .@"packed") {
+        .@"struct" => |s| if (s.layout == .@"packed") {
             safe_port_type(s.backing_integer.?);
             return;
         },
-        .Int => |i| switch (i.bits) {
+        .int => |i| switch (i.bits) {
             8, 16, 32 => return,
             else => {},
         },

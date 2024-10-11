@@ -39,7 +39,7 @@ pub inline fn CopyPtrAttrs(
 }
 
 pub inline fn ArrayTuple(comptime Arr: type) type {
-    return std.meta.Tuple(&(.{std.meta.Elem(Arr)} ** @typeInfo(Arr).Array.len));
+    return std.meta.Tuple(&(.{std.meta.Elem(Arr)} ** @typeInfo(Arr).array.len));
 }
 
 pub inline fn tuple_from_array(arr: anytype) ArrayTuple(@TypeOf(arr)) {
@@ -56,7 +56,7 @@ pub inline fn PriorityEnum(comptime levels: comptime_int) type {
         arr[l] = .{ .name = std.fmt.comptimePrint("p{d}", .{levels - l}), .value = l };
     }
     return @Type(.{
-        .Enum = .{
+        .@"enum" = .{
             .is_exhaustive = true,
             .fields = &arr,
             .decls = &.{},

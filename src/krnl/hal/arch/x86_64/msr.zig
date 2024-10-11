@@ -39,7 +39,7 @@ fn MsrValueType(comptime msr: Msr) type {
 }
 
 inline fn isKnownMsr(msr: Msr) bool {
-    return inline for (@typeInfo(Msr).Enum.fields) |f| {
+    return inline for (@typeInfo(Msr).@"enum".fields) |f| {
         if (@intFromEnum(msr) == f.value) break true;
     } else false;
 }

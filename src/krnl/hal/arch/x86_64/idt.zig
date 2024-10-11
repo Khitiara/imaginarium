@@ -234,7 +234,7 @@ comptime {
     // and the pops
     var pop: []const u8 = "\n";
 
-    for (@typeInfo(SavedRegisters).Struct.fields) |reg| {
+    for (@typeInfo(SavedRegisters).@"struct".fields) |reg| {
         // prepend to push and append to pop - earlier fields in the struct must be pushed later so prepend
         // matches the semantics required due to the stack pushing downward
         push = "\n     pushq     %" ++ reg.name ++ push;
@@ -341,7 +341,7 @@ fn make_handler(comptime int: Interrupt) RawHandler {
         comptime {
             // idk if this is strictly required but i was having a bit of a panic not being able to find the dang thing
             // in the disassembly, and at least with this i can confirm it works
-            @export(handler, .{ .name = std.fmt.comptimePrint("__isr_{x:0>2}", .{@as(u8, @bitCast(int))}), .linkage = .strong });
+            @export(&handler, .{ .name = std.fmt.comptimePrint("__isr_{x:0>2}", .{@as(u8, @bitCast(int))}), .linkage = .strong });
         }
     }.handler;
 }

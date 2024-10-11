@@ -339,9 +339,9 @@ pub inline fn CpuidOutputType(comptime leaf: Leaf, comptime subleaf: Subleaf(lea
 
 inline fn normalize_subleaf(comptime leaf: Leaf, comptime subleaf: Subleaf(leaf)) u32 {
     switch (@typeInfo(Subleaf(leaf))) {
-        .Int => return @intCast(subleaf),
-        .Enum => return @intFromEnum(subleaf),
-        .Void => return 0,
+        .int => return @intCast(subleaf),
+        .@"enum" => return @intFromEnum(subleaf),
+        .void => return 0,
         else => unreachable,
     }
 }

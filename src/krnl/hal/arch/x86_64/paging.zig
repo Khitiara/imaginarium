@@ -256,9 +256,9 @@ var cr3_new: ctrl_registers.ControlRegisterValueType(.cr3) = undefined;
 
 fn get_or_create_root_table() !Table(entries.PML45E) {
     if (pgtbl) |tbl| {
+        @branchHint(.likely);
         return tbl;
     }
-    @setCold(true);
     cr3_new = ctrl_registers.read(.cr3);
     pgtbl = try create_page_table(entries.PML45E, &cr3_new);
     root_physaddr = cr3_new.get_phys_addr();

@@ -20,12 +20,13 @@ pub inline fn supports_x2apic() bool {
 
 pub inline fn check_enable_x2apic() bool {
     if (x2apic_enabled) {
+        @branchHint(.likely);
         return true;
     }
     if (!supports_x2apic()) {
+        @branchHint(.unlikely);
         return false;
     }
-    @setCold(true);
     enable_x2apic();
     return true;
 }
@@ -46,10 +47,10 @@ const RegisterId = apic.RegisterId;
 const RegisterType = apic.RegisterType;
 
 pub fn read_apic_register(comptime register: RegisterId) RegisterType(register) {
-    return @bitCast(@as(@Type(.{ .Int = .{ .signedness = .unsigned, .bits = @bitSizeOf(RegisterType(register)) } }), @truncate(msr.read_unsafe(0x800 + @as(u16, @intFromEnum(register))))));
+    return @bitCast(@as(@Type(.{ .int = .{ .signedness = .unsigned, .bits = @bitSizeOf(RegisterType(register)) } }), @truncate(msr.read_unsafe(0x800 + @as(u16, @intFromEnum(register))))));
 }
 
 pub fn write_apic_register(comptime register: RegisterId, value: RegisterType(register)) void {
-    const v: u64 = @as(@Type(.{ .Int = .{ .signedness = .unsigned, .bits = @bitSizeOf(@TypeOf(value)) } }), @bitCast(value));
+    const v: u64 = @as(@Type(.{ .int = .{ .signedness = .unsigned, .bits = @bitSizeOf(@TypeOf(value)) } }), @bitCast(value));
     msr.write_unsafe(0x800 + @intFromEnum(register), v);
 }

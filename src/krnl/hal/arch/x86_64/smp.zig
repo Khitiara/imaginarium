@@ -55,7 +55,7 @@ var bspid: u8 = undefined;
 
 const log = std.log.scoped(.@"hal.smp");
 
-pub fn init(comptime cb: anytype) @typeInfo(@TypeOf(cb)).Fn.return_type.? {
+pub fn init(comptime cb: anytype) @typeInfo(@TypeOf(cb)).@"fn".return_type.? {
     bspid = apic.get_lapic_id();
     const alloc = vmm.raw_page_allocator.allocator();
     const gpa = vmm.gpa.allocator();

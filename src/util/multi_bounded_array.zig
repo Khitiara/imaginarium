@@ -36,8 +36,8 @@ pub fn MultiBoundedArrayAligned(
         const Len = math.IntFittingRange(0, buffer_capacity);
 
         const Elem = switch (@typeInfo(T)) {
-            .Struct => T,
-            .Union => |u| struct {
+            .@"struct" => T,
+            .@"union" => |u| struct {
                 pub const Bare =
                     @Type(.{ .Union = .{
                     .layout = u.layout,
@@ -85,7 +85,7 @@ pub fn MultiBoundedArrayAligned(
                 };
             }
             break :blk @Type(.{
-                .Struct = .{
+                .@"struct" = .{
                     .layout = .auto,
                     .fields = &flds,
                     .is_tuple = false,
@@ -119,8 +119,8 @@ pub fn MultiBoundedArrayAligned(
 
         pub fn set(self: *Self, index: Len, elem: T) void {
             const e = switch (@typeInfo(T)) {
-                .Struct => elem,
-                .Union => Elem.fromT(elem),
+                .@"struct" => elem,
+                .@"union" => Elem.fromT(elem),
                 else => unreachable,
             };
             inline for (fields, 0..) |field_info, i| {
