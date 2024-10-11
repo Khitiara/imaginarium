@@ -6,7 +6,7 @@ const cpuid = @import("cpuid.zig");
 const pmm = @import("pmm.zig");
 const ctrl_registers = @import("ctrl_registers.zig");
 
-pub const PagingFeatures = packed struct {
+pub const PagingFeatures = struct {
     maxphyaddr: u8,
     linear_address_width: u8,
     five_level_paging: bool,
