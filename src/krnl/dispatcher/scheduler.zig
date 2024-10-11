@@ -93,6 +93,13 @@ pub fn signal_wait_block(block: *WaitBlock) void {
     schedule(thread, null);
 }
 
+inline fn set_running(l: *smp.LocalControlBlock, thread: *Thread, expected: Thread.State, frame: *arch.SavedRegisterState) void {
+    l.current_thread = thread;
+    thread.set_state(expected, .running);
+    frame.* = thread.saved_state.registers;
+    smp.set_tls_base(thread);
+}
+
 pub fn dispatch(frame: *arch.SavedRegisterState) void {
     const l: *smp.LocalControlBlock = lcb.*;
     // TODO: cross-processor thread scheduling fun times
@@ -103,6 +110,7 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
         defer smp.lcb.*.local_dispatcher_lock.unlock();
         thread.set_state(.running, .assigned);
         smp.lcb.*.local_dispatcher_queue.add(thread);
+        l.current_thread = null;
     };
     l.force_yield = false;
 
@@ -123,10 +131,7 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
                     cur.saved_state.registers = frame.*;
                     cur.set_state(.running, .assigned);
                     frame.* = stby.saved_state.registers;
-                    l.current_thread = stby;
-                    stby.affinity.last_processor = l.apic_id;
-                    stby.set_state(.standby, .running);
-                    smp.set_tls_base(stby);
+                    set_running(l, stby, .standby, frame);
 
                     // grab the lock a bit early to put the old running thread into the queue
                     l.local_dispatcher_lock.lock();
@@ -156,12 +161,7 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
                 // nothing running but we have a standby, so move that up to run
                 l.local_dispatcher_lock.lock();
                 defer l.local_dispatcher_lock.unlock();
-                l.current_thread = stby;
-                stby.set_state(.standby, .running);
-                smp.set_tls_base(stby);
-                // and set up the LCB to restore the saved register state of the thread
-                // the caller should have the lcb already set up with a frame pointer
-                frame.* = stby.saved_state.registers;
+                set_running(l, stby, .standby, frame);
                 // move the queue head up to standby
                 if (l.local_dispatcher_queue.dequeue()) |new_stby| {
                     l.standby_thread = new_stby;
@@ -184,10 +184,7 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
                 // if theres nothing running then just stick the idle thread in
                 // and then return with something set to run
                 if (l.current_thread == null) {
-                    l.current_thread = l.idle_thread;
-                    l.idle_thread.set_state(.assigned, .running);
-                    smp.set_tls_base(l.idle_thread);
-                    frame.* = l.idle_thread.saved_state.registers;
+                    set_running(l, l.idle_thread, .assigned, frame);
                 }
                 return;
             }
