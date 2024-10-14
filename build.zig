@@ -78,7 +78,7 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
     const exe_module = &exe.root_module;
     // exe_module.dwarf_format = .@"64";
 
-    exe.addAssemblyFile(b.path(b.fmt("src/krnl/hal/arch/{s}/ap_trampoline.S", .{@tagName(arch)})));
+    exe.addAssemblyFile(b.path("src/krnl/hal/arch/ap_trampoline.S"));
 
     addImportFromTable(exe_module, "util");
     addImportFromTable(exe_module, "config");

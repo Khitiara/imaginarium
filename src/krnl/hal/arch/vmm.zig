@@ -3,10 +3,10 @@ const paging = @import("paging.zig");
 const entries = paging.entries;
 const std = @import("std");
 const ctrl_registers = @import("ctrl_registers.zig");
-const mcfg = @import("../../acpi/mcfg.zig");
+const mcfg = @import("../acpi/mcfg.zig");
 
-const apic = @import("../../apic/apic.zig");
-const memory = @import("../../memory.zig");
+const apic = @import("../apic/apic.zig");
+const memory = @import("../memory.zig");
 
 // the base where we plan to id-map physical memory
 const idmap_base_4lvl: isize = -1 << 45;

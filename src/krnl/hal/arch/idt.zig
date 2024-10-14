@@ -1,7 +1,7 @@
 const std = @import("std");
 const descriptors = @import("descriptors.zig");
 const gdt = @import("gdt.zig");
-const x86_64 = @import("x86_64.zig");
+const arch = @import("arch.zig");
 
 pub const GateType = enum(u4) {
     interrupt = 0xE,
@@ -41,7 +41,7 @@ pub const Exception = enum(u8) {
 
 pub const Interrupt = packed union {
     exception: Exception,
-    vector: @import("../../hal.zig").InterruptVector,
+    vector: @import("../hal.zig").InterruptVector,
     int: u8,
 
     pub fn has_error_code(self: Interrupt) bool {
@@ -173,7 +173,7 @@ pub fn InterruptFrame(ErrorCode: type) type {
         error_code: ErrorCode,
         rip: usize,
         cs: descriptors.Selector align(8),
-        eflags: @import("x86_64.zig").Flags,
+        eflags: @import("arch.zig").Flags,
         rsp: usize,
         ss: descriptors.Selector align(8),
 
@@ -367,7 +367,7 @@ pub fn is_vector_free(vector: u8) bool {
     return !vectors.isSet(vector);
 }
 
-const hal = @import("../../hal.zig");
+const hal = @import("../hal.zig");
 const InterruptRequestPriority = hal.InterruptRequestPriority;
 const SpinLock = hal.SpinLock;
 const InterruptVector = hal.InterruptVector;
@@ -427,7 +427,7 @@ pub fn load() void {
 }
 
 pub fn get_and_disable() bool {
-    const f = x86_64.flags().interrupt_enable;
+    const f = arch.flags().interrupt_enable;
     disable();
     return f;
 }

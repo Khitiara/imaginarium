@@ -121,12 +121,12 @@ pub fn setup_stack(self: *@This(), allocator: std.mem.Allocator, thread_start: *
     @memset(@constCast(stk[stk.len - (3 * @sizeOf(usize)) ..]), 0);
     frame.rsp = @intFromPtr(stk.ptr) + stk.len;
     frame.rsp -= 2 * @sizeOf(usize);
-    frame.eflags = arch.x86_64.flags();
+    frame.eflags = arch.flags();
     frame.eflags.interrupt_enable = true;
-    frame.cs = arch.x86_64.gdt.selectors.kernel_code;
-    frame.ss = arch.x86_64.gdt.selectors.kernel_data;
-    frame.fs = arch.x86_64.gdt.selectors.kernel_data;
-    frame.gs = arch.x86_64.gdt.selectors.kernel_data;
+    frame.cs = arch.gdt.selectors.kernel_code;
+    frame.ss = arch.gdt.selectors.kernel_data;
+    frame.fs = arch.gdt.selectors.kernel_data;
+    frame.gs = arch.gdt.selectors.kernel_data;
 }
 
 pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {

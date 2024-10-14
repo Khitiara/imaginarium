@@ -48,7 +48,7 @@ fn init(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator, wait_for_aps: boo
     const stack_slice = try page_alloc.alignedAlloc(u8, 4096, 8192);
     const stack_top = @intFromPtr(stack_slice.ptr) + 8192;
     const p: *LocalControlBlock = lcb.*;
-    const base = arch.x86_64.msr.read(.gs_base);
+    const base = arch.msr.read(.gs_base);
     log.debug("in smp init, block gs:0x0000000000000008->0x{x:0>16} (gs_base 0x{x:0>16}), stack at {*}", .{ @intFromPtr(lcb.*), base, stack_slice });
     // log.debug("NOTE: addr 0x0000000000000008 in flat addressing is 0x{x:0>16}", .{@as(*usize, @ptrFromInt(8)).*});
     p.syscall_stack = stack_top;

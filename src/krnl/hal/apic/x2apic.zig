@@ -1,7 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
-const cpuid = @import("../arch/x86_64/cpuid.zig");
-const msr = @import("../arch/x86_64/msr.zig");
+const cpuid = @import("../arch/cpuid.zig");
+const msr = @import("../arch/msr.zig");
 
 pub var x2apic_support: ?bool = null;
 pub var x2apic_enabled: bool = false;

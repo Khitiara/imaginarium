@@ -51,7 +51,7 @@ fn logFn(
 
 pub const os = struct {
     pub const heap = struct {
-        pub const page_allocator = arch.x86_64.vmm.raw_page_allocator.allocator();
+        pub const page_allocator = arch.vmm.raw_page_allocator.allocator();
     };
 };
 
@@ -69,7 +69,7 @@ pub const std_options: std.Options = .{
     .logFn = logFn,
     .log_level = .debug,
     .crypto_always_getrandom = true,
-    .cryptoRandomSeed = arch.x86_64.rand.fill_secure,
+    .cryptoRandomSeed = arch.rand.fill_secure,
 };
 
 /// the true entry point is __kstart and is exported by global asm in `hal/arch/{arch}/init.zig`
@@ -93,7 +93,7 @@ noinline fn main(ldr_info: *bootelf.BootelfData) !noreturn {
     const current_apic_id = hal.apic.get_lapic_id();
 
     log.info("local apic id {d}", .{current_apic_id});
-    log.info("acpi oem id {s}", .{&arch.x86_64.oem_id});
+    log.info("acpi oem id {s}", .{&arch.oem_id});
 
     if (ldr_info.framebuffer.base == 0) {
         log.warn("graphics-mode framebuffer not found by bootelf", .{});
@@ -101,8 +101,8 @@ noinline fn main(ldr_info: *bootelf.BootelfData) !noreturn {
     }
 
     log.info("graphics-mode framebuffer located at 0x{X:0>16}..{X:0>16}, {d}x{d}, hblank {d}", .{
-        ldr_info.framebuffer.base + @as(usize, @bitCast(arch.phys_mem_base())),
-        ldr_info.framebuffer.base + @as(usize, @bitCast(arch.phys_mem_base())) + ldr_info.framebuffer.pitch * ldr_info.framebuffer.height,
+        ldr_info.framebuffer.base + @as(usize, @bitCast(arch.pmm.phys_mapping_base)),
+        ldr_info.framebuffer.base + @as(usize, @bitCast(arch.pmm.phys_mapping_base)) + ldr_info.framebuffer.pitch * ldr_info.framebuffer.height,
         ldr_info.framebuffer.width,
         ldr_info.framebuffer.height,
         (ldr_info.framebuffer.pitch - ldr_info.framebuffer.width) / 4,

@@ -31,7 +31,7 @@
 //      higher physical memory (general paging, a page fault handler, etc)
 
 const ext = @import("util").extern_address;
-const memory = @import("../../memory.zig");
+const memory = @import("../memory.zig");
 const std = @import("std");
 
 // the base virtual address of the initial memory layout. should always be -2G but only set it once in the linkerscript

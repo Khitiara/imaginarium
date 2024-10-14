@@ -1,6 +1,5 @@
 const cpuid = @import("cpuid.zig");
 const std = @import("std");
-const x86_64 = @import("x86_64.zig");
 
 pub fn hardware_random_supported() bool {
     return cpuid.cpuid(.type_fam_model_stepping_features, {}).features.rdrand;

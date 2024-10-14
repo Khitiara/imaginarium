@@ -26,7 +26,7 @@ fn enter_scheduling_1(_: *arch.SavedRegisterState) void {}
 export const enter_scheduling_2 = handle_interrupt(enter_scheduling_1);
 
 pub noinline fn enter_scheduling() void {
-    arch.x86_64.idt.spoof_isr(&enter_scheduling_2);
+    arch.idt.spoof_isr(&enter_scheduling_2);
 }
 
 fn enter_thread_ctx_1(frame: *arch.SavedRegisterState) callconv(.SysV) void {
@@ -36,7 +36,7 @@ fn enter_thread_ctx_1(frame: *arch.SavedRegisterState) callconv(.SysV) void {
 }
 
 pub noinline fn enter_thread_ctx() void {
-    arch.x86_64.idt.spoof_isr(&enter_thread_ctx_1);
+    arch.idt.spoof_isr(&enter_thread_ctx_1);
 }
 
 pub const IrqlOp = enum {
@@ -46,8 +46,8 @@ pub const IrqlOp = enum {
 };
 
 pub inline fn fetch_set_irql(level: InterruptRequestPriority, op: IrqlOp) InterruptRequestPriority {
-    const restore = arch.get_and_disable_interrupts();
-    defer arch.restore_interrupt_state(restore);
+    const restore = arch.idt.get_and_disable();
+    defer arch.idt.restore(restore);
     const l = lcb.*;
     defer {
         if (switch (op) {
@@ -56,7 +56,7 @@ pub inline fn fetch_set_irql(level: InterruptRequestPriority, op: IrqlOp) Interr
             .lower => @intFromEnum(level) < @intFromEnum(l.irql),
         }) {
             l.irql = level;
-            arch.x86_64.control_registers.write(.cr8, .{ .tpr = @intFromEnum(level) });
+            arch.control_registers.write(.cr8, .{ .tpr = @intFromEnum(level) });
         }
     }
     return l.irql;
@@ -75,7 +75,7 @@ inline fn set_irql_internal(level: InterruptRequestPriority, op: IrqlOp) Interru
 /// this may result in nested interrupts from other IRQLs, *but* the nested interrupt
 /// is guaranteed to correctly handle
 fn dispatch_interrupt_tail(frame: *arch.SavedRegisterState) void {
-    arch.enable_interrupts();
+    arch.idt.enable();
     var level = lcb.*.irql;
     // higher IRQLs do processing through ISRs rather than fixed logic. loop through to process each IRQL in turn
     while (@intFromEnum(level) > @intFromEnum(InterruptRequestPriority.dpc)) : (level = set_irql_internal(level.lower(), .lower)) {}
