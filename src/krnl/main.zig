@@ -53,7 +53,16 @@ pub const os = struct {
     pub const heap = struct {
         pub const page_allocator = arch.x86_64.vmm.raw_page_allocator.allocator();
     };
-    pub const panic = debug.panic;
+};
+
+pub const Panic = struct {
+    pub const call = debug.panic;
+    pub const sentinelMismatch = std.debug.FormattedPanic.sentinelMismatch;
+    pub const unwrapError = std.debug.FormattedPanic.unwrapError;
+    pub const outOfBounds = std.debug.FormattedPanic.outOfBounds;
+    pub const startGreaterThanEnd = std.debug.FormattedPanic.startGreaterThanEnd;
+    pub const inactiveUnionField = std.debug.FormattedPanic.inactiveUnionField;
+    pub const messages = std.debug.FormattedPanic.messages;
 };
 
 pub const std_options: std.Options = .{
@@ -78,6 +87,7 @@ noinline fn main(ldr_info: *bootelf.BootelfData) !noreturn {
     std.debug.assert(bootelf_magic_check);
 
     try arch.platform_init(ldr_info.memory_map());
+    // ldr_info.entries = arch.ptr_from_physaddr([*]hal.memory.MemoryMapEntry, @intFromPtr(ldr_info.entries));
     try arch.smp.init(smp.allocate_lcbs);
 
     const current_apic_id = hal.apic.get_lapic_id();
@@ -118,7 +128,7 @@ noinline fn main(ldr_info: *bootelf.BootelfData) !noreturn {
 
     log.debug("ap_trampoline: {*} (len {X})", .{ ap_trampoline_start, ap_trampoline_length });
 
-    try debug.dump_hex(ap_trampoline_start[0..ap_trampoline_length]);
+    // try debug.dump_hex(ap_trampoline_start[0..ap_trampoline_length]);
     // debug.dump_stack_trace(log, null);
 
     // log.info("{}", .{@import("builtin").target});

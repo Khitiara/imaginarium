@@ -6,6 +6,9 @@ ebx_save equ bootelf + 0x200
 
   mov es, [ebx_save] ; Get a zero into es
   mov di, memmap_location
+  ;mov word [bootelf + 22], 0xffff
+  mov dword [bootelf + 20], 0xffffffff
+  mov word [bootelf + 18], 0x8000
   mov word [bootelf_memmap_entries], di
 
 memmap_loop:

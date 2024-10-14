@@ -68,16 +68,18 @@ pub const Icr = packed struct(u64) {
     dest: u8,
 };
 
+pub const Polarity = enum(u1) {
+    active_high = 0,
+    active_low = 1,
+};
+
 pub const LvtLintEntry = packed struct(u32) {
     vector: u8,
     delivery: DeliveryMode,
     _1: u1 = 0,
     /// read-only
     pending: bool = false,
-    polarity: enum(u1) {
-        active_high = 0,
-        active_low = 1,
-    } = .active_high,
+    polarity: Polarity = .active_high,
     remote_irr: bool = false,
     trigger_mode: TriggerMode = .edge,
     masked: bool,
@@ -181,6 +183,27 @@ pub const LapicNmiPin = packed struct(u8) {
     _: u2 = 0,
 };
 
+pub const IsaIrq = struct {
+    gsi: u32,
+    polarity: Polarity,
+    trigger: TriggerMode,
+    ioapic_idx: u8 = 0,
+    ioapic_ofs: u32 = 0,
+};
+
+pub var isa_irqs: [32]IsaIrq = blk: {
+    var scratch: [32]IsaIrq = undefined;
+    for (0..32) |i| {
+        scratch[i] = .{
+            .gsi = i,
+            .polarity = .active_high,
+            .trigger = .edge,
+        };
+    }
+    const s = scratch;
+    break :blk s;
+};
+
 pub var lapic_ptr: RegisterSlice = undefined;
 
 pub const Lapic = struct {
@@ -195,11 +218,47 @@ pub const Lapics = @import("util").MultiBoundedArray(Lapic, 255);
 pub var lapics: Lapics = undefined;
 
 pub var lapic_indices: [255]u8 = undefined;
-pub var ioapics_buf = [_]?IOApic{null} ** @import("config").max_ioapics;
+pub var ioapics_buf: [@import("config").max_ioapics]?IOApic = undefined;
 pub var ioapics_count: u8 = 0;
+
+fn read_ioapic(base: [*]volatile u32, reg: u8) u32 {
+    base[0] = reg;
+    return base[4];
+}
+
+fn write_ioapic(base: [*]volatile u32, reg: u8, value: u32) void {
+    base[0] = reg;
+    base[4] = value;
+}
+
+const IoApicVersion = packed struct(u32) {
+    version: u8,
+    _1: u8 = 0,
+    max_entries: u8,
+    _2: u8 = 0,
+};
 
 pub fn init() void {
     _ = x2apic.check_enable_x2apic();
+    const ioapics = ioapics_buf[0..ioapics_count];
+    for (&isa_irqs) |*irq| {
+        var idx: u8 = 0;
+        var base: u32 = 0;
+        for (ioapics, 0..) |ioapic, i| {
+            if (irq.gsi < ioapic.?.gsi_base)
+                continue;
+            const top: IoApicVersion = @bitCast(read_ioapic(ioapic.?.phys_addr, 1));
+            if (ioapic.?.gsi_base + top.max_entries < irq.gsi)
+                continue;
+            if (ioapic.?.gsi_base > base) {
+                base = ioapic.?.gsi_base;
+                idx = @intCast(i);
+            }
+        }
+        // std.log.debug("redirecting IRQ#{X:0>2} to IOAPIC index {d}, id 0x{x}, offset {d} from gsi base {d}", .{j, idx, ioapics[idx].?.id, irq.gsi - base, base});
+        irq.ioapic_idx = idx;
+        irq.ioapic_ofs = irq.gsi - base;
+    }
 }
 
 pub inline fn read_register(comptime reg: RegisterId) RegisterType(reg) {
@@ -237,7 +296,7 @@ inline fn get_register_ptr(reg: u7, comptime T: type) *align(16) volatile T {
 
 pub const IOApic = struct {
     id: u8,
-    phys_addr: usize,
+    phys_addr: [*]volatile u32,
     gsi_base: u32,
 };
 

@@ -93,6 +93,7 @@ fn MadtEntryPayload(comptime t: MadtEntryType) type {
 
 pub fn read_madt(ptr: *align(1) const Madt) !void {
     apic.lapics = try apic.Lapics.init(0);
+    @memset(&apic.ioapics_buf, null);
     var uid_nmi_pins: [256]apic.LapicNmiPin = undefined;
     log.info("APIC MADT table loaded at {*}", .{ptr});
     var lapic_ptr: usize = ptr.lapic_addr;
@@ -124,8 +125,26 @@ pub fn read_madt(ptr: *align(1) const Madt) !void {
 
                 apic.ioapics_buf[@atomicRmw(u8, &apic.ioapics_count, .Add, 1, .monotonic)] = .{
                     .id = payload.ioapic_id,
-                    .phys_addr = payload.ioapic_addr,
+                    .phys_addr = @import("../arch/arch.zig").ptr_from_physaddr([*]volatile u32, payload.ioapic_addr),
                     .gsi_base = payload.gsi_base,
+                };
+            },
+            .interrupt_source_override => {
+                const payload = @as(*align(1) const MadtEntryPayload(.interrupt_source_override), @ptrCast(hdr));
+                assert(payload.bus == 0);
+                // log.debug("ISA IRQ Redirect: IRQ#{d} -> GSI#{d}, polarity {} trigger {}", .{payload.source, payload.gsi, payload.flags.polarity, payload.flags.trigger});
+                apic.isa_irqs[payload.source] = .{
+                    .gsi = payload.gsi,
+                    .polarity = switch(payload.flags.polarity) {
+                        .default, .active_high => .active_high,
+                        .active_low => .active_low,
+                        else => unreachable,
+                    },
+                    .trigger = switch(payload.flags.trigger) {
+                        .default, .edge_triggered => .edge,
+                        .level_triggered => .level,
+                        else => unreachable,
+                    },
                 };
             },
             .local_apic_addr_override => {
