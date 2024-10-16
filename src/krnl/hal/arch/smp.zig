@@ -55,7 +55,7 @@ var bspid: u8 = undefined;
 
 const log = std.log.scoped(.@"hal.smp");
 
-pub fn init(comptime cb: anytype) @typeInfo(@TypeOf(cb)).@"fn".return_type.? {
+pub fn init() !struct { std.mem.Allocator, std.mem.Allocator } {
     bspid = apic.get_lapic_id();
     const alloc = vmm.raw_page_allocator.allocator();
     const gpa = vmm.gpa.allocator();
@@ -72,7 +72,7 @@ pub fn init(comptime cb: anytype) @typeInfo(@TypeOf(cb)).@"fn".return_type.? {
             log.debug("processor {d} (lapic id {d}) is not usable", .{ i, id });
         }
     }
-    return try cb(alloc, gpa);
+    return .{ alloc, gpa };
 }
 
 pub fn start_aps(cb: *const fn (std.mem.Allocator) void) !void {

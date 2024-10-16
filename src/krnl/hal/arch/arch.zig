@@ -26,6 +26,21 @@ pub fn puts(bytes: []const u8) void {
     }
 }
 
+pub const SerialWriter = struct {
+    const WriteError = error{};
+    pub const Writer = std.io.GenericWriter(*const anyopaque, error{}, typeErasedWriteFn);
+
+    fn typeErasedWriteFn(context: *const anyopaque, bytes: []const u8) error{}!usize {
+        _ = context;
+        puts(bytes);
+        return bytes.len;
+    }
+
+    pub fn writer() Writer {
+        return .{ .context = undefined };
+    }
+};
+
 pub fn delay_unsafe(cycles: u64) void {
     const target = time.rdtsc() + cycles;
     while (time.rdtsc() < target) {

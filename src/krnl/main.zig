@@ -88,7 +88,9 @@ noinline fn main(ldr_info: *bootelf.BootelfData) !noreturn {
 
     try arch.platform_init(ldr_info.memory_map());
     // ldr_info.entries = arch.ptr_from_physaddr([*]hal.memory.MemoryMapEntry, @intFromPtr(ldr_info.entries));
-    try arch.smp.init(smp.allocate_lcbs);
+    const page, const gpa = try arch.smp.init();
+    try smp.allocate_lcbs(page);
+    try smp.enter_threading(page, gpa);
 
     const current_apic_id = hal.apic.get_lapic_id();
 
@@ -127,6 +129,9 @@ noinline fn main(ldr_info: *bootelf.BootelfData) !noreturn {
     const ap_trampoline_start = @as([*]const u8, @ptrFromInt(ext("__ap_trampoline_begin__")));
 
     log.debug("ap_trampoline: {*} (len {X})", .{ ap_trampoline_start, ap_trampoline_length });
+
+    log.info("Enumerating PCI(e)", .{});
+    try @import("hal/pci/pcie.zig").init(gpa);
 
     // try debug.dump_hex(ap_trampoline_start[0..ap_trampoline_length]);
     // debug.dump_stack_trace(log, null);

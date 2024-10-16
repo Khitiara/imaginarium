@@ -8,6 +8,7 @@ const util = @import("util");
 const queue = util.queue;
 const zuid = @import("zuid");
 const atomic = std.atomic;
+const msr = arch.msr;
 
 pub const idle_thread_id = zuid.UUID.nul;
 const log = std.log.scoped(.smp);
@@ -36,10 +37,7 @@ const LcbWrapper = struct {
 };
 
 pub var lcbs: []LcbWrapper = undefined;
-const hal_smp = arch.smp.SmpUtil(LcbWrapper, LocalControlBlock, &.{ "lcb", "self" });
-pub const lcb = hal_smp.lcb;
-
-pub const krnl_tls_len: usize = 0;
+pub const lcb: *allowzero addrspace(.gs) const *LocalControlBlock = @ptrFromInt(@offsetOf(LcbWrapper, "lcb") + @offsetOf(LocalControlBlock, "self"));
 
 fn init(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator, wait_for_aps: bool) !void {
     dispatcher.WaitBlock.pool = dispatcher.WaitBlock.Pool.init(gpa);
@@ -61,44 +59,32 @@ fn init(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator, wait_for_aps: boo
     }
 }
 
-// pub fn set_tls_base(thread: *const Thread) void {
-//     hal_smp.set_tls(thread.tls_ptr);
-// }
-
-// pub var initial_tls: []const u8 = undefined;
-
-pub fn allocate_lcbs(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator) !void {
-    // try @import("own_elf.zig").get_tls_size(&krnl_tls_len, &initial_tls);
-
+pub fn allocate_lcbs(page_alloc: std.mem.Allocator) !void {
     lcbs = try page_alloc.alignedAlloc(LcbWrapper, 1 << 12, apic.lapics.len);
+    const apic_ids = apic.lapics.items(.id);
     for (lcbs, 0..) |*l, i| {
         l.* = .{
             .lcb = .{
                 .self = &l.lcb,
-                .apic_id = apic.lapics.items(.id)[i],
+                .apic_id = apic_ids[i],
             },
         };
     }
-
+}
+pub fn enter_threading(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator) !void {
     const id = apic.get_lapic_id();
     const idx = apic.lapic_indices[id];
     const base = @intFromPtr(&lcbs[idx]);
     log.debug("APIC {x}, idx {x}, base 0x{x:0>16}->0x{x:0>16}", .{ id, idx, base, base + @offsetOf(LcbWrapper, "lcb") });
     set_lcb_base(base);
     try init(page_alloc, gpa, false);
-    const tls: []u8, const tls_ptr = if (krnl_tls_len > 0) blk: {
-        const t = try gpa.alloc(u8, krnl_tls_len + 8);
-        const tp = @intFromPtr(&t[krnl_tls_len]);
-        hal_smp.set_tls(tp);
-        break :blk .{ t, tp };
-    } else .{ &.{}, 0 };
-    // try @import("debug.zig").dump_hex(tls);
-    const t: *Thread = try Thread.init2(gpa, tls, tls_ptr, zuid.UUID.new.v4());
+    const t: *Thread = try Thread.init(gpa, zuid.UUID.new.v4());
     t.stack = arch.smp.get_local_krnl_stack();
     lcb.*.current_thread = t;
     dispatcher.interrupts.enter_thread_ctx();
 }
 
 pub fn set_lcb_base(addr: usize) void {
-    hal_smp.setup(addr);
+    msr.write(.gs_base, addr);
+    msr.write(.kernel_gs_base, addr);
 }

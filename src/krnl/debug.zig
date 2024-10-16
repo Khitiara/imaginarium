@@ -2,21 +2,7 @@ const std = @import("std");
 const hal = @import("hal/hal.zig");
 const arch = hal.arch;
 const puts = arch.puts;
-
-pub const SerialWriter = struct {
-    const WriteError = error{};
-    pub const Writer = std.io.GenericWriter(*const anyopaque, error{}, typeErasedWriteFn);
-
-    fn typeErasedWriteFn(context: *const anyopaque, bytes: []const u8) error{}!usize {
-        _ = context;
-        puts(bytes);
-        return bytes.len;
-    }
-
-    pub fn writer() Writer {
-        return .{ .context = undefined };
-    }
-};
+pub const SerialWriter = arch.SerialWriter;
 
 const log = std.log.default;
 

@@ -47,6 +47,7 @@ fn addImportFromTable(module: *std.Build.Module, name: []const u8) void {
 }
 
 fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) !struct {
+    *std.Build.Step.Compile,
     *std.Build.Step,
     LazyPath,
     ?LazyPath,
@@ -110,6 +111,7 @@ fn krnl(b: *std.Build, arch: Target.Cpu.Arch, target: std.Build.ResolvedTarget, 
     b.getInstallStep().dependOn(krnlstep);
 
     return .{
+        exe,
         krnlstep,
         objcopy.getOutput(),
         objcopy.getOutputSeparatedDebug(),
@@ -246,7 +248,7 @@ pub fn build(b: *std.Build) !void {
     addImportFromTable(util, "config");
     addImportFromTable(util, "zuid");
 
-    const krnlstep, const elf, const debug = try krnl(b, arch, target, optimize);
+    const krnlexe, const krnlstep, const elf, const debug = try krnl(b, arch, target, optimize);
     const imgstep, const imgFile = try img(b, arch, krnlstep, elf, debug);
 
     var cpu_flags = try std.ArrayList([]const u8).initCapacity(b.allocator, 8);
@@ -320,4 +322,7 @@ pub fn build(b: *std.Build) !void {
     if (zuid_dep.builder.top_level_steps.get("test")) |zuid_tests| {
         test_step.dependOn(&zuid_tests.step);
     }
+
+    const noemit = b.step("buildnoemit", "");
+    noemit.dependOn(&krnlexe.step);
 }
