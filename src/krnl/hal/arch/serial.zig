@@ -153,6 +153,16 @@ pub inline fn in(port: u16, T: type) T {
     );
 }
 
+pub inline fn read_addr_data(addr_port: u16, data_port: u16, comptime TData: type, addr: anytype) TData {
+    out(addr_port, addr);
+    return in(data_port, TData);
+}
+
+pub inline fn write_addr_data(addr_port: u16, data_port: u16, addr: anytype, data: anytype) void {
+    out(addr_port, addr);
+    out(data_port, data);
+}
+
 pub const SerialInitError = error{serial_init_failure};
 
 pub fn init_serial(port: u16) !void {

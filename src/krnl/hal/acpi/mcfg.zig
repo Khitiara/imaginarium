@@ -39,7 +39,7 @@ pub const PciHostBridge = extern struct {
         breakdown.bus = bus;
         breakdown.device = device;
         breakdown.function = function;
-        return arch.ptr_from_physaddr(*align(4096) volatile [4096 / 32]u32, @bitCast(breakdown));
+        return arch.ptr_from_physaddr(*align(4096) volatile [4096 / 32]u32, @enumFromInt(@as(u64,@bitCast(breakdown))));
     }
 };
 

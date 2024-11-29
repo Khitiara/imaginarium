@@ -50,10 +50,10 @@ pub fn delay_unsafe(cycles: u64) void {
 
 const log = std.log.scoped(.init);
 
+pub const PhysAddr = pmm.PhysAddr;
 pub const ptr_from_physaddr = pmm.ptr_from_physaddr;
+pub const physaddr_from_ptr = pmm.physaddr_from_ptr;
 const apic = @import("../apic/apic.zig");
-
-pub var oem_id: [6]u8 = undefined;
 
 pub fn platform_init(memmap: []memory.MemoryMapEntry) !void {
     log.info("setting up GDT", .{});
@@ -76,10 +76,11 @@ pub fn platform_init(memmap: []memory.MemoryMapEntry) !void {
     control_registers.write(.cr4, cr4);
     idt.enable();
     log.info("interrupts enabled", .{});
-    try acpi.load_sdt(&oem_id);
+    try acpi.load_sdt();
     log.info("loaded acpi sdt", .{});
     apic.init();
     log.info("checked for x2apic compat and enabled apic in {s} mode", .{if (apic.x2apic.x2apic_enabled) "x2apic" else "xapic"});
+    apic.bspid = apic.get_lapic_id();
     time.init_timing();
     log.info("timekeeping initialized", .{});
     log.info("early platform init complete", .{});

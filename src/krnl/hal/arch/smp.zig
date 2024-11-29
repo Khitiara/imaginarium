@@ -12,31 +12,6 @@ const ptr_from_physaddr = @import("pmm.zig").ptr_from_physaddr;
 
 export var __bsp_start_spinlock_flag: u8 = 0;
 
-pub fn SmpUtil(comptime Wrapper: type, comptime LocalControlBlock: type, comptime fields: []const []const u8) type {
-    const offset = blk: {
-        var T = Wrapper;
-        var o: usize = 0;
-        for (fields) |f| {
-            o += @offsetOf(T, f);
-            T = @TypeOf(@field(@as(T, undefined), f));
-        }
-        break :blk o;
-    };
-    return struct {
-        pub const LocalControlBlockPointer = *allowzero addrspace(.gs) const *LocalControlBlock;
-        pub const lcb: LocalControlBlockPointer = @ptrFromInt(offset);
-
-        pub fn setup(base_linear_addr: usize) void {
-            msr.write(.gs_base, base_linear_addr);
-            msr.write(.kernel_gs_base, base_linear_addr);
-        }
-
-        pub fn set_tls(linear_addr: usize) void {
-            msr.write(.fs_base, linear_addr);
-        }
-    };
-}
-
 const arch = @import("arch.zig");
 const delay_unsafe = arch.delay_unsafe;
 
@@ -46,7 +21,7 @@ pub fn get_local_krnl_stack() *[8 << 20]u8 {
     return ap_stacks[apic.lapic_indices[apic.get_lapic_id()]];
 }
 pub fn get_local_krnl_stack_top() *anyopaque {
-    return @ptrFromInt(@intFromPtr(get_local_krnl_stack()) + (8 << 20));
+    return get_local_krnl_stack() + (8 << 20);
 }
 
 var _cb: *const fn (std.mem.Allocator) void = undefined;

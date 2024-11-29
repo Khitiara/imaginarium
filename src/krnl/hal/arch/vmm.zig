@@ -14,6 +14,8 @@ const idmap_base_5lvl: isize = -1 << 53;
 
 const log = std.log.scoped(.vmm);
 
+const PhysAddr = pmm.PhysAddr;
+
 var phys_mapping_range_bits: u6 = undefined;
 
 pub fn init(memmap: []memory.MemoryMapEntry) !void {
@@ -49,9 +51,9 @@ pub fn init(memmap: []memory.MemoryMapEntry) !void {
     log.info("mapping all phys mem at 0x{X}", .{@as(usize, @bitCast(idmap_base))});
     phys_mapping_range_bits = if (paging.using_5_level_paging) @min(paging.features.maxphyaddr, 48) else @min(paging.features.maxphyaddr, 39);
     log.debug("phys mapping range of {d} bits", .{phys_mapping_range_bits});
-    try paging.map_range(0, idmap_base, @as(usize, 1) << phys_mapping_range_bits);
+    try paging.map_range(.nul, idmap_base, @as(usize, 1) << phys_mapping_range_bits);
     log.info("mapping bottom {X} at 0x{X}", .{ pmm.kernel_size, @as(usize, @bitCast(@as(isize, -1 << 31))) });
-    try paging.map_range(0, -1 << 31, pmm.kernel_size);
+    try paging.map_range(.nul, -1 << 31, pmm.kernel_size);
     // log.info("mapping bottom 4M at 0", .{});
     // try paging.map_range(0, 0, 1 << 22);
     // dump_paging_debug();
@@ -117,9 +119,7 @@ pub const raw_page_allocator = struct {
     fn resize(_: *anyopaque, old_mem: []u8, old_align: u8, new_size: usize, ret_addr: usize) bool {
         const old_alloc = pmm.get_allocation_size(@max(old_mem.len, old_align));
 
-        const addr: usize = @intFromPtr(old_mem.ptr);
-        const base_vaddr = pmm.phys_mapping_base;
-        const paddr: usize = addr - @as(usize, @bitCast(base_vaddr));
+        const paddr = pmm.physaddr_from_ptr(old_mem.ptr);
 
         if (new_size == 0) {
             free(undefined, old_mem, old_align, ret_addr);
@@ -133,7 +133,7 @@ pub const raw_page_allocator = struct {
 
             var curr_alloc = old_alloc;
             while (new_alloc < curr_alloc) {
-                pmm.free(paddr + curr_alloc / 2, curr_alloc / 2);
+                pmm.free(@enumFromInt(@intFromEnum(paddr) + curr_alloc / 2), curr_alloc / 2);
                 curr_alloc /= 2;
             }
 
@@ -143,10 +143,7 @@ pub const raw_page_allocator = struct {
 
     fn free(_: *anyopaque, old_mem: []u8, old_align: u8, _: usize) void {
         const old_alloc = pmm.get_allocation_size(@max(old_mem.len, old_align));
-
-        const addr = @intFromPtr(old_mem.ptr);
-        const base_vaddr: usize = @bitCast(pmm.phys_mapping_base);
-        const paddr = addr - base_vaddr;
+        const paddr = pmm.physaddr_from_ptr(old_mem.ptr);
 
         pmm.free(paddr, old_alloc);
     }

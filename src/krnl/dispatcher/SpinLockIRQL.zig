@@ -10,8 +10,8 @@ key: u8 = 0,
 irql: hal.InterruptRequestPriority = undefined,
 set_irql: hal.InterruptRequestPriority,
 
-pub fn lock(self: anytype) void {
-    self.irql = ints.fetch_set_irql(self.set_irql, .raise);
+pub fn lock(self: anytype, tgt_irql: ?hal.InterruptRequestPriority) void {
+    self.irql = ints.fetch_set_irql(tgt_irql orelse self.set_irql, .raise);
 
     asm volatile (
         \\  1:  lock bts $0, %[key]

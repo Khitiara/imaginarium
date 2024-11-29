@@ -95,16 +95,15 @@ noinline fn main(ldr_info: *bootelf.BootelfData) !noreturn {
     const current_apic_id = hal.apic.get_lapic_id();
 
     log.info("local apic id {d}", .{current_apic_id});
-    log.info("acpi oem id {s}", .{&arch.oem_id});
 
-    if (ldr_info.framebuffer.base == 0) {
+    if (ldr_info.framebuffer.base == .nul) {
         log.warn("graphics-mode framebuffer not found by bootelf", .{});
         return error.no_framebuffer;
     }
 
     log.info("graphics-mode framebuffer located at 0x{X:0>16}..{X:0>16}, {d}x{d}, hblank {d}", .{
-        ldr_info.framebuffer.base + @as(usize, @bitCast(arch.pmm.phys_mapping_base)),
-        ldr_info.framebuffer.base + @as(usize, @bitCast(arch.pmm.phys_mapping_base)) + ldr_info.framebuffer.pitch * ldr_info.framebuffer.height,
+        @intFromEnum(ldr_info.framebuffer.base) + @as(usize, @bitCast(arch.pmm.phys_mapping_base)),
+        @intFromEnum(ldr_info.framebuffer.base) + @as(usize, @bitCast(arch.pmm.phys_mapping_base)) + ldr_info.framebuffer.pitch * ldr_info.framebuffer.height,
         ldr_info.framebuffer.width,
         ldr_info.framebuffer.height,
         (ldr_info.framebuffer.pitch - ldr_info.framebuffer.width) / 4,

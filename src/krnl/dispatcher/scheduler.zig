@@ -48,19 +48,19 @@ pub fn schedule(thread: *Thread, processor: ?u8) void {
     l.local_dispatcher_queue.add(thread);
 }
 
-pub fn signal_wait_block(block: *WaitBlock) void {
+pub fn signal_wait_block(block: *WaitBlock, already_removed: bool) void {
     const thread = block.thread;
     {
         // grab the wait lock
-        thread.wait_lock.lock();
+        thread.wait_lock.lock(null);
         defer thread.wait_lock.unlock();
         switch (thread.wait_type) {
             .all => {
                 // remove the block from the list
                 thread.wait_list.remove(block);
-                {
+                if (!already_removed) {
                     // remove it from its handle's wait queue
-                    block.target.wait_lock.lock();
+                    block.target.wait_lock.lock(null);
                     defer block.target.wait_lock.unlock();
                     block.target.wait_queue.remove(block);
                 }
@@ -76,9 +76,9 @@ pub fn signal_wait_block(block: *WaitBlock) void {
                 var n = thread.wait_list.clear();
                 while (n) |node| {
                     n = thread.WaitListType.ref_from_optional_node(node.thread_wait_list.next);
-                    {
+                    if(node != block or !already_removed){
                         // remove it from its handle's wait queue
-                        node.target.wait_lock.lock();
+                        node.target.wait_lock.lock(null);
                         defer node.target.wait_lock.unlock();
                         node.target.wait_queue.remove(node);
                     }
@@ -106,7 +106,7 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
 
     // if we need to yield the thread then do that
     if (l.force_yield) if (l.current_thread) |thread| {
-        smp.lcb.*.local_dispatcher_lock.lock();
+        smp.lcb.*.local_dispatcher_lock.lock(null);
         defer smp.lcb.*.local_dispatcher_lock.unlock();
         thread.set_state(.running, .assigned);
         smp.lcb.*.local_dispatcher_queue.add(thread);
@@ -134,7 +134,7 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
                     set_running(l, stby, .standby, frame);
 
                     // grab the lock a bit early to put the old running thread into the queue
-                    l.local_dispatcher_lock.lock();
+                    l.local_dispatcher_lock.lock(null);
                     if (!cur.header.id.eql(smp.idle_thread_id)) {
                         l.local_dispatcher_queue.add(cur);
                     }
@@ -143,7 +143,7 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
                         new_stby.set_state(.assigned, .standby);
                     }
                 } else {
-                    l.local_dispatcher_lock.lock();
+                    l.local_dispatcher_lock.lock(null);
                 }
                 defer l.local_dispatcher_lock.unlock();
                 // check if theres anything in the queue, and swap standby and the head if needed
@@ -159,7 +159,7 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
                 return;
             } else {
                 // nothing running but we have a standby, so move that up to run
-                l.local_dispatcher_lock.lock();
+                l.local_dispatcher_lock.lock(null);
                 defer l.local_dispatcher_lock.unlock();
                 set_running(l, stby, .standby, frame);
                 // move the queue head up to standby
@@ -172,7 +172,7 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
             }
         } else {
             // nothing in standby
-            l.local_dispatcher_lock.lock();
+            l.local_dispatcher_lock.lock(null);
             defer l.local_dispatcher_lock.unlock();
             if (l.local_dispatcher_queue.dequeue()) |queued| {
                 // move queued to standby

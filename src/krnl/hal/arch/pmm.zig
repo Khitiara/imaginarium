@@ -34,6 +34,8 @@ const ext = @import("util").extern_address;
 const memory = @import("../memory.zig");
 const std = @import("std");
 
+pub const PhysAddr = enum(usize) { nul = 0, _ };
+
 // the base virtual address of the initial memory layout. should always be -2G but only set it once in the linkerscript
 pub var kernel_size: usize = undefined;
 
@@ -62,7 +64,7 @@ const pmm_sizes_global = blk: {
 var pmm_sizes: []const usize = undefined;
 
 // the address of the first free root of a given size (sizes from pmm_sizes)
-export var free_roots = [_]usize{0} ** pmm_sizes_global.len;
+export var free_roots = [_]PhysAddr{.nul} ** pmm_sizes_global.len;
 
 pub var max_phys_mem: usize = 0;
 
@@ -88,7 +90,7 @@ pub fn init(paddrwidth: u8, memmap: []memory.MemoryMapEntry) void {
     // the identity mapped region is mapped lazily by the vmm through the page fault handler
     for (memmap) |entry| {
         if (entry.type == .normal) {
-            var base = entry.base;
+            var base = @intFromEnum(entry.base);
             var size = entry.size;
             const end = base + size;
             if (end > max_phys_mem)
@@ -113,7 +115,7 @@ pub fn init(paddrwidth: u8, memmap: []memory.MemoryMapEntry) void {
             }
             log.debug("marking 0x{X}..0x{X} (0x{X} bytes)", .{ base, end, size });
             // any alignment and other nonsense the bios throws at us gets handled in mark_free
-            mark_free(base, size);
+            mark_free(@enumFromInt(base), size);
         }
     }
 }
@@ -128,9 +130,9 @@ pub fn enlarge_mapped_physical(memmap: []memory.MemoryMapEntry, new_base: isize)
     phys_mapping_limit = @as(usize, 1) << @intCast(phys_addr_width);
     for (memmap) |entry| {
         // we already mapped entries which are wholly within our old limits
-        if (entry.type == .normal and entry.base + entry.size >= old_limit) {
+        if (entry.type == .normal and @intFromEnum(entry.base) + entry.size >= old_limit) {
             // all the alignment and other nonsense is handled by mark_free
-            log.debug("marking 0x{X}..0x{X} (0x{X} bytes)", .{ entry.base, entry.base + entry.size, entry.size });
+            log.debug("marking 0x{X}..0x{X} (0x{X} bytes)", .{ entry.base, @intFromEnum(entry.base) + entry.size, entry.size });
             mark_free(entry.base, entry.size);
         }
     }
@@ -138,24 +140,24 @@ pub fn enlarge_mapped_physical(memmap: []memory.MemoryMapEntry, new_base: isize)
 
 // turns a physical address into a pointer by way of the identity mapped region
 // before enlarge_mapped_physical is called the returend pointers should not be saved
-pub fn ptr_from_physaddr(Ptr: type, paddr: usize) Ptr {
+pub fn ptr_from_physaddr(Ptr: type, paddr: PhysAddr) Ptr {
     // if the phys addr is 0 and the pointer is optional then its null. used mainly in the pmm to mark the end of the
     // free block lists
     if (@as(std.builtin.TypeId, @typeInfo(Ptr)) == .optional and paddr == 0) {
         return null;
     }
-    return @ptrFromInt(paddr +% phys_mapping_base_unsigned);
+    return @ptrFromInt(@intFromEnum(paddr) +% phys_mapping_base_unsigned);
 }
 
-pub fn physaddr_from_ptr(ptr: anytype) usize {
-    return @intFromPtr(ptr) -% phys_mapping_base_unsigned;
+pub fn physaddr_from_ptr(ptr: anytype) PhysAddr {
+    return @enumFromInt(@intFromPtr(ptr) -% phys_mapping_base_unsigned);
 }
 
 // allocate a block from physical memory by index
 // the size of the region is pmm_sizes[idx] but working by index is easier
-fn alloc_impl(idx: usize) error{OutOfMemory}!usize {
+fn alloc_impl(idx: usize) error{OutOfMemory}!PhysAddr {
     // check if there is a free root available at the requested size
-    if (free_roots[idx] == 0) {
+    if (free_roots[idx] == .nul) {
         // no block of the given size is available
 
         // is there another larger size to allocate and split?
@@ -177,7 +179,7 @@ fn alloc_impl(idx: usize) error{OutOfMemory}!usize {
         // this should divide evenly because powers of two, and in fact should only go through one iteration
         while (next_size > curr_size) {
             free_impl(next, idx);
-            next += curr_size;
+            next = @enumFromInt(@intFromEnum(next) + curr_size);
             next_size -= curr_size;
         }
 
@@ -190,20 +192,20 @@ fn alloc_impl(idx: usize) error{OutOfMemory}!usize {
         // is just memory owned by some other component
         const addr = free_roots[idx];
         // store the next address in the free roots over the one we allocated
-        free_roots[idx] = ptr_from_physaddr(*const usize, addr).*;
+        free_roots[idx] = ptr_from_physaddr(*const PhysAddr, addr).*;
         return addr;
     }
 }
 
 // free by index into free_roots rather than by size
-fn free_impl(phys_addr: usize, index: usize) void {
+fn free_impl(phys_addr: PhysAddr, index: usize) void {
     // TODO: if enough contiguous blocks are free then free a larger block instead
-    ptr_from_physaddr(*usize, phys_addr).* = free_roots[index];
+    ptr_from_physaddr(*PhysAddr, phys_addr).* = free_roots[index];
     free_roots[index] = phys_addr;
 }
 
 // allocate a block of at least len bytes
-pub fn alloc(len: usize) !usize {
+pub fn alloc(len: usize) !PhysAddr {
     // log2_ceil of the length - 12 indexes into pmm_sizes the smallest block size strictly larger than len
     const idx = std.math.log2_int_ceil(usize, len) - 12;
     if (idx >= pmm_sizes.len) {
@@ -221,10 +223,10 @@ pub fn get_allocation_size(size: usize) usize {
 }
 
 // free an allocated block which was at least len bytes
-pub fn free(phys_addr: usize, len: usize) void {
+pub fn free(phys_addr: PhysAddr, len: usize) void {
     // the physical addresses we return should always be page-aligned
     // and ideally so will whatever the memmap gives us to free here
-    if (!std.mem.isAligned(phys_addr, pmm_sizes[0])) {
+    if (!std.mem.isAligned(@intFromEnum(phys_addr), pmm_sizes[0])) {
         @panic("unaligned address to free");
     }
 
@@ -235,13 +237,13 @@ pub fn free(phys_addr: usize, len: usize) void {
 }
 
 // mark a new memory block as free. generally called with entries from the bios or uefi memory map
-fn mark_free(phys_addr: usize, len: usize) void {
+fn mark_free(phys_addr: PhysAddr, len: usize) void {
     var sz: usize = len;
 
     // the bios sucks i give up so for this we align the start of the block forward to match our smallest block size
-    var a = std.mem.alignForwardLog2(phys_addr, 12);
+    var a: PhysAddr = @enumFromInt(std.mem.alignForwardLog2(@intFromEnum(phys_addr), 12));
     // if we aligned forward then shrink the size accordingly so we dont reach into reserved ranges
-    sz -= @bitCast(a - phys_addr);
+    sz -= @bitCast(@intFromEnum(a) - @intFromEnum(phys_addr));
     // and align the size backward to a multiple of our smallest block size because the bios still sucks
     sz = std.mem.alignBackward(usize, sz, pmm_sizes[0]);
 
@@ -255,12 +257,12 @@ fn mark_free(phys_addr: usize, len: usize) void {
             const s = pmm_sizes[idx];
             // find the largest size that is no greater than the amount to free and which is aligned
             // the sz >= s case should be covered by the log2 bit above but leave it in for now just in case
-            if (sz >= s and std.mem.isAligned(a, s)) {
+            if (sz >= s and std.mem.isAligned(@intFromEnum(a), s)) {
                 // free the biggest block we can fit aligned in the newly freed region
                 free_impl(a, idx);
                 // adjust the address and size to remove the freed chunk and restart
                 sz -= s;
-                a += s;
+                a = @enumFromInt(@intFromEnum(a) + s);
                 continue :outer;
             }
         }

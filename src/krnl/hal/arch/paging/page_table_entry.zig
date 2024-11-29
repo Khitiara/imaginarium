@@ -2,6 +2,8 @@ const std = @import("std");
 const makeTruncMask = @import("util").masking.makeTruncMask;
 const assert = std.debug.assert;
 
+const PhysAddr = @import("../arch.zig").PhysAddr;
+
 pub const PageMeta = packed struct(u7) {
     /// if present is false and reserved is true then a page fault to this page should lazily obtain and zero a physical
     /// page. if both present and reserved is false, and the physical address of the page is nonzero then the page is
@@ -26,11 +28,11 @@ pub const PML45E = packed struct(u64) {
     xd: bool,
 
     const physaddr_mask = makeTruncMask(PML45E, "physaddr");
-    pub fn get_phys_addr(self: PML45E) u64 {
-        return @as(u64, @bitCast(self)) & physaddr_mask;
+    pub fn get_phys_addr(self: PML45E) PhysAddr {
+        return @enumFromInt(@as(u64, @bitCast(self)) & physaddr_mask);
     }
-    pub fn set_phys_addr(self: *PML45E, addr: u64) void {
-        self.physaddr = @truncate(addr >> 12);
+    pub fn set_phys_addr(self: *PML45E, addr: PhysAddr) void {
+        self.physaddr = @truncate(@intFromEnum(addr) >> 12);
     }
 };
 
@@ -63,20 +65,20 @@ pub const PDPTE = packed struct(u64) {
     },
     xd: bool,
 
-    pub fn get_phys_addr(self: PDPTE) u52 {
+    pub fn get_phys_addr(self: PDPTE) PhysAddr {
         if (self.page_size) {
             // 1gb page
-            return @as(u52, @intCast(self.physaddr.gb_page.physaddr)) << 30;
+            return @enumFromInt(@as(u52, @intCast(self.physaddr.gb_page.physaddr)) << 30);
         } else {
-            return @as(u52, @intCast(self.physaddr.pd_ptr.addr)) << 12;
+            return @enumFromInt(@as(u52, @intCast(self.physaddr.pd_ptr.addr)) << 12);
         }
     }
-    pub fn set_phys_addr(self: *PDPTE, addr: u64) void {
+    pub fn set_phys_addr(self: *PDPTE, addr: PhysAddr) void {
         if (self.page_size) {
             // 1gb page
-            self.physaddr.gb_page.physaddr = @truncate(addr >> 30);
+            self.physaddr.gb_page.physaddr = @truncate(@intFromEnum(addr) >> 30);
         } else {
-            self.physaddr.pd_ptr.addr = @truncate(addr >> 12);
+            self.physaddr.pd_ptr.addr = @truncate(@intFromEnum(addr) >> 12);
         }
     }
 };
@@ -108,20 +110,20 @@ pub const PDE = packed struct(u64) {
     },
     xd: bool,
 
-    pub fn get_phys_addr(self: PDE) u52 {
+    pub fn get_phys_addr(self: PDE) PhysAddr {
         if (self.page_size) {
             // 2mb page
-            return @as(u52, @intCast(self.physaddr.mb_page.physaddr)) << 21;
+            return @enumFromInt(@as(u52, @intCast(self.physaddr.mb_page.physaddr)) << 21);
         } else {
-            return @as(u52, @intCast(self.physaddr.pd_ptr.addr)) << 12;
+            return @enumFromInt(@as(u52, @intCast(self.physaddr.pd_ptr.addr)) << 12);
         }
     }
-    pub fn set_phys_addr(self: *PDE, addr: u64) void {
+    pub fn set_phys_addr(self: *PDE, addr: PhysAddr) void {
         if (self.page_size) {
             // 2mb page
-            self.physaddr.mb_page.physaddr = @truncate(addr >> 21);
+            self.physaddr.mb_page.physaddr = @truncate(@intFromEnum(addr) >> 21);
         } else {
-            self.physaddr.pd_ptr.addr = @truncate(addr >> 12);
+            self.physaddr.pd_ptr.addr = @truncate(@intFromEnum(addr) >> 12);
         }
     }
 };
@@ -144,11 +146,11 @@ pub const PTE = packed struct(u64) {
     xd: bool,
 
     const physaddr_mask = makeTruncMask(PTE, .physaddr);
-    pub fn get_phys_addr(self: PTE) u64 {
-        return @as(u64, @bitCast(self)) & physaddr_mask;
+    pub fn get_phys_addr(self: PTE) PhysAddr {
+        return @enumFromInt(@as(u64, @bitCast(self)) & physaddr_mask);
     }
-    pub fn set_phys_addr(self: *PTE, addr: u64) void {
-        self.physaddr = @truncate(addr >> 12);
+    pub fn set_phys_addr(self: *PTE, addr: PhysAddr) void {
+        self.physaddr = @truncate(@intFromEnum(addr) >> 12);
     }
 };
 

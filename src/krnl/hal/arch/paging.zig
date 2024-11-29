@@ -36,7 +36,7 @@ pub inline fn Table(Entry: type) type {
 
 // the base address of the top level page table
 pub var pgtbl: ?Table(entries.PML45E) = null;
-var root_physaddr: usize = undefined;
+var root_physaddr: pmm.PhysAddr = undefined;
 pub var using_5_level_paging: bool = false;
 pub var features: PagingFeatures = undefined;
 
@@ -91,8 +91,8 @@ const log = std.log.scoped(.page_tables);
 // maps a contiguous region of virtual memory to a contiguous region of physical memory
 // this function uses the largest possible page sizes within alignment and compatability limits
 // though the same caveats about huge pages and free physical memory apply to this function as to map_page
-pub fn map_range(base_phys: usize, base_linear: isize, length: usize) !void {
-    var pa = base_phys;
+pub fn map_range(base_phys: pmm.PhysAddr, base_linear: isize, length: usize) !void {
+    var pa = @intFromEnum(base_phys);
     var la = base_linear;
     var sz = length;
     if (!std.mem.isAlignedLog2(pa, 12) or !std.mem.isAlignedLog2(@bitCast(la), 12) or !std.mem.isAlignedLog2(sz, 12)) {
@@ -100,17 +100,17 @@ pub fn map_range(base_phys: usize, base_linear: isize, length: usize) !void {
     }
     while (sz > 0) {
         if (std.mem.isAlignedLog2(pa, 30) and std.mem.isAlignedLog2(@bitCast(la), 30) and std.mem.isAlignedLog2(sz, 30) and sz >= 1 << 30) {
-            try map_page(pa, la, .huge);
+            try map_page(@enumFromInt(pa), la, .huge);
             sz -= 1 << 30;
             pa += 1 << 30;
             la += 1 << 30;
         } else if (std.mem.isAlignedLog2(pa, 21) and std.mem.isAlignedLog2(@bitCast(la), 21) and std.mem.isAlignedLog2(sz, 21) and sz >= 1 << 21) {
-            try map_page(pa, la, .large);
+            try map_page(@enumFromInt(pa), la, .large);
             sz -= 1 << 21;
             pa += 1 << 21;
             la += 1 << 21;
         } else if (sz >= 1 << 12) {
-            try map_page(pa, la, .normal);
+            try map_page(@enumFromInt(pa), la, .normal);
             sz -= 1 << 12;
             pa += 1 << 12;
             la += 1 << 12;
@@ -124,7 +124,7 @@ pub fn map_range(base_phys: usize, base_linear: isize, length: usize) !void {
 // as this function uses the pmm to allocate physical pages for the created page tables and thus if
 // the target physical memory is unallocated any created page tables may end up in the mapped region,
 // though in some cases e.g. the sequentially mapped region at base -1 << 45 this may be acceptable behavior
-pub noinline fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSize) !void {
+pub noinline fn map_page(phys_addr: pmm.PhysAddr, linear_addr: isize, page_size: PageSize) !void {
     const lin_unsigned: usize = @bitCast(linear_addr);
     // log.debug("mapping {x:0>16} to {x:0>16} ({s})", .{ lin_unsigned, phys_addr, @tagName(page_size) });
     // this method takes a physical address meaning the block is already mapped
@@ -138,7 +138,7 @@ pub noinline fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSi
         log.err("linear address 0x{X} misaligned for {s} page", .{ lin_unsigned, @tagName(page_size) });
         return error.misaligned_page_linear_addr;
     }
-    if (!std.mem.isAlignedLog2(phys_addr, alignment)) {
+    if (!std.mem.isAlignedLog2(@intFromEnum(phys_addr), alignment)) {
         log.err("physical address 0x{X} misaligned for {s} page", .{ phys_addr, @tagName(page_size) });
         return error.misaligned_page_physical_addr;
     }
@@ -192,7 +192,7 @@ pub noinline fn map_page(phys_addr: usize, linear_addr: isize, page_size: PageSi
         // no 1g page support so recurse and map 512 large pages. the higher level tables should all short-circuit here.
         for (0..512) |table| {
             const new_addr = @as(isize, @bitCast(lin_unsigned + (table << 21)));
-            try map_page(phys_addr + (table << 21), new_addr, .large);
+            try map_page(@enumFromInt(@intFromEnum(phys_addr) + (table << 21)), new_addr, .large);
         }
         return;
     }

@@ -80,7 +80,7 @@ pub const InterruptGateDescriptor = packed struct(u128) {
         };
     }
 
-    pub const nul = .{
+    pub const nul: InterruptGateDescriptor = .{
         .offset_low = 0,
         .segment_selector = gdt.selectors.null_desc,
         .ist = 0,
@@ -426,18 +426,14 @@ pub fn load() void {
     );
 }
 
-pub fn get_and_disable() bool {
-    const f = arch.flags().interrupt_enable;
+pub fn get_and_disable() arch.Flags {
+    const f = arch.flags();
     disable();
     return f;
 }
 
-pub fn restore(state: bool) void {
-    if (state) {
-        enable();
-    } else {
-        disable();
-    }
+pub fn restore(state: arch.Flags) void {
+    arch.setflags(state);
 }
 
 test {

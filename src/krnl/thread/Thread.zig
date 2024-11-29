@@ -9,6 +9,8 @@ const smp = @import("../smp.zig");
 const zuid = @import("zuid");
 const atomic = std.atomic;
 
+const Thread = @This();
+
 pub const Semaphore = @import("Semaphore.zig");
 
 pub const State = enum {
@@ -55,34 +57,59 @@ header: ob.Object,
 wait_lock: dispatcher.SpinLockIRQL = .{ .set_irql = .dispatch },
 wait_type: WaitType = undefined,
 wait_list: WaitListType = .{},
-join: dispatcher.WaitHandle = .{},
+join: dispatcher.WaitHandle,
 state: State = .init,
 priority: Priority,
 affinity: Affinity = .{},
 scheduler_hook: queue.Node = .{},
 saved_state: SavedThreadState = undefined,
 stack: ?[]const u8 = null,
+client_ids: struct {
+    threadid: u64,
+    procid: u64,
+},
 
 const WaitListType = queue.DoublyLinkedList(dispatcher.WaitBlock, "thread_wait_list");
 
-pub fn init(alloc: std.mem.Allocator, id: zuid.UUID) !*@This() {
-    const self = try alloc.create(@This());
+const vtable: ob.Object.VTable = .{
+    .deinit = &ob.DeinitImpl(ob.Object, Thread, "header").deinit_inner,
+};
+
+fn check_wait(handle: *dispatcher.WaitHandle, thread: *Thread) !bool {
+    const self: *Thread = @fieldParentPtr("join", handle);
+    if (@atomicLoad(State, &self.state, .acquire) == .terminated) {
+        return false;
+    }
+
+    try handle.enqueue_wait(thread);
+    return true;
+}
+
+pub fn init(alloc: std.mem.Allocator, id: zuid.UUID, tid: u64) !*Thread {
+    const self = try alloc.create(Thread);
     self.* = .{
         .header = .{
             .kind = .thread,
             .id = id,
+            .pointer_count = .init(1),
+            .vtable = &vtable,
         },
         .priority = .p1,
+        .client_ids = .{
+            .procid = 0,
+            .threadid = tid,
+        },
+        .join = .{ .check_wait = &check_wait },
     };
     return self;
 }
 
-pub fn set_state(self: *@This(), expect: State, state: State) void {
+pub fn set_state(self: *Thread, expect: State, state: State) void {
     const old = @cmpxchgStrong(State, &self.state, expect, state, .acq_rel, .monotonic);
     std.debug.assert(old != null);
 }
 
-pub fn setup_stack(self: *@This(), allocator: std.mem.Allocator, thread_start: *const fn (*anyopaque) callconv(.Win64) noreturn, param: ?*anyopaque) !void {
+pub fn setup_stack(self: *Thread, allocator: std.mem.Allocator, thread_start: *const fn (*anyopaque) callconv(.Win64) noreturn, param: ?*anyopaque) !void {
     // note the noreturn on the thread_start - the thread_start must only exit by
     // removing this thread from the LCB and using a (spoofed) interrupt to enter
     // the main dispatcher next thread selection, which will switch to a new thread.
@@ -115,10 +142,9 @@ pub fn setup_stack(self: *@This(), allocator: std.mem.Allocator, thread_start: *
     frame.gs = arch.gdt.selectors.kernel_data;
 }
 
-pub fn deinit(self: *@This(), allocator: std.mem.Allocator) void {
+pub fn deinit(self: *Thread, allocator: std.mem.Allocator) void {
     if (self.stack) |stk| {
         allocator.free(stk);
         self.stack = null;
     }
-    allocator.free(self.tls);
 }

@@ -5,6 +5,7 @@ const std = @import("std");
 pub const rsd_ptr_sig: *const [8]u8 = "RSD PTR ";
 
 const ptr_from_physaddr = @import("../arch/arch.zig").ptr_from_physaddr;
+const physaddr_from_ptr = @import("../arch/arch.zig").physaddr_from_ptr;
 
 pub const Rsdp1 = extern struct {
     signature: [8]u8,
@@ -30,7 +31,7 @@ pub const RsdpError = error{
     unrecognized_version,
     table_not_found,
     xsdt_on_32bit,
-    rsdp_not_found,
+    NotFound,
 } || checksum.ChecksumErrors;
 
 pub const RsdpInfo = struct {
@@ -89,44 +90,46 @@ const RsdpAlignedPrologue = extern struct {
     _padding: [8]u8,
 };
 
-inline fn rsdp_search(region: []align(4) const u8) !?Rsdp {
+inline fn rsdp_search(region: []align(4) const u8) ?*align(4)const anyopaque {
     const slice = std.mem.bytesAsSlice(RsdpAlignedPrologue, region);
     for (slice) |*hay| {
         if (std.mem.eql(u8, &hay.signature, rsd_ptr_sig)) {
-            return try Rsdp.fetch_from_pointer(hay);
+            return hay;
         }
     }
     return null;
 }
 
-fn locate_rsdp_bios() !Rsdp {
-    const ebda_addr = ptr_from_physaddr(*const u16, 0x40E).*;
-    const ebda = ptr_from_physaddr(*align(4) const [0x400]u8, ebda_addr << 4);
-    if (try rsdp_search(ebda)) |rsdp| {
-        return rsdp;
+const PhysAddr = @import("../arch/arch.zig").PhysAddr;
+
+fn locate_rsdp_bios() !PhysAddr {
+    const ebda_addr = ptr_from_physaddr(*const u16, @enumFromInt(0x40E)).*;
+    const ebda = ptr_from_physaddr(*align(4) const [0x400]u8, @enumFromInt(ebda_addr << 4));
+    if (rsdp_search(ebda)) |rsdp| {
+        return physaddr_from_ptr(rsdp);
     }
-    if (try rsdp_search(ptr_from_physaddr(*align(4) const [0x20000]u8, 0xE0000))) |rsdp| {
-        return rsdp;
+    if (rsdp_search(ptr_from_physaddr(*align(4) const [0x20000]u8, @enumFromInt(0xE0000)))) |rsdp| {
+        return physaddr_from_ptr(rsdp);
     }
-    return error.rsdp_not_found;
+    return error.NotFound;
 }
 
 const zuid = @import("zuid");
 
-fn locate_rsdp_efi() !Rsdp {
+fn locate_rsdp_efi() !PhysAddr {
     const sys = std.os.uefi.system_table;
     const tbls = sys.configuration_table[0..sys.number_of_table_entries];
     for (tbls) |t| {
         if (t.vendor_guid.eql(std.os.uefi.tables.ConfigurationTable.acpi_20_table_guid)) {
-            return Rsdp.fetch_from_pointer(t.vendor_table);
+            return t.vendor_table;
         }
     }
     for (tbls) |t| {
         if (t.vendor_guid.eql(std.os.uefi.tables.ConfigurationTable.acpi_10_table_guid)) {
-            return Rsdp.fetch_from_pointer(t.vendor_table);
+            return t.vendor_table;
         }
     }
-    return error.rsdp_not_found;
+    return error.NotFound;
 }
 
-pub const locate_rsdp: fn () RsdpError!Rsdp = if (@import("builtin").os.tag == .uefi or !@import("config").rsdp_search_bios) locate_rsdp_efi else locate_rsdp_bios;
+pub const locate_rsdp: fn () RsdpError!PhysAddr = if (@import("builtin").os.tag == .uefi or !@import("config").rsdp_search_bios) locate_rsdp_efi else locate_rsdp_bios;

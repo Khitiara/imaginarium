@@ -6,6 +6,8 @@ pub const ControlRegister = enum {
     cr8,
 };
 
+const PhysAddr = @import("arch.zig").PhysAddr;
+
 pub fn ControlRegisterValueType(comptime cr: ControlRegister) type {
     return switch (cr) {
         .cr0 => return packed struct(u64) {
@@ -39,11 +41,11 @@ pub fn ControlRegisterValueType(comptime cr: ControlRegister) type {
             pml45_base_addr: u52,
 
             // paging support functions
-            pub fn get_phys_addr(self: @This()) u64 {
-                return @as(u64, self.pml45_base_addr) << 12;
+            pub fn get_phys_addr(self: @This()) PhysAddr {
+                return @enumFromInt(@as(u64, self.pml45_base_addr) << 12);
             }
-            pub fn set_phys_addr(self: *@This(), addr: u64) void {
-                self.pml45_base_addr = @truncate(addr >> 12);
+            pub fn set_phys_addr(self: *@This(), addr: PhysAddr) void {
+                self.pml45_base_addr = @truncate(@intFromEnum(addr) >> 12);
             }
         },
         .cr4 => packed struct(u64) {

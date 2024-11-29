@@ -83,7 +83,7 @@ fn dispatch_interrupt_tail(frame: *arch.SavedRegisterState) void {
     // IRQL:DPC
     {
         var node = blk: {
-            lcb.*.dpc_lock.lock();
+            lcb.*.dpc_lock.lock(null);
             defer lcb.*.dpc_lock.unlock();
             break :blk lcb.*.dpc_queue.clear();
         };

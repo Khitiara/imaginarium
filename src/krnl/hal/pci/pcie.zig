@@ -26,6 +26,7 @@ const Function = struct {
     class: u8,
     subclass: u8,
     revision: u8,
+    prog_if: u8,
     header: enum {
         general,
         pci_pci_bridge,
@@ -74,42 +75,37 @@ fn tee(next: bool, entry: bool) []const u8 {
 }
 
 fn render(gpa: std.mem.Allocator, node: *const TreeNode, writer: SerialWriter.Writer, buf: *std.ArrayList(u8)) std.mem.Allocator.Error!void {
-
-
-    try writer.print("{s}{s}Device #{d}\n", .{buf.items, tee(node.next != null, true), node.device});
+    try writer.print("{s}{s}Device #{d}\n", .{ buf.items, tee(node.next != null, true), node.device });
     {
         const len = buf.items.len;
         defer buf.shrinkRetainingCapacity(len);
         try buf.appendSlice(tee(node.next != null, false));
         try render_function(gpa, node.funcs, writer, buf);
     }
-    if(node.next) |n| {
+    if (node.next) |n| {
         try render(gpa, n, writer, buf);
     }
 }
 
 fn render_function(gpa: std.mem.Allocator, func: *const Function, writer: SerialWriter.Writer, buf: *std.ArrayList(u8)) std.mem.Allocator.Error!void {
-    try writer.print("{s}{s}Function #{d}: {s} of class {x:0>2}:{x:0>2}, revision {d} with id {x:0>4} from {x:0>4}\n", .{
-        buf.items, tee(func.next != null, true),
-        func.function,
-        @tagName(func.header),
-        func.class,
-        func.subclass,
-        func.revision,
-        func.device_id,
-        func.vendor_id,
+    try writer.print("{s}{s}Function #{d}: {s} of class {x:0>2}:{x:0>2}::{x:0>2}, revision {d} with id {x:0>4} from {x:0>4}\n", .{
+        buf.items,      tee(func.next != null, true),
+        func.function,  @tagName(func.header),
+        func.class,     func.subclass,
+        func.prog_if,   func.revision,
+        func.device_id, func.vendor_id,
     });
 
-    if(func.child) |c| {
-        try writer.print("{s}{s}Bus {d}\n", .{buf.items, tee(func.next != null, true), func.secondary});
+    if (func.child) |c| {
+        try writer.print("{s}{s}Bus {d}\n", .{ buf.items, tee(func.next != null, true), func.secondary });
 
-            const len = buf.items.len;
-            defer buf.shrinkRetainingCapacity(len);
+        const len = buf.items.len;
+        defer buf.shrinkRetainingCapacity(len);
 
         try buf.appendSlice(tee(func.next != null, false));
         try render(gpa, c, writer, buf);
     }
-    if(func.next) |f| {
+    if (func.next) |f| {
         try render_function(gpa, f, writer, buf);
     }
 }
@@ -130,6 +126,7 @@ fn enumerate_function(gpa: std.mem.Allocator, bridge: *align(1) const mcfg.PciHo
         .class = classes[3],
         .subclass = classes[2],
         .revision = classes[0],
+        .prog_if = classes[1],
         .header = @enumFromInt(stuff[2] & 0x7F),
     };
 

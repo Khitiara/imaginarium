@@ -11,8 +11,8 @@ allocated: usize = 0,
 
 /// acquire the spinlock. this version of the method disables interrupts before entering the loop,
 /// returning the previous interrupt flag
-pub fn lock(self: anytype) bool {
-    const s = arch.get_and_disable_interrupts();
+pub fn lock(self: anytype) arch.Flags {
+    const s = arch.idt.get_and_disable();
     self.lock_unsafe();
     return s;
 }
@@ -30,9 +30,9 @@ pub fn lock_unsafe(self: anytype) void {
 }
 
 /// release the spinlock, restoring the interrupt flag to the state saved when the spinlock was acquired
-pub fn unlock(self: anytype, saved_state: bool) void {
+pub fn unlock(self: anytype, saved_state: arch.Flags) void {
     self.unlock_unsafe();
-    arch.restore_interrupt_state(saved_state);
+    arch.idt.restore(saved_state);
 }
 
 /// release the spinlock, leaving the interrupt flag as is

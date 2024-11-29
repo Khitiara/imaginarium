@@ -44,7 +44,7 @@ SECTIONS
         *(.rodata*)
     } :rodata
 
-    . = ALIGN(8);
+    . = ALIGN(16);
     .data . : {
         *(.data*)
     } :data
@@ -74,5 +74,5 @@ SECTIONS
     __kernel_end__ = .;
     __kernel_phys_end__ = . - __base__;
 
-    /DISCARD/ : { *(.eh_frame*) *(.comment*) *(.note*) }
+    /DISCARD/ : { *(.eh_frame*) *(.comment*) *(.note*) .got }
 }

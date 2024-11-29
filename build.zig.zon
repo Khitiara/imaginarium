@@ -8,6 +8,10 @@
         .zuid = .{
             .path = "zuid/",
         },
+        .uacpi = .{
+            .url = "git+https://github.com/UltraOS/uACPI?ref=master#7e5722efeea1136e4ef4cd809c15052cbaf93919",
+            .hash = "1220ca9828d56fa1e34239cff31086e291934ba4e4f97f9777940f841c79b0a144f4",
+        },
     },
     .paths = .{
         "src/",

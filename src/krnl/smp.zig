@@ -11,6 +11,7 @@ const atomic = std.atomic;
 const msr = arch.msr;
 
 pub const idle_thread_id = zuid.UUID.nul;
+pub const idle_client_thread_id = std.math.maxInt(u64) - 1;
 const log = std.log.scoped(.smp);
 
 pub const LocalControlBlock = struct {
@@ -51,7 +52,7 @@ fn init(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator, wait_for_aps: boo
     // log.debug("NOTE: addr 0x0000000000000008 in flat addressing is 0x{x:0>16}", .{@as(*usize, @ptrFromInt(8)).*});
     p.syscall_stack = stack_top;
 
-    p.idle_thread = try Thread.init(gpa, idle_thread_id);
+    p.idle_thread = try Thread.init(gpa, idle_thread_id, idle_client_thread_id);
     try p.idle_thread.setup_stack(page_alloc, @import("dispatcher/idle.zig").idle, null);
     if (wait_for_aps) {
         arch.smp.wait_for_all_aps();
@@ -78,7 +79,8 @@ pub fn enter_threading(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator) !v
     log.debug("APIC {x}, idx {x}, base 0x{x:0>16}->0x{x:0>16}", .{ id, idx, base, base + @offsetOf(LcbWrapper, "lcb") });
     set_lcb_base(base);
     try init(page_alloc, gpa, false);
-    const t: *Thread = try Thread.init(gpa, zuid.UUID.new.v4());
+    const is_bsp = id == apic.bspid;
+    const t: *Thread = try Thread.init(gpa, if (is_bsp) zuid.UUID.max else zuid.UUID.new.v4(), if (is_bsp) 0 else std.crypto.random.intRangeAtMost(u64, 1, std.math.maxInt(u64) - 2));
     t.stack = arch.smp.get_local_krnl_stack();
     lcb.*.current_thread = t;
     dispatcher.interrupts.enter_thread_ctx();

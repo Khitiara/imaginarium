@@ -228,6 +228,8 @@ pub fn write_register(comptime reg: RegisterId, value: RegisterType(reg)) void {
     }
 }
 
+pub var bspid: u8 = undefined;
+
 pub inline fn get_lapic_id() u8 {
     return @truncate(read_register(.id) >> 24);
 }

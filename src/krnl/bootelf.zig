@@ -1,7 +1,7 @@
 const hal = @import("hal/hal.zig");
 
 pub const FramebufferInfo = extern struct {
-    base: usize,
+    base: hal.arch.PhysAddr,
     pitch: u32,
     width: u32,
     height: u32,

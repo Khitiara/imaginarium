@@ -391,6 +391,14 @@ pub fn DoublyLinkedList(comptime T: type, comptime field_name: []const u8) type 
             return @fieldParentPtr(field_name, node orelse return null);
         }
 
+        pub fn peek_front(self: *@This()) ?*T {
+            return ref_from_optional_node(self.impl.head);
+        }
+
+        pub fn peek_back(self: *@This()) ?*T {
+            return ref_from_optional_node(self.impl.tail);
+        }
+
         pub fn add_back(self: *@This(), item: *T) void {
             self.impl.add_back(node_from_ref(item));
         }

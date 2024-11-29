@@ -55,14 +55,19 @@ pub fn load_sdt_tableptr(table: *align(1) const anyopaque, expect_sig: ?sdt.Sign
     }
 }
 
-pub fn load_sdt(oem_id_ptr: ?*[6]u8) GlobalSdtError!void {
-    const rsdp_ptr = try rsdp.locate_rsdp();
-    // log.debug("rsdp: {s}", .{rsdp_ptr});
-    const info = rsdp.RsdpInfo.from_rsdp(rsdp_ptr);
-    try load_sdt_tableptr(info.table_addr, info.expect_signature);
-    if (oem_id_ptr) |p| {
-        p.* = info.oem_id;
-    }
+const PhysAddr = @import("../arch/arch.zig").PhysAddr;
+
+var rsdp_ptr:  ?PhysAddr = null;
+
+pub fn find_rsdp() !PhysAddr {
+    if(rsdp_ptr) |p| return p;
+    const p = try rsdp.locate_rsdp();
+    rsdp_ptr = p;
+    return p;
+}
+
+pub fn load_sdt() GlobalSdtError!void {
+
 }
 
 test {

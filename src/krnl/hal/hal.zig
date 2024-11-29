@@ -43,3 +43,7 @@ pub const InterruptVector = packed struct(u8) {
 test {
     @import("std").testing.refAllDecls(@This());
 }
+
+comptime {
+    _ = @import("acpi/zuacpi.zig");
+}

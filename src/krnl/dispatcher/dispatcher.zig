@@ -27,9 +27,12 @@ pub inline fn wait_for_single_object(handle: WaitHandle) !void {
 }
 
 pub fn wait_for_multiple_objects(targets: []*WaitHandle, mode: Thread.WaitType) !void {
+    smp.lcb.*.local_dispatcher_lock.lock();
+    defer smp.lcb.*.local_dispatcher_lock.unlock();
     if (@atomicRmw(?*Thread, &smp.lcb.*.current_thread, .Xchg, null, .acq_rel)) |thread| {
         thread.wait_lock.lock();
         defer thread.wait_lock.unlock();
+        var wait_needed: bool = false;
 
         thread.set_state(.running, .blocked);
         thread.wait_type = mode;
@@ -37,14 +40,14 @@ pub fn wait_for_multiple_objects(targets: []*WaitHandle, mode: Thread.WaitType) 
             wait_handle.wait_lock.lock();
             defer wait_handle.wait_lock.unlock();
 
-            const block: *WaitBlock = try WaitBlock.pool.create();
-            block.thread = thread;
-            block.target = wait_handle;
-            wait_handle.wait_queue.add_back(block);
-            thread.wait_list.add_back(block);
+            if (try wait_handle.check_wait(thread)) {
+                wait_needed = true;
+            }
+        }
+        if (!wait_needed) {
+            smp.lcb.*.current_thread = thread;
         }
     } else {
         @panic("Wait with no thread current");
     }
 }
-
