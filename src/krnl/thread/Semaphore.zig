@@ -3,12 +3,12 @@ const Thread = @import("../thread/Thread.zig");
 const smp = @import("../smp.zig");
 const InterruptRequestPriority = @import("../hal/hal.zig").InterruptRequestPriority;
 
+const Semaphore = @This();
+
 permits: usize,
 spinlock: dispatcher.SpinLockIRQL = .{ .set_irql = .dispatch },
 wait_handle: dispatcher.WaitHandle = .{ .check_wait = &check_wait },
 decrement_dpc: ?*dispatcher.Dpc = null,
-
-const Semaphore = @This();
 
 pub fn init(count: usize) Semaphore {
     return .{ .permits = count };
@@ -18,7 +18,7 @@ pub fn signal(self: *Semaphore) void {
     self.spinlock.lock(null);
     defer self.spinlock.unlock();
     self.permits += 1;
-    if (@intFromEnum(smp.lcb.irql) > @intFromEnum(InterruptRequestPriority.dpc)) {
+    if (@intFromEnum(smp.lcb.*.irql) > @intFromEnum(InterruptRequestPriority.dpc)) {
         if (self.decrement_dpc == null) {
             const dpc: *dispatcher.Dpc = dispatcher.Dpc.pool.create() catch @panic("Could not allocate DPC");
             self.decrement_dpc = dpc;
@@ -34,8 +34,14 @@ pub fn signal(self: *Semaphore) void {
     }
 }
 
+pub fn reset(self: *Semaphore) void {
+    self.spinlock.lock(null);
+    defer self.spinlock.unlock();
+    self.permits = 0;
+}
+
 fn dec_dpc(_: *const dispatcher.Dpc, self_opaque: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque) void {
-    const self: *Semaphore = @ptrCast(self_opaque.?);
+    const self: *Semaphore = @alignCast(@ptrCast(self_opaque.?));
     self.spinlock.lock(null);
     defer self.spinlock.unlock();
     self.decrement();
@@ -43,7 +49,7 @@ fn dec_dpc(_: *const dispatcher.Dpc, self_opaque: ?*anyopaque, _: ?*anyopaque, _
 
 fn decrement(self: *Semaphore) void {
     while (self.permits > 0) : (self.permits -= 1) {
-        self.wait_handle.release_one();
+        if(!self.wait_handle.release_one()) break;
     }
 }
 

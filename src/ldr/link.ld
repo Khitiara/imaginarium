@@ -13,13 +13,13 @@ PHDRS
 
 SECTIONS
 {
-    . = -2048M; /* ok, why isnt G an allowed suffix in linkerscript lmao */
+    . = 0x10000; /* ok, why isnt G an allowed suffix in linkerscript lmao */
     __base__          = .;
-    . += 0x200000;
 
     __kernel_begin__ = .;
     __kernel_text_begin__ = .;
     .text . : {
+        *(.realmode)
         *(.text*)
         . = ALIGN(4K);
         __ap_trampoline_begin__ = .;
@@ -28,18 +28,16 @@ SECTIONS
     }:text
     __kernel_text_end__ = .;
 
-    . = ALIGN(16K);
-    . += 16K;
+    . = ALIGN(2K);
 
     .bss.stack (NOLOAD) : {
-        . = ALIGN(16K);
+        . = ALIGN(2K);
         __bootstrap_stack_bottom__ = .;
-        . += 8M;
+        . += 2K;
         . = ALIGN(8);
         __bootstrap_stack_top__ = .;
     } :stk
 
-    . += 16K;
     .rodata . : {
         *(.rodata*)
     } :rodata

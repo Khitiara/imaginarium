@@ -7,6 +7,8 @@ const apic = @import("../apic/apic.zig");
 const log = @import("acpi.zig").log;
 const std = @import("std");
 
+const PhysAddr = @import("cmn").types.PhysAddr;
+
 const assert = std.debug.assert;
 
 pub const MadtFlags = packed struct(u32) {
@@ -73,7 +75,7 @@ fn MadtEntryPayload(comptime t: MadtEntryType) type {
         },
         .local_apic_addr_override => extern struct {
             header: MadtEntryHeader align(4),
-            lapic_addr: u64 align(4),
+            lapic_addr: PhysAddr align(4),
         },
         .io_apic => extern struct {
             header: MadtEntryHeader,
@@ -97,7 +99,7 @@ pub fn read_madt(ptr: *align(1) const Madt) !void {
     @memset(&apic.ioapic.ioapics_buf, null);
     var uid_nmi_pins: [256]apic.LapicNmiPin = undefined;
     log.info("APIC MADT table loaded at {*}", .{ptr});
-    var lapic_ptr: usize = ptr.lapic_addr;
+    var lapic_ptr: PhysAddr = @enumFromInt(ptr.lapic_addr);
     const entries_base_ptr = @as([*]const u8, @ptrCast(ptr))[@sizeOf(Madt)..ptr.header.length];
     var indexer = WindowStructIndexer(MadtEntryHeader){ .buf = entries_base_ptr };
     while (indexer.offset < entries_base_ptr.len) {
@@ -126,7 +128,7 @@ pub fn read_madt(ptr: *align(1) const Madt) !void {
 
                 apic.ioapic.ioapics_buf[@atomicRmw(u8, &apic.ioapic.ioapics_count, .Add, 1, .monotonic)] = .{
                     .id = payload.ioapic_id,
-                    .phys_addr = @import("../arch/arch.zig").ptr_from_physaddr([*]volatile u32, payload.ioapic_addr),
+                    .phys_addr = @import("../arch/arch.zig").ptr_from_physaddr([*]volatile u32, @enumFromInt(payload.ioapic_addr)),
                     .gsi_base = payload.gsi_base,
                 };
             },

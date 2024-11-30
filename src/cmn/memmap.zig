@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const PhysAddr = @import("arch/arch.zig").PhysAddr;
+const PhysAddr = @import("types.zig").PhysAddr;
 
 pub const RegionType = enum(u32) {
     normal = 1,
@@ -20,7 +20,7 @@ pub const ExtendedAddressRangeAttributes = packed struct(u32) {
     _reserved3: u28 = 0,
 };
 
-pub const MemoryMapEntry = extern struct {
+pub const Entry = extern struct {
     base: PhysAddr,
     size: usize,
     type: RegionType,

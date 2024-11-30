@@ -6,7 +6,7 @@ pub const ControlRegister = enum {
     cr8,
 };
 
-const PhysAddr = @import("arch.zig").PhysAddr;
+const PhysAddr = @import("cmn").types.PhysAddr;
 
 pub fn ControlRegisterValueType(comptime cr: ControlRegister) type {
     return switch (cr) {

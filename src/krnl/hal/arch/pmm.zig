@@ -31,10 +31,9 @@
 //      higher physical memory (general paging, a page fault handler, etc)
 
 const ext = @import("util").extern_address;
-const memory = @import("../memory.zig");
 const std = @import("std");
-
-pub const PhysAddr = enum(usize) { nul = 0, _ };
+const cmn = @import("cmn");
+const PhysAddr = cmn.types.PhysAddr;
 
 // the base virtual address of the initial memory layout. should always be -2G but only set it once in the linkerscript
 pub var kernel_size: usize = undefined;
@@ -71,7 +70,7 @@ pub var max_phys_mem: usize = 0;
 const log = std.log.scoped(.pmm);
 
 // initialize the pmm. takes the physical address width and the memory map
-pub fn init(paddrwidth: u8, memmap: []memory.MemoryMapEntry) void {
+pub fn init(paddrwidth: u8, memmap: []cmn.memmap.Entry) void {
     phys_mapping_base_unsigned = @intFromPtr(@extern(*u64, .{ .name = "__base__" }));
     phys_mapping_base = @bitCast(phys_mapping_base_unsigned);
     log.debug("initial physical mapping base 0x{X}", .{phys_mapping_base_unsigned});
@@ -123,7 +122,7 @@ pub fn init(paddrwidth: u8, memmap: []memory.MemoryMapEntry) void {
 // switch to a complete identity map at a new base virtual address.
 // this allows the use of the full physical memory not just the first 2G that bootelf maps
 // current plan is to map all of physmem at -1 << 45 (ffff_e..._...._....)
-pub fn enlarge_mapped_physical(memmap: []memory.MemoryMapEntry, new_base: isize) void {
+pub fn enlarge_mapped_physical(memmap: []cmn.memmap.Entry, new_base: isize) void {
     phys_mapping_base_unsigned = @bitCast(new_base);
     phys_mapping_base = new_base;
     const old_limit = phys_mapping_limit;
@@ -143,7 +142,7 @@ pub fn enlarge_mapped_physical(memmap: []memory.MemoryMapEntry, new_base: isize)
 pub fn ptr_from_physaddr(Ptr: type, paddr: PhysAddr) Ptr {
     // if the phys addr is 0 and the pointer is optional then its null. used mainly in the pmm to mark the end of the
     // free block lists
-    if (@as(std.builtin.TypeId, @typeInfo(Ptr)) == .optional and paddr == 0) {
+    if (@as(std.builtin.TypeId, @typeInfo(Ptr)) == .optional and paddr == .nul) {
         return null;
     }
     return @ptrFromInt(@intFromEnum(paddr) +% phys_mapping_base_unsigned);

@@ -24,7 +24,7 @@ pub fn read_hpet(ptr: *align(1) const Hpet) void {
     const idx = @atomicRmw(u8, &hpet.hpet_count, .Add, 1, .monotonic);
     hpet.hpet_indices[ptr.hpet_number] = idx;
     hpet.hpet_ids[idx] = ptr.hpet_number;
-    hpet.hpets[idx] = arch.ptr_from_physaddr(?*volatile hpet.HpetRegisters, ptr.address());
+    hpet.hpets[idx] = arch.ptr_from_physaddr(?*volatile hpet.HpetRegisters, @enumFromInt(ptr.address()));
     hpet.caps[idx] = ptr.block_id;
     hpet.min_periodic_ticks[idx] = ptr.minimum_clock_ticks_periodic_mode;
 }

@@ -294,7 +294,7 @@ pub const UntypedDoublyLinkedList = struct {
         }
     }
 
-    pub fn remove_front(self: *UntypedDoublyLinkedList) ?*Node {
+    pub fn remove_front(self: *UntypedDoublyLinkedList) ?*DoublyLinkedNode {
         self.len -= 1;
         if (self.head) |head| {
             if (head.next) |n| {
@@ -310,7 +310,7 @@ pub const UntypedDoublyLinkedList = struct {
         }
     }
 
-    pub fn remove_back(self: *UntypedDoublyLinkedList) ?*Node {
+    pub fn remove_back(self: *UntypedDoublyLinkedList) ?*DoublyLinkedNode {
         self.len -= 1;
         if (self.tail) |tail| {
             if (tail.prev) |p| {
@@ -368,6 +368,14 @@ pub const UntypedDoublyLinkedList = struct {
         }
         i.next = n;
         n.prev = i;
+    }
+
+    pub fn clear(self: *UntypedDoublyLinkedList) ?*DoublyLinkedNode {
+        defer {
+            self.head = null;
+            self.tail = null;
+        }
+        return self.head;
     }
 };
 

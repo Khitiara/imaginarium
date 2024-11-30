@@ -1,13 +1,14 @@
 const hal = @import("hal/hal.zig");
 const arch = hal.arch;
 const std = @import("std");
+const cmn = @import("cmn");
 
 pub var fb_base: [*]Pixel = undefined;
 pub var fb_width: usize = undefined;
 pub var fb_height: usize = undefined;
 pub var fb_pitch: usize = undefined;
 
-pub fn init(fb_info: *const @import("bootelf.zig").FramebufferInfo) void {
+pub fn init(fb_info: *const cmn.bootelf.FramebufferInfo) void {
     fb_base = arch.ptr_from_physaddr(@TypeOf(fb_base), fb_info.base);
     fb_width = fb_info.width;
     fb_height = fb_info.height;

@@ -30,8 +30,8 @@ pub fn add_krnl(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, 
     exe.build_id = .uuid;
     exe.pie = false;
     // exe.want_lto = false;
-    b.verbose_llvm_ir = "agony.ir";
-    b.verbose_llvm_bc = "agony.bc";
+    // b.verbose_llvm_ir = "agony.ir";
+    // b.verbose_llvm_bc = "agony.bc";
     // const ir = exe.getEmittedLlvmIr();
     // exe.export_memory = true;
     exe.entry = .disabled;
@@ -49,6 +49,7 @@ pub fn add_krnl(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, 
     utils.addImportFromTable(exe_module, "util");
     utils.addImportFromTable(exe_module, "config");
     utils.addImportFromTable(exe_module, "zuid");
+    utils.addImportFromTable(exe_module, "cmn");
 
     exe.setLinkerScript(b.path("src/krnl/link.ld"));
 

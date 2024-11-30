@@ -11,8 +11,11 @@ pub export fn _memset(dest: [*c]u8, value: c_int, size: usize) callconv(.C) [*c]
 }
 
 pub export fn _memmove(dest: [*]u8, src: [*]u8, size: usize) callconv(.C) [*]u8 {
-    @memcpy(dest, src[0..size]);
-    @memset(src[0..size], 0);
+    if(@intFromPtr(dest) > @intFromPtr(src)) {
+        std.mem.copyBackwards(u8, dest[0..size], src[0..size]);
+    } else {
+        std.mem.copyForwards(u8, dest[0..size], src[0..size]);
+    }
     return dest;
 }
 

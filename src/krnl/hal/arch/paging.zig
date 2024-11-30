@@ -4,6 +4,8 @@ const std = @import("std");
 
 const cpuid = @import("cpuid.zig");
 const pmm = @import("pmm.zig");
+const cmn = @import("cmn");
+const types = cmn.types;
 const ctrl_registers = @import("ctrl_registers.zig");
 
 pub const PagingFeatures = struct {
@@ -36,7 +38,7 @@ pub inline fn Table(Entry: type) type {
 
 // the base address of the top level page table
 pub var pgtbl: ?Table(entries.PML45E) = null;
-var root_physaddr: pmm.PhysAddr = undefined;
+var root_physaddr: types.PhysAddr = undefined;
 pub var using_5_level_paging: bool = false;
 pub var features: PagingFeatures = undefined;
 
@@ -91,7 +93,7 @@ const log = std.log.scoped(.page_tables);
 // maps a contiguous region of virtual memory to a contiguous region of physical memory
 // this function uses the largest possible page sizes within alignment and compatability limits
 // though the same caveats about huge pages and free physical memory apply to this function as to map_page
-pub fn map_range(base_phys: pmm.PhysAddr, base_linear: isize, length: usize) !void {
+pub fn map_range(base_phys: types.PhysAddr, base_linear: isize, length: usize) !void {
     var pa = @intFromEnum(base_phys);
     var la = base_linear;
     var sz = length;
@@ -124,7 +126,7 @@ pub fn map_range(base_phys: pmm.PhysAddr, base_linear: isize, length: usize) !vo
 // as this function uses the pmm to allocate physical pages for the created page tables and thus if
 // the target physical memory is unallocated any created page tables may end up in the mapped region,
 // though in some cases e.g. the sequentially mapped region at base -1 << 45 this may be acceptable behavior
-pub noinline fn map_page(phys_addr: pmm.PhysAddr, linear_addr: isize, page_size: PageSize) !void {
+pub noinline fn map_page(phys_addr: types.PhysAddr, linear_addr: isize, page_size: PageSize) !void {
     const lin_unsigned: usize = @bitCast(linear_addr);
     // log.debug("mapping {x:0>16} to {x:0>16} ({s})", .{ lin_unsigned, phys_addr, @tagName(page_size) });
     // this method takes a physical address meaning the block is already mapped

@@ -42,8 +42,8 @@ pub fn schedule(thread: *Thread, processor: ?u8) void {
         // TODO trampoline into a DPC on the target processor
         // DPC execution is not implemented yet so for now dont bother and just eat the lock penalty
     }
-    const key = l.local_dispatcher_lock.lock();
-    defer l.local_dispatcher_lock.unlock(key);
+    l.local_dispatcher_lock.lock(null);
+    defer l.local_dispatcher_lock.unlock();
     thread.set_state(.ready, .assigned);
     l.local_dispatcher_queue.add(thread);
 }
@@ -75,7 +75,7 @@ pub fn signal_wait_block(block: *WaitBlock, already_removed: bool) void {
                 // list struct so we can use it to iterate and free
                 var n = thread.wait_list.clear();
                 while (n) |node| {
-                    n = thread.WaitListType.ref_from_optional_node(node.thread_wait_list.next);
+                    n = Thread.WaitListType.ref_from_optional_node(node.thread_wait_list.next);
                     if(node != block or !already_removed){
                         // remove it from its handle's wait queue
                         node.target.wait_lock.lock(null);

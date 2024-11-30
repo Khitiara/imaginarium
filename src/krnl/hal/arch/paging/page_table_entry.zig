@@ -2,7 +2,7 @@ const std = @import("std");
 const makeTruncMask = @import("util").masking.makeTruncMask;
 const assert = std.debug.assert;
 
-const PhysAddr = @import("../arch.zig").PhysAddr;
+const PhysAddr = @import("cmn").types.PhysAddr;
 
 pub const PageMeta = packed struct(u7) {
     /// if present is false and reserved is true then a page fault to this page should lazily obtain and zero a physical

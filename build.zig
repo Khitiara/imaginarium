@@ -2,10 +2,12 @@ const std = @import("std");
 const log = std.log;
 const Target = std.Target;
 const DiskImage = @import("build/disk_image.zig");
-const LazyPath = std.Build.LazyPath;
+const Build = std.Build;
+const LazyPath = Build.LazyPath;
 
 const utils = @import("build/util.zig");
 const add_krnl = @import("build/krnl.zig").add_krnl;
+const add_stage2 = @import("build/ldr.zig").add_stage2;
 const uacpi = @import("build/uacpi.zig");
 
 fn target_features(query: *Target.Query) !void {
@@ -55,7 +57,7 @@ fn parseQemuGdbOption(v: ?[]const u8) QemuGdbOption {
     }
 }
 
-fn add_img(b: *std.Build, arch: Target.Cpu.Arch, krnlstep: *std.Build.Step, elf: LazyPath, symbols: ?LazyPath) !struct { *std.Build.Step, LazyPath } {
+fn add_img(b: *Build, arch: Target.Cpu.Arch, krnlstep: *Build.Step, elf: LazyPath, symbols: ?LazyPath) !struct { *Build.Step, LazyPath } {
     const ldr_img = b.dependency("bootelf", .{}).namedWriteFiles("bootelf").getDirectory().path(b, "bootelf.bin");
     const disk_image = DiskImage.create(b, .{
         .basename = "drive.bin",
@@ -80,7 +82,7 @@ fn add_img(b: *std.Build, arch: Target.Cpu.Arch, krnlstep: *std.Build.Step, elf:
     return .{ step, disk_image.getOutput() };
 }
 
-pub fn build(b: *std.Build) !void {
+pub fn build(b: *Build) !void {
     utils.init(b);
     const arch = b.option(Target.Cpu.Arch, "arch", "The CPU architecture to build for") orelse .x86_64;
     var selected_target: Target.Query = .{
@@ -108,14 +110,23 @@ pub fn build(b: *std.Build) !void {
     const zuid_dep = b.dependency("zuid", .{});
     utils.name_module("zuid", zuid_dep.module("zuid"));
 
-    const util = b.addModule("util", .{
+    const util = b.createModule(.{
         .root_source_file = b.path("src/util/util.zig"),
     });
     utils.name_module("util", util);
     utils.addImportFromTable(util, "config");
     utils.addImportFromTable(util, "zuid");
 
+    const common_module = b.createModule(.{
+        .root_source_file = b.path("src/cmn/common.zig"),
+    });
+    utils.name_module("cmn", common_module);
+
     const krnlexe, const krnlstep, const elf, const debug = try add_krnl(b, arch, target, optimize);
+    const stage2exe, const stage2step, const s2elf, const s2debug = try add_stage2(b, arch, optimize);
+    _ = stage2step; // autofix
+    _ = s2elf; // autofix
+    _ = s2debug; // autofix
     const imgstep, const imgFile = try add_img(b, arch, krnlstep, elf, debug);
 
     var cpu_flags = try std.ArrayList([]const u8).initCapacity(b.allocator, 8);
@@ -141,11 +152,11 @@ pub fn build(b: *std.Build) !void {
 
     qemu.addArgs(&.{
         "-d",
-        "int,cpu_reset",
+        "int,cpu_reset,guest_errors",
         "--no-reboot",
         // "--no-shutdown",
-        "-smp",
-        "4,cores=4",
+        // "-smp",
+        // "4,cores=4",
         "-M",
         "type=q35,smm=off,hpet=on", // q35 has HPET by default afaik but better safe than sorry
         "-cpu",
@@ -159,7 +170,7 @@ pub fn build(b: *std.Build) !void {
 
     if (b.option(bool, "debugcon", "output ports to stdio") orelse true) {
         qemu.addArg("-debugcon");
-        qemu.addArg("file:aaa.ansi");
+        qemu.addArg("file:aaa.txt");
     }
     switch (parseQemuGdbOption(b.option([]const u8, "gdb", "use gdb with qemu"))) {
         .none => {},
@@ -190,4 +201,5 @@ pub fn build(b: *std.Build) !void {
 
     const noemit = b.step("buildnoemit", "");
     noemit.dependOn(&krnlexe.step);
+    noemit.dependOn(&stage2exe.step);
 }

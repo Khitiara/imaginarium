@@ -11,10 +11,10 @@
 
 void *_memcpy(void *dest, const void* src, size_t size);
 void *_memset(void *dest, int src, size_t size);
-int _memcmp(const void *src1, const void *src2, size_t size);
+//int _memcmp(const void *src1, const void *src2, size_t size);
 void *_memmove(void *dest, const void* src, size_t size);
-int _strncmp(const char *src1, const char *src2, size_t size);
-int _strcmp(const char *src1, const char *src2);
+//int _strncmp(const char *src1, const char *src2, size_t size);
+//int _strcmp(const char *src1, const char *src2);
 size_t _strnlen(const char *src, size_t size);
 size_t _strlen(const char *src);
 

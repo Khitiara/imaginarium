@@ -17,6 +17,10 @@ pub const Signature = enum(u32) {
     // BGRT = cast_signature("BGRT"),
     _,
 
+    pub fn to_string(self: *const Signature) *const [4]u8 {
+        return @as(*const [4]u8, @ptrCast(&self));
+    }
+
     pub fn format(
         self: Signature,
         comptime fmt: []const u8,
@@ -26,7 +30,7 @@ pub const Signature = enum(u32) {
         _ = fmt;
         _ = options;
 
-        try writer.writeAll(@as(*const [4]u8, @ptrCast(&self)));
+        try writer.writeAll(self.to_string());
     }
 };
 

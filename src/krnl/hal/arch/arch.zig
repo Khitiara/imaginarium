@@ -14,15 +14,16 @@ pub const rand = @import("rand.zig");
 pub const smp = @import("smp.zig");
 pub const time = @import("time.zig");
 const std = @import("std");
+const cmn = @import("cmn");
+const types = cmn.types;
 
-const memory = @import("../memory.zig");
 const acpi = @import("../acpi/acpi.zig");
 
-pub const cc: @import("std").builtin.CallingConvention = .SysV;
+pub const cc: @import("std").builtin.CallingConvention = .{ .x86_64_sysv = .{} };
 
 pub fn puts(bytes: []const u8) void {
     for (bytes) |b| {
-        serial.writeout(0xE9, b);
+        serial.out(0xE9, b);
     }
 }
 
@@ -50,12 +51,11 @@ pub fn delay_unsafe(cycles: u64) void {
 
 const log = std.log.scoped(.init);
 
-pub const PhysAddr = pmm.PhysAddr;
 pub const ptr_from_physaddr = pmm.ptr_from_physaddr;
 pub const physaddr_from_ptr = pmm.physaddr_from_ptr;
 const apic = @import("../apic/apic.zig");
 
-pub fn platform_init(memmap: []memory.MemoryMapEntry) !void {
+pub fn platform_init(memmap: []cmn.memmap.Entry) !void {
     log.info("setting up GDT", .{});
     gdt.setup_gdt();
     log.info("gdt setup and loaded", .{});
@@ -76,7 +76,7 @@ pub fn platform_init(memmap: []memory.MemoryMapEntry) !void {
     control_registers.write(.cr4, cr4);
     idt.enable();
     log.info("interrupts enabled", .{});
-    try acpi.load_sdt();
+    try @import("../acpi/zuacpi.zig").init();
     log.info("loaded acpi sdt", .{});
     apic.init();
     log.info("checked for x2apic compat and enabled apic in {s} mode", .{if (apic.x2apic.x2apic_enabled) "x2apic" else "xapic"});
@@ -91,33 +91,7 @@ comptime {
     _ = idt;
 }
 
-pub const Flags = packed struct(u64) {
-    carry: bool,
-    _reserved1: u1 = 1,
-    parity: bool,
-    _reserved2: u1 = 0,
-    aux_carry: bool,
-    _reserved3: u1 = 0,
-    zero: bool,
-    sign: bool,
-    trap: bool,
-    interrupt_enable: bool,
-    direction: bool,
-    overflow: bool,
-    iopl: u2,
-    nt: bool,
-    mode: bool,
-    res: bool,
-    vm: bool,
-    alignment_check: bool,
-    vif: bool,
-    vip: bool,
-    cpuid: bool,
-    _reserved4: u8 = 0,
-    aes_keyschedule_loaded: bool,
-    alternate_instruction_set: bool,
-    _reserved5: u32 = 0,
-};
+pub const Flags = types.Flags;
 
 pub fn flags() Flags {
     return asm volatile (

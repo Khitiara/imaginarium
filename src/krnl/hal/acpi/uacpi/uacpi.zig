@@ -1,3 +1,5 @@
+pub const tables = @import("tables.zig");
+
 pub const uacpi_object = opaque {};
 pub const uacpi_handle = *anyopaque;
 
@@ -183,6 +185,7 @@ pub const uacpi_flags = packed struct(u64) {
     proactive_table_csum: bool = false,
     _: u58 = 0,
 };
+
 extern fn uacpi_initialize(flags: uacpi_flags) uacpi_status;
 pub inline fn initialize(flags: uacpi_flags) Error!void {
     return uacpi_initialize(flags).err();

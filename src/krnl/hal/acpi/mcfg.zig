@@ -45,9 +45,12 @@ pub const PciHostBridge = extern struct {
 
 const log = @import("acpi.zig").log;
 
-pub fn set_table(table: *align(1) const Mcfg) void {
+pub fn set_table(table: *align(1) const Mcfg) !void {
     log.info("PCI(E) MCFG table loaded at {*}", .{table});
-    host_bridges = table.bridges();
+    const b = table.bridges();
+    const b2 = try arch.vmm.gpa.allocator().alignedAlloc(PciHostBridge, 1, b.len);
+    @memcpy(b2, b);
+    host_bridges = b2;
     for (host_bridges, 0..) |host_bridge, i| {
         log.debug("Host Bridge {d}: SegGrp 0x{X:0>4} buses {X:0>2}-{X:0>2} mapped with base 0x{X:0>16}", .{ i, host_bridge.segment_group, host_bridge.bus_start, host_bridge.bus_end, host_bridge.base });
     }

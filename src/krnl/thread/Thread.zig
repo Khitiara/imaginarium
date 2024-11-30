@@ -39,7 +39,7 @@ pub const SavedThreadState = struct {
 };
 
 pub const WaitType = enum {
-    await_ny,
+    any,
     all,
 };
 
@@ -69,7 +69,7 @@ client_ids: struct {
     procid: u64,
 },
 
-const WaitListType = queue.DoublyLinkedList(dispatcher.WaitBlock, "thread_wait_list");
+pub const WaitListType = queue.DoublyLinkedList(dispatcher.WaitBlock, "thread_wait_list");
 
 const vtable: ob.Object.VTable = .{
     .deinit = &ob.DeinitImpl(ob.Object, Thread, "header").deinit_inner,

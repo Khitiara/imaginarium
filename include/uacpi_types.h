@@ -72,7 +72,7 @@ typedef unsigned int                uintptr_t;
 #define va_copy(d,s)	__builtin_va_copy(d,s)
 #endif
 #define __va_copy(d,s)	__builtin_va_copy(d,s)
-typedef char* va_list;
+typedef __builtin_va_list va_list;
 
 // BEGIN UACPI ALIASES
 

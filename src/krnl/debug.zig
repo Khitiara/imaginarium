@@ -40,7 +40,7 @@ pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_
     }
     dump_stack_trace(log, ret_addr);
     while (true) {
-        @breakpoint();
+        // @breakpoint();
     }
 }
 

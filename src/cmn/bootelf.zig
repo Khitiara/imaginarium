@@ -1,7 +1,8 @@
-const hal = @import("hal/hal.zig");
+const types = @import("types.zig");
+const memmap = @import("memmap.zig");
 
 pub const FramebufferInfo = extern struct {
-    base: hal.arch.PhysAddr,
+    base: types.PhysAddr,
     pitch: u32,
     width: u32,
     height: u32,
@@ -10,10 +11,10 @@ pub const FramebufferInfo = extern struct {
 pub const BootelfData = extern struct {
     magic: u64,
     entry_count: u64,
-    entries: [*]hal.memory.MemoryMapEntry,
+    entries: [*]memmap.Entry,
     framebuffer: FramebufferInfo,
 
-    pub fn memory_map(self: *BootelfData) []hal.memory.MemoryMapEntry {
+    pub fn memory_map(self: *BootelfData) []memmap.Entry {
         return self.entries[0..self.entry_count];
     }
 };

@@ -1,5 +1,8 @@
 const uacpi = @import("uacpi.zig");
 const std = @import("std");
+const cmn = @import("cmn");
+const types = cmn.types;
+
 const log = std.log.scoped(.uacpi);
 
 const hal = @import("../../hal.zig");
@@ -10,7 +13,7 @@ const serial = arch.serial;
 const uacpi_allocator = vmm.gpa.allocator();
 const ptr_from_physaddr = pmm.ptr_from_physaddr;
 const physaddr_from_ptr = pmm.physaddr_from_ptr;
-const PhysAddr = pmm.PhysAddr;
+const PhysAddr = types.PhysAddr;
 
 const SpinLock = hal.SpinLock;
 const Mutex = @import("../../../thread/Mutex.zig");
@@ -185,28 +188,39 @@ export fn uacpi_kernel_release_mutex(_: *Mutex) callconv(.C) void {}
 export fn uacpi_kernel_create_event() callconv(.C) ?*Semaphore {
     return uacpi_allocator.create(Semaphore) catch null;
 }
+
 export fn uacpi_kernel_free_event(ptr: *Semaphore) callconv(.C) void {
     uacpi_allocator.destroy(ptr);
 }
+
 export fn uacpi_kernel_wait_for_event(_: *Semaphore, _: u16) callconv(.C) bool {
     return true;
 }
-export fn uacpi_kernel_signal_event(_: *Semaphore) callconv(.C) void {}
-export fn uacpi_kernel_reset_event(_: *Semaphore) callconv(.C) void {}
+
+export fn uacpi_kernel_signal_event(sema: *Semaphore) callconv(.C) void {
+    sema.signal();
+}
+
+export fn uacpi_kernel_reset_event(sema: *Semaphore) callconv(.C) void {
+    sema.reset();
+}
 
 export fn uacpi_kernel_handle_firmware_request(_: [*c]uacpi.FirmwareRequestRaw) callconv(.C) uacpi.uacpi_status {
     return .unimplemented;
 }
+
 export fn uacpi_kernel_install_interrupt_handler(irq: u32, _: uacpi.InterruptHandler, ctx: ?*anyopaque, out_irq_handle: *?*anyopaque) callconv(.C) uacpi.uacpi_status {
     _ = irq;
     _ = ctx;
     _ = out_irq_handle;
     return .unimplemented;
 }
+
 export fn uacpi_kernel_uninstall_interrupt_handler(_: uacpi.InterruptHandler, irq_handle: ?*anyopaque) callconv(.C) uacpi.uacpi_status {
     _ = irq_handle;
     return .unimplemented;
 }
+
 export fn uacpi_kernel_create_spinlock() callconv(.C) ?*SpinLock {
     return uacpi_allocator.create(SpinLock) catch null;
 }
