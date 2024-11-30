@@ -226,7 +226,7 @@ pub noinline fn spoof_isr(isr: InterruptHandler) void {
     __isr__spoof__(isr, @returnAddress());
 }
 
-extern fn __isr__spoof__(isr: InterruptHandler, return_address: usize) callconv(.Win64) void;
+extern fn __isr__spoof__(isr: InterruptHandler, return_address: usize) callconv(arch.cc) void;
 
 comptime {
     // the asm snippet of push operations for saved registers
@@ -270,16 +270,16 @@ comptime {
         \\  .global __isr_spoof__;
         \\  .type __isr_spoof__, @function;
         \\  __isr__spoof__:
-        \\      pushq    %rcx # push the handler address. this will be right above the frame
-        \\      movq     %ss, %rcx
-        \\      pushq    %rcx # normal interrupt frame things
-        \\      movq     %rsp, %rcx
-        \\      addq     $8, %rcx
-        \\      pushq    %rcx
+        \\      pushq    %rdi # push the handler address. this will be right above the frame
+        \\      movq     %ss, %rdi
+        \\      pushq    %rdi # normal interrupt frame things
+        \\      movq     %rsp, %rdi
+        \\      addq     $8, %rdi
+        \\      pushq    %rdi
         \\      pushfq
-        \\      movq     %cs, %rcx
-        \\      pushq    %rcx
-        \\      pushq    %rdx
+        \\      movq     %cs, %rdi
+        \\      pushq    %rdi
+        \\      pushq    %rsi
         \\      pushq    $0 # no error code
         \\      pushq    $0x20 # use vector 0x20 to set the IRQL if the handler uses the normal bits
     ++ isr_setup

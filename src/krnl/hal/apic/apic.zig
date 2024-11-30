@@ -184,7 +184,7 @@ pub const LapicNmiPin = packed struct(u8) {
     _: u2 = 0,
 };
 
-pub var lapic_ptr: RegisterSlice = undefined;
+pub var lapic_ptr: [*]volatile u32 = undefined;
 
 pub const Lapic = struct {
     id: u8,
@@ -234,8 +234,8 @@ pub inline fn get_lapic_id() u8 {
     return @truncate(read_register(.id) >> 24);
 }
 
-inline fn get_register_ptr(reg: u7, comptime T: type) *align(16) volatile T {
-    return @ptrCast(&lapic_ptr[reg].item);
+inline fn get_register_ptr(reg: u7, comptime T: type) *volatile T {
+    return @ptrCast(lapic_ptr + (reg << 4));
 }
 
 test {

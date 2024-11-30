@@ -51,7 +51,7 @@ pub const Hpet = extern struct {
         switch (self.base_address.address_space) {
             .system_memory => return self.base_address.address.system_memory,
             .system_io => return self.base_address.address.system_io,
-            else => @panic(""),
+            else => @panic("idk whats happening here"),
         }
     }
 };

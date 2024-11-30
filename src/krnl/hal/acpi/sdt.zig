@@ -17,8 +17,8 @@ pub const Signature = enum(u32) {
     // BGRT = cast_signature("BGRT"),
     _,
 
-    pub fn to_string(self: *const Signature) *const [4]u8 {
-        return @as(*const [4]u8, @ptrCast(&self));
+    pub fn to_string(self: Signature) [4]u8 {
+        return @bitCast(@intFromEnum(self));
     }
 
     pub fn format(

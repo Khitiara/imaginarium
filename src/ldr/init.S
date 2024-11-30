@@ -3,8 +3,8 @@
 .global __kstart;
 __kstart:
     cli
-    leal __bootstrap_stack_top__, %esp
-    pushl $0
-    pushl $0
-    xorl %ebp, %ebp
+    leaq __bootstrap_stack_top__, %rsp
+    pushq $0
+    pushq $0
+    xorq %rbp, %rbp
     jmp __kstart2

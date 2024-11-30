@@ -19,7 +19,7 @@ const types = cmn.types;
 
 const acpi = @import("../acpi/acpi.zig");
 
-pub const cc: @import("std").builtin.CallingConvention = .{ .x86_64_sysv = .{} };
+pub const cc: @import("std").builtin.CallingConvention = types.cc;
 
 pub fn puts(bytes: []const u8) void {
     for (bytes) |b| {

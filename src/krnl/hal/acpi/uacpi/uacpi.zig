@@ -1,4 +1,5 @@
 pub const tables = @import("tables.zig");
+const std = @import("std");
 
 pub const uacpi_object = opaque {};
 pub const uacpi_handle = *anyopaque;
@@ -96,7 +97,7 @@ pub const uacpi_status = enum(c_uint) {
     aml_call_stack_depth_limit = 251592714,
     _,
 
-    pub inline fn err(s: uacpi_status) Error!void {
+    pub fn err(s: uacpi_status) Error!void {
         return switch (s) {
             .ok => {},
             .mapping_failed => error.MappingFailed,
@@ -130,11 +131,11 @@ pub const uacpi_status = enum(c_uint) {
             .aml_invalid_resource => error.AmlInvalidResource,
             .aml_loop_timeout => error.AmlLoopTimeout,
             .aml_call_stack_depth_limit => error.AmlCallStackDepthLimit,
-            else => @panic("Invalid UACPI error"),
+            else => std.debug.panic("Invalid UACPI status {x}", .{s}),
         };
     }
 
-    pub inline fn status(e: Error) uacpi_status {
+    pub fn status(e: Error) uacpi_status {
         return switch (e) {
             error.MappingFailed => .mapping_failed,
             error.OutOfMemory => .out_of_memory,

@@ -184,7 +184,8 @@ pub fn read_madt(ptr: *align(1) const Madt) !void {
     for (apic.lapics.items(.uid), apic.lapics.items(.nmi_pins)) |uid, *pins| {
         pins.* = uid_nmi_pins[uid];
     }
-    apic.lapic_ptr = @import("../arch/arch.zig").ptr_from_physaddr(apic.RegisterSlice, lapic_ptr);
+    log.info("LAPIC base at phys {x}", .{@intFromEnum(lapic_ptr)});
+    apic.lapic_ptr = @import("../arch/arch.zig").ptr_from_physaddr([*]volatile u32, lapic_ptr);
 }
 
 test {

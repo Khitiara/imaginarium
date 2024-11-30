@@ -20,12 +20,13 @@ const Mutex = @import("../../../thread/Mutex.zig");
 const Semaphore = @import("../../../thread/Semaphore.zig");
 
 export fn uacpi_kernel_log(level: uacpi.log_level, string: [*:0]const u8) callconv(.C) void {
+    const str = std.mem.span(string);
+    const s = std.mem.trim(u8, str, " \n\r\t");
     switch (level) {
-        .debug => log.debug("{s}", .{string}),
-        .trace => log.debug("{s}", .{string}),
-        .info => log.info("{s}", .{string}),
-        .warn => log.warn("{s}", .{string}),
-        .err => log.err("{s}", .{string}),
+        .debug, .trace => log.debug("{s}", .{s}),
+        .info => log.info("{s}", .{s}),
+        .warn => log.warn("{s}", .{s}),
+        .err => log.err("{s}", .{s}),
     }
 }
 
@@ -39,9 +40,9 @@ fn alignedAlloc2(alloc: std.mem.Allocator, len: usize, alignment: usize) ?[*]u8 
 }
 
 export fn uacpi_kernel_calloc(count: usize, size: usize) callconv(.C) ?[*]u8 {
-    const ret = alignedAlloc2(uacpi_allocator, count * size, size) orelse return null;
-    @memset(ret[0 .. count * size], 0);
-    return ret;
+    const ret = uacpi_allocator.alloc(u8, count * size) catch return null;
+    @memset(ret, 0);
+    return ret.ptr;
 }
 
 export fn uacpi_kernel_free(address: [*]u8, size: usize) callconv(.C) void {
@@ -179,8 +180,8 @@ export fn uacpi_kernel_free_mutex(ptr: *Mutex) callconv(.C) void {
     uacpi_allocator.destroy(ptr);
 }
 
-export fn uacpi_kernel_acquire_mutex(_: *Mutex, _: u16) callconv(.C) bool {
-    return true;
+export fn uacpi_kernel_acquire_mutex(_: *Mutex, _: u16) callconv(.C) uacpi.uacpi_status {
+    return .ok;
 }
 
 export fn uacpi_kernel_release_mutex(_: *Mutex) callconv(.C) void {}

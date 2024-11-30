@@ -32,20 +32,17 @@ fn re_query(arch: Target.Cpu.Arch) !Target.Query {
     return query;
 }
 
-pub fn add_stage2(b: *Build, arch: Target.Cpu.Arch, optimize: std.builtin.OptimizeMode)  !struct {
+pub fn add_stage2(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, optimize: std.builtin.OptimizeMode)  !struct {
     *std.Build.Step.Compile,
     *std.Build.Step,
     LazyPath,
     ?LazyPath,
 } {
-    const query = try re_query(arch);
-    const stage2_target = b.resolveTargetQuery(query);
-
     const exe_name = "imaginarium.ldr.b";
     const exe = b.addExecutable(.{
         .name = "stage2.elf",
         .root_source_file = b.path("src/ldr/main.zig"),
-        .target = stage2_target,
+        .target = target,
         .optimize = optimize,
         .code_model = .kernel,
         .pic = false,
@@ -71,8 +68,8 @@ pub fn add_stage2(b: *Build, arch: Target.Cpu.Arch, optimize: std.builtin.Optimi
 
     exe.setLinkerScript(b.path("src/ldr/link.ld"));
 
-    const krnlstep = b.step("ldr", "imaginarium stage2 bootloader");
-    krnlstep.dependOn(&b.addInstallArtifact(exe, .{
+    const ldrstep = b.step("ldr", "imaginarium stage2 bootloader");
+    ldrstep.dependOn(&b.addInstallArtifact(exe, .{
         .dest_dir = .{
             .override = .{
                 .custom = "agony",
@@ -85,18 +82,18 @@ pub fn add_stage2(b: *Build, arch: Target.Cpu.Arch, optimize: std.builtin.Optimi
         .extract_to_separate_file = true,
     });
 
-    const krnloutdir = b.fmt("{s}/ldr/", .{@tagName(arch)});
-    utils.installFrom(b, &objcopy.step, krnlstep, objcopy.getOutput(), krnloutdir, b.dupe(exe_name));
-    // installFrom(b, &exe.step, krnlstep, ir, "agony", "something.ir");
+    const ldroutdir = b.fmt("{s}/ldr/", .{@tagName(arch)});
+    utils.installFrom(b, &objcopy.step, ldrstep, objcopy.getOutput(), ldroutdir, b.dupe(exe_name));
+    // installFrom(b, &exe.step, ldrstep, ir, "agony", "something.ir");
     if (objcopy.getOutputSeparatedDebug()) |dbg| {
-        utils.installFrom(b, &objcopy.step, krnlstep, dbg, krnloutdir, try std.mem.concat(b.allocator, u8, &.{ exe_name, ".debug" }));
+        utils.installFrom(b, &objcopy.step, ldrstep, dbg, ldroutdir, try std.mem.concat(b.allocator, u8, &.{ exe_name, ".debug" }));
     }
 
-    b.getInstallStep().dependOn(krnlstep);
+    b.getInstallStep().dependOn(ldrstep);
 
     return .{
         exe,
-        krnlstep,
+        ldrstep,
         objcopy.getOutput(),
         objcopy.getOutputSeparatedDebug(),
     };

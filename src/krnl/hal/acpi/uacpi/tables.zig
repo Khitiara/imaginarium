@@ -28,8 +28,8 @@ pub fn set_table_installation_handler(handler: TableInstallationHandler) !void {
 extern fn uacpi_table_find_by_signature(signature: *const [4]u8, out_table: *uacpi_table) uacpi.uacpi_status;
 pub fn find_table_by_signature(signature: sdt.Signature) !?uacpi_table {
     var t: uacpi_table = undefined;
-    uacpi_table_find_by_signature(signature.to_string(), &t).err() catch |err| switch (err) {
-        error.NotFound => return null,
+    uacpi_table_find_by_signature(&signature.to_string(), &t).err() catch |err| switch (err) {
+        // error.NotFound => return null,
         else => return err,
     };
     return t;
