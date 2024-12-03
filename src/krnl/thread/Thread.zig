@@ -54,7 +54,7 @@ pub const Affinity = struct {
 };
 
 header: ob.Object,
-wait_lock: dispatcher.SpinLockIRQL = .{ .set_irql = .dispatch },
+wait_lock: @import("../hal/SpinLock.zig") = .{},
 wait_type: WaitType = undefined,
 wait_list: WaitListType = .{},
 join: dispatcher.WaitHandle,

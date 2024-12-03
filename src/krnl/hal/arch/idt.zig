@@ -91,8 +91,8 @@ pub const InterruptGateDescriptor = packed struct(u128) {
     };
 };
 
-const RawHandler = *const fn () callconv(.Naked) void;
-const InterruptHandler = *const fn (*RawInterruptFrame) callconv(.SysV) void;
+const RawHandler = *const fn () callconv(.naked) void;
+const InterruptHandler = *const fn (*RawInterruptFrame) callconv(arch.cc) void;
 
 pub const SelectorIndexCode = packed struct(u64) {
     pub const Entry = union(enum) {
@@ -308,7 +308,7 @@ comptime {
         \\      popq     %rax # pop fs and gs segment selectors
         \\      mov      %rax, %fs
         \\      popq     %rax
-        \\      mov      %rax, %gs
+        // \\      mov      %rax, %gs
     ++ pop ++ // pop all the saved normal registers
         \\      add      $8, %rsp
         \\      movl     4(%rsp), %edx # pop FS_BASE
@@ -393,7 +393,7 @@ pub fn allocate_vector(level: InterruptRequestPriority) !InterruptVector {
 }
 
 /// handler can be a pointer to any function which takes *InterruptFrame(SomeErrorCodeType) as its only parameter
-pub fn add_handler(int: Interrupt, handler: anytype, typ: GateType, dpl: u2, ist: u3) void {
+pub noinline fn add_handler(int: Interrupt, handler: anytype, typ: GateType, dpl: u2, ist: u3) void {
     // put a descriptor in the IDT pointing to the raw handler for the specified vector
     idt[int.int] = InterruptGateDescriptor.init(@intFromPtr(raw_handlers[int.int]), ist, typ, dpl);
     // and put the managed isr into the function pointer array so __isr_common calls into it

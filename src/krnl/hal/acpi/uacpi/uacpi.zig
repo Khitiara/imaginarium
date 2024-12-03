@@ -1,4 +1,5 @@
 pub const tables = @import("tables.zig");
+pub const event = @import("event.zig");
 const std = @import("std");
 
 pub const uacpi_object = opaque {};

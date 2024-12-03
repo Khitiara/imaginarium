@@ -116,6 +116,10 @@ pub fn Queue(comptime T: type, comptime field_name: []const u8) type {
             return if (self.impl.peek()) |head| ref_from_node(head) else null;
         }
 
+        pub fn next(item: *T) ?*T {
+            return ref_from_optional_node(node_from_ref(item).next);
+        }
+
         pub fn dequeue(self: *@This()) ?*T {
             if (self.impl.dequeue()) |node| {
                 return ref_from_node(node);
@@ -326,7 +330,7 @@ pub const UntypedDoublyLinkedList = struct {
         }
     }
 
-    pub fn remove(self: *UntypedDoublyLinkedList, n: *DoublyLinkedNode) void {
+    pub fn remove(self: *UntypedDoublyLinkedList, n: *const DoublyLinkedNode) void {
         self.len -= 1;
         if (n.next) |n2| {
             // has a next item, update next.prev
@@ -423,8 +427,8 @@ pub fn DoublyLinkedList(comptime T: type, comptime field_name: []const u8) type 
             self.impl.add_after(node_from_ref(node), node_from_ref(item));
         }
 
-        pub fn remove(self: *@This(), item: *T) void {
-            self.impl.remove(node_from_ref(item));
+        pub fn remove(self: *@This(), item: *const T) void {
+            self.impl.remove(node_from_ref(@constCast(item)));
         }
 
         pub fn remove_front(self: *@This()) ?*T {
@@ -437,6 +441,14 @@ pub fn DoublyLinkedList(comptime T: type, comptime field_name: []const u8) type 
 
         pub fn clear(self: *@This()) ?*T {
             return if (self.impl.clear()) |n| ref_from_node(n) else return null;
+        }
+
+        pub fn next(item: *T) ?*T {
+            return ref_from_optional_node(node_from_ref(item).next);
+        }
+
+        pub fn prev(item: *T) ?*T {
+            return ref_from_optional_node(node_from_ref(item).prev);
         }
     };
 }

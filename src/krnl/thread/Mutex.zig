@@ -6,15 +6,15 @@ const std = @import("std");
 
 const Mutex = @This();
 
-spinlock: dispatcher.SpinLockIRQL = .{ .set_irql = .dispatch },
+spinlock: @import("../hal/SpinLock.zig") = .{},
 wait_handle: dispatcher.WaitHandle = .{ .check_wait = &check_wait },
 held: ?u64 = null,
 reentrant: bool = false,
 
 fn check_wait(handle: *dispatcher.WaitHandle, thread: *Thread) !bool {
     const self: *Mutex = @fieldParentPtr("wait_handle", handle);
-    self.spinlock.lock(null);
-    defer self.spinlock.unlock();
+    const irql = self.spinlock.lock();
+    defer self.spinlock.unlock(irql);
     if (self.held) |h| if (!self.reentrant or h != thread.client_ids.threadid) {
         try handle.enqueue_wait(thread);
         return true;
@@ -24,8 +24,8 @@ fn check_wait(handle: *dispatcher.WaitHandle, thread: *Thread) !bool {
 }
 
 pub fn release(self: *Mutex) void {
-    self.spinlock.lock(null);
-    defer self.spinlock.unlock();
+    const irql = self.spinlock.lock();
+    defer self.spinlock.unlock(irql);
     const tid = smp.lcb.*.current_thread.?.client_ids.threadid;
     std.debug.assert(tid == self.held);
     self.held = null;

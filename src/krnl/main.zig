@@ -93,6 +93,11 @@ noinline fn main(ldr_info: *bootelf.BootelfData) !noreturn {
     try smp.allocate_lcbs(page);
     try smp.enter_threading(page, gpa);
 
+
+    log.debug("current gs base: {x}", .{arch.msr.read(.gs_base)});
+
+    try arch.late_init();
+
     const current_apic_id = hal.apic.get_lapic_id();
 
     log.info("local apic id {d}", .{current_apic_id});

@@ -5,7 +5,7 @@ const queue = util.queue;
 pub const interrupts = @import("interrupts.zig");
 pub const scheduler = @import("scheduler.zig");
 pub const Dpc = @import("Dpc.zig");
-pub const SpinLockIRQL = @import("SpinLockIRQL.zig");
+pub const SpinLock = @import("../hal/SpinLock.zig");
 
 pub const WaitBlock = @import("WaitBlock.zig");
 pub const WaitHandle = @import("WaitHandle.zig");
@@ -14,7 +14,7 @@ const smp = @import("../smp.zig");
 const std = @import("std");
 const assert = std.debug.assert;
 
-var global_dispatcher_lock: SpinLockIRQL = .{ .set_irql = .dispatch };
+var global_dispatcher_lock: SpinLock = .{};
 var dispatch_queue: queue.PriorityQueue(Thread, "scheduler_hook", "priority", Thread.Priority) = .{};
 
 pub fn yield() *Thread {

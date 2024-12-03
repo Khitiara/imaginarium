@@ -54,6 +54,7 @@ const log = std.log.scoped(.init);
 pub const ptr_from_physaddr = pmm.ptr_from_physaddr;
 pub const physaddr_from_ptr = pmm.physaddr_from_ptr;
 const apic = @import("../apic/apic.zig");
+const zuacpi = @import("../acpi/zuacpi.zig");
 
 pub fn platform_init(memmap: []cmn.memmap.Entry) !void {
     log.info("setting up GDT", .{});
@@ -76,14 +77,22 @@ pub fn platform_init(memmap: []cmn.memmap.Entry) !void {
     control_registers.write(.cr4, cr4);
     idt.enable();
     log.info("interrupts enabled", .{});
-    try @import("../acpi/zuacpi.zig").init();
+    try zuacpi.init();
     log.info("loaded acpi sdt", .{});
+    try @import("../../io/interrupts.zig").init();
+    try zuacpi.load_namespace();
+    log.info("loaded acpi namespace", .{});
     apic.init();
     log.info("checked for x2apic compat and enabled apic in {s} mode", .{if (apic.x2apic.x2apic_enabled) "x2apic" else "xapic"});
     apic.bspid = apic.get_lapic_id();
     time.init_timing();
     log.info("timekeeping initialized", .{});
     log.info("early platform init complete", .{});
+}
+
+pub fn late_init() !void {
+    try zuacpi.initialize_namespace();
+    log.info("late platform init complete", .{});
 }
 
 comptime {

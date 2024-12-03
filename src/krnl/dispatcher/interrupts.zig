@@ -9,14 +9,14 @@ const InterruptRequestPriority = hal.InterruptRequestPriority;
 const InterruptVector = hal.InterruptVector;
 const lcb = smp.lcb;
 
-pub inline fn handle_interrupt(handler: fn (*arch.SavedRegisterState) void) fn (*arch.SavedRegisterState) callconv(.SysV) void {
+pub inline fn handle_interrupt(comptime handler: fn (*arch.SavedRegisterState) void) fn (*arch.SavedRegisterState) callconv(.SysV) void {
     return struct {
         fn f(frame: *arch.SavedRegisterState) callconv(.SysV) void {
             const is_root_interrupt: bool = lcb.*.frame == null;
             defer if (is_root_interrupt) dispatch_interrupt_tail(frame);
             lcb.*.frame = lcb.*.frame orelse frame;
             const vector: InterruptVector = frame.vector.vector;
-            set_irql(vector.level, .raise);
+            _ = hal.set_irql(vector.level, .raise);
             @call(.always_inline, handler, .{frame});
         }
     }.f;
@@ -39,38 +39,6 @@ pub noinline fn enter_thread_ctx() void {
     arch.idt.spoof_isr(&enter_thread_ctx_1);
 }
 
-pub const IrqlOp = enum {
-    raise,
-    lower,
-    any,
-};
-
-pub inline fn fetch_set_irql(level: InterruptRequestPriority, op: IrqlOp) InterruptRequestPriority {
-    const restore = arch.idt.get_and_disable();
-    defer arch.idt.restore(restore);
-    const l = lcb.*;
-    defer {
-        if (switch (op) {
-            .any => true,
-            .raise => @intFromEnum(level) > @intFromEnum(l.irql),
-            .lower => @intFromEnum(level) < @intFromEnum(l.irql),
-        }) {
-            l.irql = level;
-            arch.control_registers.write(.cr8, .{ .tpr = @intFromEnum(level) });
-        }
-    }
-    return l.irql;
-}
-
-pub inline fn set_irql(level: InterruptRequestPriority, op: IrqlOp) void {
-    _ = set_irql_internal(level, op);
-}
-
-inline fn set_irql_internal(level: InterruptRequestPriority, op: IrqlOp) InterruptRequestPriority {
-    _ = fetch_set_irql(level, op);
-    return level;
-}
-
 /// progresses downward through the IRQL levels and addresses each in turn if needed
 /// this may result in nested interrupts from other IRQLs, *but* the nested interrupt
 /// is guaranteed to correctly handle
@@ -78,13 +46,13 @@ fn dispatch_interrupt_tail(frame: *arch.SavedRegisterState) void {
     arch.idt.enable();
     var level = lcb.*.irql;
     // higher IRQLs do processing through ISRs rather than fixed logic. loop through to process each IRQL in turn
-    while (@intFromEnum(level) > @intFromEnum(InterruptRequestPriority.dpc)) : (level = set_irql_internal(level.lower(), .lower)) {}
+    while (@intFromEnum(level) > @intFromEnum(InterruptRequestPriority.dpc)) : (level = hal.set_irql(level.lower(), .lower)) {}
 
     // IRQL:DPC
     {
         var node = blk: {
-            lcb.*.dpc_lock.lock(null);
-            defer lcb.*.dpc_lock.unlock();
+            const irql = lcb.*.dpc_lock.lock_at(.dpc);
+            defer lcb.*.dpc_lock.unlock(irql);
             break :blk lcb.*.dpc_queue.clear();
         };
         while (node) |dpc| {
@@ -92,7 +60,7 @@ fn dispatch_interrupt_tail(frame: *arch.SavedRegisterState) void {
             dpc.run();
             dispatcher.Dpc.pool.destroy(dpc);
         }
-        set_irql(lcb.*.irql.lower(), .lower);
+        _ = hal.set_irql(lcb.*.irql.lower(), .lower);
     }
 
     // IRQL:DISPATCH
@@ -106,7 +74,7 @@ fn dispatch_interrupt_tail(frame: *arch.SavedRegisterState) void {
             lcb.*.frame = null;
         }
         dispatcher.scheduler.dispatch(frame);
-        set_irql(lcb.*.irql.lower(), .lower);
+        _ = hal.set_irql(lcb.*.irql.lower(), .lower);
     }
     std.debug.assert(lcb.*.irql == .passive);
 }

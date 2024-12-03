@@ -1,6 +1,8 @@
 const arch = @import("../arch/arch.zig");
 const serial = arch.serial;
 
+const std = @import("std");
+
 pub const msi = @import("msi.zig");
 pub const pcie = @import("pcie.zig");
 
@@ -18,27 +20,72 @@ pub const ConfigAddress = packed struct(u32) {
     enable: bool,
 };
 
-pub fn config_read(address: ConfigAddress, comptime T: type) T {
+pub const PciAddress = struct {
+    segment: u16,
+    offset: u64,
+    function: u3,
+    device: u5,
+    bus: u8,
+};
+
+const mcfg = @import("../acpi/mcfg.zig");
+
+pub fn config_read(address: PciAddress, comptime T: type) !T {
+    const host_bridge_map = for (mcfg.host_bridges) |*b| {
+        if (b.segment_group == address.segment)
+            break b;
+    } else {
+        if (address.segment != 0) return error.InvalidArgument;
+        return config_read_legacy(.{
+            .bus = address.bus,
+            .device = address.device,
+            .enable = true,
+            .function = address.function,
+            .register_offset = @intCast(address.offset),
+        }, T);
+    };
+    const w = address.offset & 0x3;
+    const value = host_bridge_map.block(address.bus, address.device, address.function)[address.offset / 4];
+    return @intCast((value >> @intCast(8 * w)) & std.math.maxInt(T));
+}
+
+pub fn config_write(address: PciAddress, value: anytype) !void {
+    const host_bridge_map = for (mcfg.host_bridges) |*b| {
+        if (b.segment_group == address.segment)
+            break b;
+    } else {
+        if (address.segment != 0) return error.InvalidArgument;
+        config_write_legacy(.{
+            .bus = address.bus,
+            .device = address.device,
+            .enable = true,
+            .function = address.function,
+            .register_offset = @intCast(address.offset),
+        }, value);
+        return;
+    };
+    const w = address.offset & 0x3;
+    const old_mask: u32 = @as(u32, std.math.maxInt(@TypeOf(value))) << @intCast(8 * w);
+    const old = host_bridge_map.block(address.bus, address.device, address.function)[address.offset / 4] & old_mask;
+    host_bridge_map.block(address.bus, address.device, address.function)[address.offset / 4] = @intCast(old | (value << @intCast(8 * w)));
+}
+
+pub fn config_read_legacy(address: ConfigAddress, comptime T: type) T {
     const w = address.register_offset & 0x3;
     var a = address;
     a.register_offset = address.register_offset & 0xFC;
     serial.out(IoLocation.config_address, a);
     const dword = serial.in(IoLocation.config_data, u32);
-    switch (T) {
-        inline i8, u8 => return (dword >> (8 * w)) & 0xFF,
-        inline i16, u16 => return (dword >> (16 * (w / 2))) & 0xFFFF,
-        inline i32, u32 => return dword,
-        else => @compileError("invalid pci config register type"),
-    }
+    return @intCast(@as(u32, @bitCast(dword >> @intCast(8 * w) & std.math.maxInt(T))));
 }
 
-pub fn config_write(address: ConfigAddress, value: anytype) void {
+pub fn config_write_legacy(address: ConfigAddress, value: anytype) void {
     const w = address.register_offset & 0x3;
     var a = address;
     a.register_offset = address.register_offset & 0xFC;
     const dword: u32 = switch (@TypeOf(value)) {
-        inline i8, u8 => @as(u32, @bitCast(value)) << (8 * w),
-        inline i16, u16 => @as(u32, @bitCast(value)) << (16 * (w / 2)),
+        inline i8, u8 => @as(u32, @as(u8, @bitCast(value))) << @intCast(8 * w),
+        inline i16, u16 => @as(u32, @as(u16, @bitCast(value))) << @intCast(8 * w),
         inline i32, u32 => @bitCast(value),
         else => @compileError("invalid pci config register type"),
     };

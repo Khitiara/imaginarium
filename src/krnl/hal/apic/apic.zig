@@ -201,6 +201,7 @@ pub var lapic_indices: [255]u8 = undefined;
 
 pub fn init() void {
     _ = x2apic.check_enable_x2apic();
+    ioapic.process_isa_redirections();
 }
 
 pub inline fn read_register(comptime reg: RegisterId) RegisterType(reg) {

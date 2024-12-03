@@ -20,7 +20,7 @@ pub fn run(self: *const Dpc) void {
 }
 
 pub fn schedule(self: *Dpc) void {
-    smp.lcb.*.dpc_lock.lock(null);
-    defer smp.lcb.*.dpc_lock.unlock();
+    const irql = smp.lcb.*.dpc_lock.lock_at(.dpc);
+    defer smp.lcb.*.dpc_lock.unlock(irql);
     smp.lcb.*.dpc_queue.add(self);
 }

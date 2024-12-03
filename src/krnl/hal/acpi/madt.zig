@@ -96,7 +96,6 @@ fn MadtEntryPayload(comptime t: MadtEntryType) type {
 
 pub fn read_madt(ptr: *align(1) const Madt) !void {
     apic.lapics = try apic.Lapics.init(0);
-    @memset(&apic.ioapic.ioapics_buf, null);
     var uid_nmi_pins: [256]apic.LapicNmiPin = undefined;
     log.info("APIC MADT table loaded at {*}", .{ptr});
     var lapic_ptr: PhysAddr = @enumFromInt(ptr.lapic_addr);
@@ -104,6 +103,7 @@ pub fn read_madt(ptr: *align(1) const Madt) !void {
     var indexer = WindowStructIndexer(MadtEntryHeader){ .buf = entries_base_ptr };
     while (indexer.offset < entries_base_ptr.len) {
         const hdr = indexer.current();
+        defer indexer.advance(hdr.length);
 
         switch (hdr.type) {
             .local_apic => {
@@ -126,6 +126,7 @@ pub fn read_madt(ptr: *align(1) const Madt) !void {
                 const payload = @as(*align(1) const MadtEntryPayload(.io_apic), @ptrCast(hdr));
                 assert(hdr.length == 12);
 
+                log.debug("IOApic: gsi base {x}", .{payload.gsi_base});
                 apic.ioapic.ioapics_buf[@atomicRmw(u8, &apic.ioapic.ioapics_count, .Add, 1, .monotonic)] = .{
                     .id = payload.ioapic_id,
                     .phys_addr = @import("../arch/arch.zig").ptr_from_physaddr([*]volatile u32, @enumFromInt(payload.ioapic_addr)),
@@ -135,7 +136,7 @@ pub fn read_madt(ptr: *align(1) const Madt) !void {
             .interrupt_source_override => {
                 const payload = @as(*align(1) const MadtEntryPayload(.interrupt_source_override), @ptrCast(hdr));
                 assert(payload.bus == 0);
-                // log.debug("ISA IRQ Redirect: IRQ#{d} -> GSI#{d}, polarity {} trigger {}", .{payload.source, payload.gsi, payload.flags.polarity, payload.flags.trigger});
+                log.debug("ISA IRQ Redirect: IRQ#{d} -> GSI#{d}, polarity {} trigger {}", .{ payload.source, payload.gsi, payload.flags.polarity, payload.flags.trigger });
                 apic.ioapic.isa_irqs[payload.source] = .{
                     .gsi = payload.gsi,
                     .polarity = switch (payload.flags.polarity) {
@@ -178,8 +179,6 @@ pub fn read_madt(ptr: *align(1) const Madt) !void {
                 log.debug("Found MADT payload {x}", .{hdr.type});
             },
         }
-
-        indexer.advance(hdr.length);
     }
     for (apic.lapics.items(.uid), apic.lapics.items(.nmi_pins)) |uid, *pins| {
         pins.* = uid_nmi_pins[uid];

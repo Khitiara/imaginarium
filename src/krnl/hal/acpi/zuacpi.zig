@@ -24,6 +24,16 @@ pub fn init() !void {
     log.debug("hpet initialized", .{});
 }
 
+pub fn load_namespace() !void {
+    try uacpi.namespace_load();
+    log.info("ACPI namespace parsed", .{});
+}
+
+pub fn initialize_namespace() !void {
+    try uacpi.namespace_initialize();
+    log.info("ACPI namespace initialized", .{});
+}
+
 fn handler(hdr: *align(1) sdt.SystemDescriptorTableHeader, _: *u64) callconv(.C) uacpi.tables.TableInstallationDisposition {
     log.debug("uacpi installed table {s}", .{&hdr.signature.to_string()});
     return .allow;

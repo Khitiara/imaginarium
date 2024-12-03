@@ -6,7 +6,7 @@ const InterruptRequestPriority = @import("../hal/hal.zig").InterruptRequestPrior
 const Semaphore = @This();
 
 permits: usize,
-spinlock: dispatcher.SpinLockIRQL = .{ .set_irql = .dispatch },
+spinlock: @import("../hal/SpinLock.zig") = .{},
 wait_handle: dispatcher.WaitHandle = .{ .check_wait = &check_wait },
 decrement_dpc: ?*dispatcher.Dpc = null,
 
@@ -15,8 +15,8 @@ pub fn init(count: usize) Semaphore {
 }
 
 pub fn signal(self: *Semaphore) void {
-    self.spinlock.lock(null);
-    defer self.spinlock.unlock();
+    const irql = self.spinlock.lock();
+    defer self.spinlock.unlock(irql);
     self.permits += 1;
     if (@intFromEnum(smp.lcb.*.irql) > @intFromEnum(InterruptRequestPriority.dpc)) {
         if (self.decrement_dpc == null) {
@@ -35,15 +35,15 @@ pub fn signal(self: *Semaphore) void {
 }
 
 pub fn reset(self: *Semaphore) void {
-    self.spinlock.lock(null);
-    defer self.spinlock.unlock();
+    const irql = self.spinlock.lock();
+    defer self.spinlock.unlock(irql);
     self.permits = 0;
 }
 
 fn dec_dpc(_: *const dispatcher.Dpc, self_opaque: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque) void {
     const self: *Semaphore = @alignCast(@ptrCast(self_opaque.?));
-    self.spinlock.lock(null);
-    defer self.spinlock.unlock();
+    const irql = self.spinlock.lock();
+    defer self.spinlock.unlock(irql);
     self.decrement();
 }
 
@@ -55,8 +55,8 @@ fn decrement(self: *Semaphore) void {
 
 fn check_wait(handle: *dispatcher.WaitHandle, thread: *Thread) !bool {
     const self: *Semaphore = @fieldParentPtr("wait_handle", handle);
-    self.spinlock.lock(null);
-    defer self.spinlock.unlock();
+    const irql = self.spinlock.lock();
+    defer self.spinlock.unlock(irql);
     if (self.permits > 0) {
         self.permits -= 1;
         return false;
