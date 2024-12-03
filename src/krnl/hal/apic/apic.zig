@@ -47,13 +47,15 @@ pub const TriggerMode = enum(u1) {
     level = 1,
 };
 
+pub const DestinationMode = enum(u1) {
+    physical = 0,
+    logical = 1,
+};
+
 pub const Icr = packed struct(u64) {
     vector: u8,
     delivery: DeliveryMode,
-    dest_mode: enum(u1) {
-        physical = 0,
-        logical = 1,
-    },
+    dest_mode: DestinationMode,
     pending: bool = false,
     _1: u1 = 0,
     assert: bool,
@@ -201,7 +203,6 @@ pub var lapic_indices: [255]u8 = undefined;
 
 pub fn init() void {
     _ = x2apic.check_enable_x2apic();
-    ioapic.process_isa_redirections();
 }
 
 pub inline fn read_register(comptime reg: RegisterId) RegisterType(reg) {

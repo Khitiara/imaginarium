@@ -95,14 +95,16 @@ pub fn build(b: *Build) !void {
     const optimize = b.standardOptimizeOption(.{});
     uacpi.add_uacpi_to_build(b, target, optimize);
 
-    const max_ioapics = b.option(u32, "max_ioapics", "maximum number of ioapics supported (default 5)") orelse 5;
-    const max_hpets = b.option(u32, "max_hpets", "maximum number of HPET blocks supported (default 1)") orelse 1;
+    const max_ioapics = b.option(u32, "max-ioapics", "maximum number of ioapics supported (default 5)") orelse 5;
+    const max_hpets = b.option(u32, "max-hpets", "maximum number of HPET blocks supported (default 1)") orelse 1;
+    const force_hypervisor = b.option(bool, "force-hypervisor", "force assume a hypervisor is present (running in a VM, default false)") orelse false;
 
     const options = b.addOptions();
     options.addOption(u32, "max_ioapics", max_ioapics);
     options.addOption(u32, "max_hpets", max_hpets);
     options.addOption(usize, "max_elf_size", 1 << 30);
     options.addOption(bool, "rsdp_search_bios", true);
+    options.addOption(bool, "force_hypervisor", force_hypervisor);
 
     const optsModule = options.createModule();
     utils.name_module("config", optsModule);

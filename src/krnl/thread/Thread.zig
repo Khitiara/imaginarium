@@ -12,6 +12,8 @@ const atomic = std.atomic;
 const Thread = @This();
 
 pub const Semaphore = @import("Semaphore.zig");
+pub const Timer = @import("Timer.zig");
+pub const Mutex = @import("Mutex.zig");
 
 pub const State = enum {
     /// being initialized
@@ -57,6 +59,7 @@ header: ob.Object,
 wait_lock: @import("../hal/SpinLock.zig") = .{},
 wait_type: WaitType = undefined,
 wait_list: WaitListType = .{},
+wait_timer: Timer = undefined,
 join: dispatcher.WaitHandle,
 state: State = .init,
 priority: Priority,

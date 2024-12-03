@@ -15,7 +15,7 @@ pub const Token = struct {
 /// the TAIL of the wait queue, if anyone is waiting.
 /// the current holder of the lock maintains a reference to the head of the queue
 /// which doubles as its token of ownership of the lock
-entry: ?*Token,
+entry: ?*Token = null,
 
 pub fn lock(self: *QueuedSpinLock, token: *Token) void {
     self.lock_at(token, .dispatch);
@@ -33,9 +33,10 @@ pub fn lock_unsafe(self: *QueuedSpinLock, token: *Token) void {
     token.* = .{
         .lock = self,
         .next = null,
+        .saved_irql = undefined,
     };
     // atomically exchange ourself into the lock's tail pointer.
-    if (@atomicRmw(?*Token, &self.entry, .Xchg, &token, .acq_rel)) |tail| {
+    if (@atomicRmw(?*Token, &self.entry, .Xchg, token, .acq_rel)) |tail| {
         // there's an old tail, which means theres an old head, which means the lock is taken
 
         // set the wait flag before append so we can get freed immediately
@@ -56,7 +57,7 @@ pub fn lock_unsafe(self: *QueuedSpinLock, token: *Token) void {
 
 pub fn unlock(token: *Token) void {
     unlock_unsafe(token);
-    hal.set_irql(token.saved_irql, .lower);
+    _ = hal.set_irql(token.saved_irql, .lower);
 }
 
 pub fn unlock_unsafe(token: *Token) void {
@@ -66,8 +67,8 @@ pub fn unlock_unsafe(token: *Token) void {
         // if noone else is in line, then we are the tail.
         // thus, do a compare-exchange to null out the lock's
         // entry pointer atomically.
-        const l: *QueuedSpinLock = @ptrFromInt(@intFromPtr(token.lock) & (~1));
-        if (@cmpxchgStrong(?*Token, &l.entry, token, null, .acq_rel, .acq_rel) == null) {
+        const l: *QueuedSpinLock = @ptrFromInt(@intFromPtr(token.lock) & (~@as(usize, 1)));
+        if (@cmpxchgStrong(?*Token, &l.entry, token, null, .acq_rel, .acquire) == null) {
             // the compare-exchange succeeded, which means that the atomicRmw in lock_unsafe
             // was not executed since the atomicLoad above. therefore, the lock is properly freed
             // and we can just return
@@ -85,9 +86,9 @@ pub fn unlock_unsafe(token: *Token) void {
     // since our next should only be set after the next's wait flag is set,
     // and the only way to unset the flag should be this function,
     // the next token's wait flag should thus always be set here.
-    std.debug.assert(@as(*u64, @ptrCast(&next.lock)).* & 1 != 0);
+    std.debug.assert(@as(*u64, @ptrCast(&next.?.lock)).* & 1 != 0);
 
     // since the next token's wait flag is guaranteed set here, an xor is
     // a quick and easy way to atomically unset the flag
-    @atomicRmw(u64, @as(*u64, @ptrCast(&next.lock)), .Xor, 1, .acq_rel);
+    _ = @atomicRmw(u64, @as(*u64, @ptrCast(&next.?.lock)), .Xor, 1, .acq_rel);
 }

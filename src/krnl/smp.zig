@@ -38,6 +38,7 @@ const LcbWrapper = struct {
 };
 
 pub var lcbs: []LcbWrapper = undefined;
+pub var smp_initialized: bool = false;
 pub const lcb: *allowzero addrspace(.gs) const *LocalControlBlock = @ptrFromInt(@offsetOf(LcbWrapper, "lcb") + @offsetOf(LocalControlBlock, "self"));
 
 fn init(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator, wait_for_aps: bool) !void {
@@ -78,6 +79,7 @@ pub fn enter_threading(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator) !v
     const base = @intFromPtr(&lcbs[idx]);
     log.debug("APIC {x}, idx {x}, base 0x{x:0>16}->0x{x:0>16}", .{ id, idx, base, base + @offsetOf(LcbWrapper, "lcb") });
     set_lcb_base(base);
+    @atomicStore(bool, &smp_initialized, true, .seq_cst);
     try init(page_alloc, gpa, false);
     const is_bsp = id == apic.bspid;
     const t: *Thread = try Thread.init(gpa, if (is_bsp) zuid.UUID.max else zuid.UUID.new.v4(), if (is_bsp) 0 else std.crypto.random.intRangeAtMost(u64, 1, std.math.maxInt(u64) - 2));

@@ -1,14 +1,20 @@
 const std = @import("std");
 
 pub const Leaf = enum(u32) {
+    //base
     max_level_and_vendor = 0,
     type_fam_model_stepping_features = 1,
     feature_flags = 7,
     freq_1 = 0x15,
     freq_2 = 0x16,
+    // extended
     extended_fam_model_stepping_features = 0x80000001,
     capabilities = 0x80000007,
     extended_address_info = 0x80000008,
+    svm = 0x8000000A,
+    // hypervisor
+    hypervisor_vendor = 0x40000000,
+    hypervisor_frequencies = 0x40000010,
 };
 
 pub fn Subleaf(comptime leaf: Leaf) type {
@@ -70,7 +76,6 @@ pub const CpuFeatures = packed struct(u32) {
 };
 
 pub const CpuFeatures2 = packed struct(u32) {
-
     sse3: bool,
     pclmul: bool,
     dtes64: bool,
@@ -252,6 +257,33 @@ pub const Flags3 = packed struct(u32) {
     avx512vl: bool,
 };
 
+pub const SvmRevisionPresence = packed struct(u32) {
+    revision: u8,
+    present: bool,
+    _: u23,
+};
+
+pub const SvmSubFeatures = packed struct(u32) {
+    nested_paging: bool,
+    lbr_virt: bool,
+    svm_lock: bool,
+    nrip_save_on_vmexit: bool,
+    tsc_rate_msr: bool,
+    vmcb_clean_bits: bool,
+    flush_by_asid: bool,
+    decode_assists: bool,
+    _r1: u1 = 0,
+    ssse3_and_sse5a_disable: bool,
+    pause_filter: bool,
+    _r2: u1 = 0,
+    pause_filter_threshold: bool,
+    avic: bool,
+    _r3: u1 = 0,
+    vls: bool,
+    vgif: bool,
+    _r4: u15 = 0,
+};
+
 pub inline fn CpuidOutputType(comptime leaf: Leaf, comptime subleaf: Subleaf(leaf)) type {
     _ = subleaf; // not used by any leaf yet implemented
     return switch (leaf) {
@@ -333,6 +365,22 @@ pub inline fn CpuidOutputType(comptime leaf: Leaf, comptime subleaf: Subleaf(lea
                 running_average_power_limit: bool,
                 _: u17 = 0,
             },
+        },
+        .svm => extern struct {
+            revision_presence: SvmRevisionPresence,
+            asid_count: u32,
+            _: u32 = 0,
+            sub_features: SvmSubFeatures,
+        },
+        .hypervisor_vendor => extern struct {
+            _: u32 = 0,
+            vendor_id: [6]u8 align(4),
+        },
+        .hypervisor_frequencies => extern struct {
+            tsc_freq_khz: u32,
+            bus_freq_khz: u32,
+            _1: u32 = 0,
+            _2: u32 = 0,
         },
     };
 }

@@ -29,7 +29,7 @@ const uacpi_flags: []const []const u8 = &.{
     "-DUACPI_SIZED_FREES",
     "-DUACPI_OVERRIDE_TYPES",
     "-DUACPI_OVERRIDE_ARCH_HELPERS",
-    "-DUACPI_DEFAULT_LOG_LEVEL=UACPI_LOG_TRACE",
+    "-DUACPI_DEFAULT_LOG_LEVEL=UACPI_LOG_INFO",
 };
 
 pub fn add_uacpi_to_module(b: *Build, module: *Build.Module) void {

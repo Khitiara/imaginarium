@@ -39,5 +39,5 @@ pub const Gas = extern struct {
         // pcc
         // prm
         // functional_fixed_hardware
-    },
+    } align(4),
 };

@@ -129,7 +129,7 @@ pub fn read_madt(ptr: *align(1) const Madt) !void {
                 log.debug("IOApic: gsi base {x}", .{payload.gsi_base});
                 apic.ioapic.ioapics_buf[@atomicRmw(u8, &apic.ioapic.ioapics_count, .Add, 1, .monotonic)] = .{
                     .id = payload.ioapic_id,
-                    .phys_addr = @import("../arch/arch.zig").ptr_from_physaddr([*]volatile u32, @enumFromInt(payload.ioapic_addr)),
+                    .base_addr = @import("../arch/arch.zig").ptr_from_physaddr([*]volatile u32, @enumFromInt(payload.ioapic_addr)),
                     .gsi_base = payload.gsi_base,
                 };
             },

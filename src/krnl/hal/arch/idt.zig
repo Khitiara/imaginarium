@@ -374,7 +374,7 @@ const InterruptVector = hal.InterruptVector;
 
 var lasts: [14]u8 = .{0} ** 14;
 var vectors_lock: SpinLock = .{};
-pub fn allocate_vector(level: InterruptRequestPriority) !InterruptVector {
+pub noinline fn allocate_vector(level: InterruptRequestPriority) !InterruptVector {
     if (level == .passive) {
         return error.cannot_allocate_passive_interrupt;
     }
@@ -389,7 +389,14 @@ pub fn allocate_vector(level: InterruptRequestPriority) !InterruptVector {
             return v;
         }
     }
-    return error.out_of_vectors;
+    return error.OutOfVectors;
+}
+
+pub noinline fn allocate_vector_any(min: InterruptRequestPriority) !InterruptVector {
+    for(@intFromEnum(min)..16) |irql| {
+        return allocate_vector(@enumFromInt(irql)) catch continue;
+    }
+    return error.OutOfVectors;
 }
 
 /// handler can be a pointer to any function which takes *InterruptFrame(SomeErrorCodeType) as its only parameter

@@ -55,11 +55,14 @@ pub const ptr_from_physaddr = pmm.ptr_from_physaddr;
 pub const physaddr_from_ptr = pmm.physaddr_from_ptr;
 const apic = @import("../apic/apic.zig");
 const zuacpi = @import("../acpi/zuacpi.zig");
+const hypervisor = @import("../hypervisor.zig");
 
 pub fn platform_init(memmap: []cmn.memmap.Entry) !void {
     log.info("setting up GDT", .{});
     gdt.setup_gdt();
     log.info("gdt setup and loaded", .{});
+    hypervisor.init();
+    log.info("checked svm information, hypervisor presence: {}", .{hypervisor.present});
     const paging_feats = paging.enumerate_paging_features();
     log.info("physical addr width: {d} (0x{x} pages)", .{ paging_feats.maxphyaddr, @as(u64, 1) << @truncate(paging_feats.maxphyaddr - 12) });
     log.info("linear addr width: {d}", .{paging_feats.linear_address_width});
@@ -80,6 +83,7 @@ pub fn platform_init(memmap: []cmn.memmap.Entry) !void {
     try zuacpi.init();
     log.info("loaded acpi sdt", .{});
     try @import("../../io/interrupts.zig").init();
+    apic.ioapic.process_isa_redirections();
     try zuacpi.load_namespace();
     log.info("loaded acpi namespace", .{});
     apic.init();
@@ -115,8 +119,8 @@ pub fn setflags(f: Flags) void {
         \\push %[flags]
         \\popfq
         :
-    : [flags] "r" (f),
-    : "flags"
+        : [flags] "r" (f),
+        : "flags"
     );
 }
 

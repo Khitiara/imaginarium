@@ -25,9 +25,23 @@ pub fn init() !void {
 }
 
 pub fn load_namespace() !void {
+    const fadt = try uacpi.tables.table_fadt();
+    const isa_irq = ioapic.isa_irqs[fadt.sci_int];
+    try ioapic.redirect_irq(fadt.sci_int, .{
+        .vector = @bitCast(@as(u8,0x20)),
+        .delivery_mode = .fixed,
+        .dest_mode = .physical,
+        .polarity = isa_irq.polarity,
+        .trigger_mode = isa_irq.trigger,
+        .destination = 0,
+    });
+
     try uacpi.namespace_load();
+    try uacpi.utilities.set_interrupt_model(.ioapic);
     log.info("ACPI namespace parsed", .{});
 }
+
+const ioapic = @import("../apic/ioapic.zig");
 
 pub fn initialize_namespace() !void {
     try uacpi.namespace_initialize();

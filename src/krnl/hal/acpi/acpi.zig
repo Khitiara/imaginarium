@@ -3,6 +3,7 @@ pub const rsdp = @import("rsdp.zig");
 pub const madt = @import("madt.zig");
 pub const mcfg = @import("mcfg.zig");
 pub const hpet = @import("hpet.zig");
+pub const fadt = @import("fadt.zig");
 const std = @import("std");
 const zuid = @import("zuid");
 

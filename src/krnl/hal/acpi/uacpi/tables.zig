@@ -1,6 +1,7 @@
 const uacpi = @import("uacpi.zig");
 const acpi = @import("../../acpi/acpi.zig");
 const sdt = acpi.sdt;
+const fadt = acpi.fadt;
 
 pub const uacpi_table = extern struct {
     location: extern union {
@@ -44,4 +45,11 @@ pub fn table_unref(tbl: *uacpi_table) !void {
 
 pub fn table_ref(tbl: *uacpi_table) !void {
     return uacpi_table_ref(tbl).err();
+}
+
+extern fn uacpi_table_fadt(tbl: **fadt.Fadt) uacpi.uacpi_status;
+pub fn table_fadt() !*fadt.Fadt {
+    var ptr: *fadt.Fadt = undefined;
+    try uacpi_table_fadt(&ptr).err();
+    return ptr;
 }

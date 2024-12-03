@@ -9,6 +9,8 @@ const mcfg = @import("../mcfg.zig");
 const log = std.log.scoped(.uacpi);
 
 const hal = @import("../../hal.zig");
+const apic = hal.apic;
+const ioapic = apic.ioapic;
 const arch = hal.arch;
 const vmm = arch.vmm;
 const pmm = arch.pmm;
@@ -250,6 +252,7 @@ export fn uacpi_kernel_handle_firmware_request(_: [*c]uacpi.FirmwareRequestRaw) 
 const IrqContext = struct {
     handler: uacpi.InterruptHandler,
     ctx: ?*anyopaque,
+    gsi: u32,
 };
 
 fn do_handle(_: *interrupts.InterruptRegistration, context: ?*anyopaque) bool {
@@ -260,13 +263,40 @@ fn do_handle(_: *interrupts.InterruptRegistration, context: ?*anyopaque) bool {
     };
 }
 
-export fn uacpi_kernel_install_interrupt_handler(irq: u32, handler: uacpi.InterruptHandler, ctx: ?*anyopaque, out_irq_handle: **interrupts.InterruptRegistration) callconv(arch.cc) uacpi.uacpi_status {
-    log.debug("uacpi requested installation of shareable interrupt handler for vector {x:0>2}", .{irq});
+noinline fn find_redirect_suitable_vector(gsi: u32) !u8 {
+    if (gsi < 32) {
+        const isa_irq = ioapic.isa_irqs[gsi];
+        if (isa_irq.cpu_irq == 0) {
+            const vector = arch.idt.allocate_vector_any(.dispatch) catch return error.InternalError;
+            const redir: ioapic.IoRedTblEntry = .{
+                .vector = vector,
+                .delivery_mode = .fixed,
+                .dest_mode = .physical,
+                .polarity = isa_irq.polarity,
+                .trigger_mode = isa_irq.trigger,
+                .destination = apic.get_lapic_id(),
+            };
+            ioapic.redirect_irq(gsi, redir) catch |err| switch (err) {
+                error.NoSuitableIoApic => return error.InternalError,
+                error.AlreadyMappedIsaIrq => return error.AlreadyExists,
+                inline else => |e| return e,
+            };
+        }
+        return isa_irq.cpu_irq;
+    } else @panic("unimplemented");
+}
+
+export fn uacpi_kernel_install_interrupt_handler(gsi: u32, handler: uacpi.InterruptHandler, ctx: ?*anyopaque, out_irq_handle: **interrupts.InterruptRegistration) callconv(arch.cc) uacpi.uacpi_status {
+    const cpu_irq = find_redirect_suitable_vector(gsi) catch |e| switch (e) {
+        inline else => |e2| return uacpi.uacpi_status.status(e2),
+    };
+    log.debug("uacpi requested installation of shareable interrupt handler for gsi vector 0x{x}. redirected to vector 0x{x:0<2} on current core", .{ gsi, cpu_irq });
     const c = uacpi_allocator.create(IrqContext) catch return .out_of_memory;
     c.ctx = ctx;
     c.handler = handler;
+    c.gsi = gsi;
     out_irq_handle.* = interrupts.InterruptRegistration.connect(.{
-        .vector = @bitCast(@as(u8, @intCast(irq))),
+        .vector = @bitCast(@as(u8, @intCast(cpu_irq))),
         .context = c,
         .routine = .{ .isr = &do_handle },
     }) catch return .out_of_memory;
