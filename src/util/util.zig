@@ -44,7 +44,7 @@ pub inline fn ArrayTuple(comptime Arr: type) type {
 
 pub inline fn tuple_from_array(arr: anytype) ArrayTuple(@TypeOf(arr)) {
     var t: ArrayTuple(@TypeOf(arr)) = undefined;
-    inline for(arr, 0..) |elem, i| {
+    inline for (arr, 0..) |elem, i| {
         t[i] = elem;
     }
     return t;
@@ -124,7 +124,7 @@ pub inline fn upper_string_comptime(comptime str: []const u8) *const [str.len:0]
 // sign extends, assuming i is typed with the correct bitsize to sign-extend from
 pub inline fn signExtend(comptime T: type, i: anytype) T {
     // i hope zig realizes that the local `m` in signExtendBits can be made comptime in this case
-    return signExtendBits(T, @typeInfo(@TypeOf(i)).Int.bits, i);
+    return signExtendBits(T, @typeInfo(@TypeOf(i)).int.bits, i);
 }
 
 test signExtend {
@@ -163,6 +163,53 @@ pub inline fn select(comptime T: type, comptime len: usize, bitset: anytype, a: 
         }
     }
     return ret;
+}
+
+pub inline fn EnumMask(comptime Enum: type) type {
+    const enum_info: std.builtin.Type.Enum = @typeInfo(Enum).@"enum";
+    const max = enum_info.fields[enum_info.fields.len - 1].value;
+    const len = comptime @max(32, std.math.ceilPowerOfTwoAssert(usize, max));
+    comptime var fields: [len]std.builtin.Type.StructField = undefined;
+    inline for (0..len) |i| {
+        fields[i] = .{
+            .name = std.fmt.comptimePrint("_{d}", .{i}),
+            .type = u1,
+            .default_value = &@as(u1, 0),
+            .is_comptime = false,
+            .alignment = 0,
+        };
+        inline for (enum_info.fields) |f| {
+            if (f.value == i) {
+                fields[i] = .{
+                    .name = f.name,
+                    .type = bool,
+                    .default_value = &false,
+                    .is_comptime = false,
+                    .alignment = 0,
+                };
+            }
+        }
+    }
+    return @Type(.{ .@"struct" = std.builtin.Type.Struct{
+        .backing_integer = std.meta.Int(.unsigned, len),
+        .fields = &fields,
+        .layout = .@"packed",
+        .decls = &.{},
+        .is_tuple = false,
+    } });
+}
+
+test EnumMask {
+    const E = enum(u8) {
+        a = 0,
+        b = 2,
+        c = 3,
+    };
+    const Mask = EnumMask(E);
+    try testing.expectEqual(0, @bitOffsetOf(Mask, "a"));
+    try testing.expectEqual(2, @bitOffsetOf(Mask, "b"));
+    try testing.expectEqual(3, @bitOffsetOf(Mask, "c"));
+    try testing.expectEqual(32, @bitSizeOf(Mask));
 }
 
 test {

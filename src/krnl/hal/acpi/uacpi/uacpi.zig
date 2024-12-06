@@ -1,10 +1,35 @@
 pub const tables = @import("tables.zig");
 pub const event = @import("event.zig");
 pub const utilities = @import("utilities.zig");
+pub const namespace = @import("namespace.zig");
+
 const std = @import("std");
 
 pub const uacpi_object = opaque {};
 pub const uacpi_handle = *anyopaque;
+
+pub const ObjectType = enum(u32) {
+    uninitialized,
+    integer,
+    string,
+    buffer,
+    package,
+    field_unit,
+    device,
+    event,
+    method,
+    mutex,
+    operation_region,
+    power_resource,
+    processor,
+    thermal_zone,
+    buffer_field,
+    debug = 16,
+    reference = 20,
+    buffer_index = 21,
+};
+
+pub const ObjectTypeBits = @import("util").EnumMask(ObjectType);
 
 pub const namespace_node = opaque {};
 pub const log_level = enum(u32) {
@@ -219,7 +244,7 @@ pub const InterruptRet = enum(u32) {
     handled,
 };
 
-pub const InterruptHandler = *const fn (?*anyopaque) callconv(.C)  InterruptRet;
+pub const InterruptHandler = *const fn (?*anyopaque) callconv(.C) InterruptRet;
 
 pub const FirmwareRequestType = enum(u8) {
     breakpoint,
@@ -256,4 +281,4 @@ pub const WorkType = enum(u32) {
     notification,
 };
 
-pub const WorkHandler = *const fn(?*anyopaque) callconv(.C) void;
+pub const WorkHandler = *const fn (?*anyopaque) callconv(.C) void;

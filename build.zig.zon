@@ -9,8 +9,8 @@
             .path = "zuid/",
         },
         .uacpi = .{
-            .url = "git+https://github.com/UltraOS/uACPI?ref=master#7e5722efeea1136e4ef4cd809c15052cbaf93919",
-            .hash = "1220ca9828d56fa1e34239cff31086e291934ba4e4f97f9777940f841c79b0a144f4",
+            .url = "git+https://github.com/UltraOS/uACPI?ref=master#2772bb5f7cae985d08f74997ca316ed56c0a79cd",
+            .hash = "12200504b037182ac0eb20900e8dd46878aed48c1883a4a19b94e786b453f03d9f25",
         },
     },
     .paths = .{
