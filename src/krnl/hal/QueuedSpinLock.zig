@@ -42,14 +42,14 @@ pub fn lock_unsafe(self: *QueuedSpinLock, token: *Token) void {
         // set the wait flag before append so we can get freed immediately
         @as(*u64, @ptrCast(&token.lock)).* |= 1;
         // and append ourself on the queue
-        tail.next = token;
+        @atomicStore(?*Token, &tail.next, token, .release);
 
         // do..while loop until the wait flag is unset.
         // when the lock is freed by the current holder
         // they will unset the flag. after setting lock.entry
         // to point to our token, at which point we own the lock
         asm volatile ("pause");
-        while (@as(*u64, @ptrCast(&token.lock)).* & 1 != 0) {
+        while (@atomicLoad(u64, @as(*u64, @ptrCast(&token.lock)), .acquire) & 1 != 0) {
             asm volatile ("pause");
         }
     }
@@ -68,10 +68,10 @@ pub fn unlock_unsafe(token: *Token) void {
         // thus, do a compare-exchange to null out the lock's
         // entry pointer atomically.
         const l: *QueuedSpinLock = @ptrFromInt(@intFromPtr(token.lock) & (~@as(usize, 1)));
-        if (@cmpxchgStrong(?*Token, &l.entry, token, null, .acq_rel, .acquire) == null) {
+        if (@cmpxchgStrong(?*Token, &l.entry, token, null, .release, .monotonic) == null) {
             // the compare-exchange succeeded, which means that the atomicRmw in lock_unsafe
-            // was not executed since the atomicLoad above. therefore, the lock is properly freed
-            // and we can just return
+            // was not executed since the atomicLoad above (ergo our free occurs BEFORE a queue-join).
+            // therefore, the lock is properly freed and we can just return
             return;
         }
 
