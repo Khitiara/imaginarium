@@ -83,6 +83,8 @@ export fn __kstart2(ldr_info: *bootelf.BootelfData) callconv(arch.cc) noreturn {
     };
 }
 
+const uacpi = @import("hal/acpi/uacpi/uacpi.zig");
+
 noinline fn main(ldr_info: *bootelf.BootelfData) !noreturn {
     const bootelf_magic_check = ldr_info.magic == bootelf.magic;
     std.debug.assert(bootelf_magic_check);
@@ -97,6 +99,9 @@ noinline fn main(ldr_info: *bootelf.BootelfData) !noreturn {
     log.debug("current gs base: {x}", .{arch.msr.read(.gs_base)});
 
     try arch.late_init();
+
+    try uacpi.event.install_fixed_event_handler(.power_button, &power_button_handler, null);
+    try uacpi.event.finalize_gpe_initialization();
 
     const current_apic_id = hal.apic.get_lapic_id();
 
@@ -147,6 +152,11 @@ noinline fn main(ldr_info: *bootelf.BootelfData) !noreturn {
     while (true) {
         asm volatile ("hlt");
     }
+}
+
+fn power_button_handler(_: ?*anyopaque) callconv(arch.cc) uacpi.InterruptRet {
+    log.info("ACPI POWER BUTTON PRESSED", .{});
+    return .handled;
 }
 
 test {
