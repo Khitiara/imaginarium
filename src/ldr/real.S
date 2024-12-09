@@ -58,13 +58,14 @@ rm_int:
         lidt rm_int.rm_idt
 
         # Save non-scratch GPRs
-        pushl %ebx
-        pushl %esi
-        pushl %edi
-        pushl %ebp
+        pushq %rbx
+        pushq %rsi
+        pushq %rdi
+        pushq %rbp
 
         # Jump to real mode
         jmpl $0x08, $rm_int.bits16
+[bits 16]
   rm_int.bits16: 
         movw $0x10,%ax
         movw %ax,%ds
@@ -83,18 +84,18 @@ rm_int:
         # Load in_regs
         movl %esp, %ss:rm_int.esp
         movl %ss:rm_int.in_regs, %esp
-        popl %gs
-        popl %fs
-        popl %es
-        popl %ds
+        popq %gs
+        popq %fs
+        popq %es
+        popq %ds
         popfl
-        popl %ebp
-        popl %edi
-        popl %esi
-        popl %edx
-        popl %ecx
-        popl %ebx
-        popl %eax
+        popq %rbp
+        popq %rdi
+        popq %rsi
+        popq %rdx
+        popq %rcx
+        popq %rbx
+        popq %rax
         movl %ss:rm_int.esp,%esp
 
         sti
@@ -110,18 +111,18 @@ rm_int:
         movl %esp, %ss:rm_int.esp
         movl %ss:rm_int.out_regs,%esp
         leal 40(%esp),%esp
-        pushl %eax
-        pushl %ebx
-        pushl %ecx
-        pushl %edx
-        pushl %esi
-        pushl %edi
-        pushl %ebp
+        pushq %rax
+        pushq %rbx
+        pushq %rcx
+        pushq %rdx
+        pushq %rsi
+        pushq %rdi
+        pushq %rbp
         pushfl
-        pushl %ds
-        pushl %es
-        pushl %fs
-        pushl %gs
+        pushq %ds
+        pushq %es
+        pushq %fs
+        pushq %gs
         movl %ss:rm_int.esp,%esp
 
         # Restore GDT
@@ -135,6 +136,7 @@ rm_int:
         orb $1,%al
         movl %eax, %cr0
         jmpl $0x18, $rm_int.bits32
+[bits 64]
   rm_int.bits32: 
         movw $0x20,%ax
         movw %ax,%ds
@@ -144,10 +146,10 @@ rm_int:
         movw %ax,%ss
 
         # Restore non-scratch GPRs
-        popl %ebp
-        popl %edi
-        popl %esi
-        popl %ebx
+        popq %rbp
+        popq %rdi
+        popq %rsi
+        popq %rbx
 
         # Exit
         ret

@@ -77,7 +77,7 @@ var ioapic_lock: QueuedSpinLock = .{};
 pub fn redirect_irq(gsi: u32, redirection: IoRedTblEntry) !void {
     var token: QueuedSpinLock.Token = undefined;
     if (smp.smp_initialized) ioapic_lock.lock(&token);
-    defer if (smp.smp_initialized) QueuedSpinLock.unlock(&token);
+    defer if (smp.smp_initialized) token.unlock();
     var base: [*]volatile u32 = undefined;
     var entry: u32 = undefined;
     if (gsi < 32) {

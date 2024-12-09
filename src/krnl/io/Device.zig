@@ -39,6 +39,7 @@ const DriverStack = queue.Queue(DriverStackEntry, "stack_hook");
 const SiblingList = queue.DoublyLinkedList(Device, "siblings");
 
 header: ob.Object,
+queue_hook: util.queue.Node = .{},
 /// the driver stack for this device. drivers in the stack should use a @fieldParentPtr extension
 /// of their DriverStackEntry to manage internal device state, and pass on any io request they
 /// do not know how to handle. most devices will have one or two entries in the stack, but some
@@ -48,17 +49,15 @@ header: ob.Object,
 /// primary device functions
 driver_stack: DriverStack = .{},
 
-// INTERNAL device tree fields
-parent: ?*Device,
+// device tree fields
+parent: ?*Device = null,
 children: SiblingList = .{},
 siblings: queue.DoublyLinkedNode = .{},
-queue_hook: util.queue.Node = .{},
-enumeration_state: struct {
-    left: u8 = 0,
-    test_drivers: std.ArrayListUnmanaged(*Driver) = .{},
-} = .{},
 
-// GET-ONLY, INTERNAL SET.
+// INTERNAL pnp enumeration state
+queued_for_probe: bool = false,
+inserted_in_directory: bool = false,
+
 // enumerated device properties
 props: Properties = .{},
 
@@ -69,8 +68,15 @@ pub fn init(self: *Device, parent: ?*Device) void {
             .kind = .device,
             .vtable = &vtable,
         },
-        .parent = parent,
     };
+    self.attach_parent(parent);
+}
+
+pub fn attach_parent(self: *Device, parent: ?*Device) void {
+    if (self.parent) |p| {
+        p.children.remove(self);
+    }
+    self.parent = parent;
     if (parent) |p| {
         p.children.add_back(self);
     }
@@ -86,5 +92,12 @@ const vtable: ob.Object.VTable = .{
 };
 
 pub fn deinit(self: *Device, alloc: std.mem.Allocator) void {
+    if (self.parent) |p| {
+        p.children.remove(self);
+    }
+    var kid = self.children.clear();
+    while (kid) |k| : (kid = SiblingList.next(k)) {
+        k.deinit(alloc);
+    }
     alloc.destroy(self);
 }

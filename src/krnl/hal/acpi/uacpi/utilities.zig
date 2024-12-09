@@ -34,11 +34,15 @@ pub const PnpIdList = extern struct {
     pub fn ids(self: *PnpIdList) []IdString {
         return @as([*]IdString, @ptrCast(@as([*]u8, @ptrCast(self)) + @sizeOf(PnpIdList)))[0..self.count];
     }
+    pub fn ids_const(self: *const PnpIdList) []const IdString {
+        return @as([*]const IdString, @alignCast(@ptrCast(@as([*]const u8, @ptrCast(self)) + @sizeOf(PnpIdList))))[0..self.count];
+    }
     pub fn dupe(self: *const PnpIdList, alloc: std.mem.Allocator) ![]const []const u8 {
         const slc = try alloc.alloc([]const u8, self.count);
-        for(self.ids(), 0..) |s, i| {
+        for (self.ids_const(), 0..) |s, i| {
             slc[i] = try alloc.dupe(u8, s.str_const());
         }
+        return slc;
     }
 };
 
@@ -72,8 +76,8 @@ extern fn uacpi_free_namespace_node_info(info: *NamespaceNodeInfo) callconv(arch
 pub const free_namespace_node_info = uacpi_free_namespace_node_info;
 
 extern fn uacpi_get_namespace_node_info(node: *namespace.NamespaceNode, out_info: **NamespaceNodeInfo) callconv(arch.cc) uacpi.uacpi_status;
-pub fn get_namespace_node_info(node: *namespace.NamespaceNode) !*NamespaceNodeInfo {
-    const info: *NamespaceNodeInfo = undefined;
-    try uacpi_get_namespace_node_info(node, &info).err();
+pub fn get_namespace_node_info(node: *namespace.NamespaceNode) error{OutOfMemory}!*NamespaceNodeInfo {
+    var info: *NamespaceNodeInfo = undefined;
+    @as(void, try @errorCast(uacpi_get_namespace_node_info(node, &info).err()));
     return info;
 }

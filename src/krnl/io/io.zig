@@ -43,22 +43,29 @@ const DriverQueue = queue.Queue(Driver, "queue_hook");
 var driver_load_queue: DriverQueue = .{};
 var driver_queue_lock: QueuedSpinLock = .{};
 
+var enumeration_queue: DeviceQueue = .{};
+var enumeration_queue_lock: QueuedSpinLock = .{};
+
 // INTERNAL STATE. DO NOT USE OUTSIDE DEV ENUMERATION
 pub var all_drivers: []*Driver = .{};
 
 pub fn report_driver_for_load(drv: *Driver) void {
     var token: QueuedSpinLock.Token = undefined;
     driver_queue_lock.lock(&token);
-    defer QueuedSpinLock.unlock(&token);
+    defer token.unlock();
     driver_load_queue.append(drv);
 }
+
+var uid_print_buf: [38]u8 = undefined;
+
+var root_bus: *Device = undefined;
 
 pub fn load_drivers(alloc: std.mem.Allocator) !void {
     {
         // FIXME: using internal state of directory object
         var token: QueuedSpinLock.Token = undefined;
         drivers_dir.lock.lock(&token);
-        defer QueuedSpinLock.unlock(&token);
+        defer token.unlock();
         var lst: std.ArrayListUnmanaged(*Driver) = try .initCapacity(alloc, drivers_dir.children.count());
         for (drivers_dir.children.values()) |o| {
             if (o.kind != .driver) continue;
@@ -67,19 +74,38 @@ pub fn load_drivers(alloc: std.mem.Allocator) !void {
         all_drivers = try lst.toOwnedSlice(alloc);
     }
 
-    var uid_print_buf: [38]u8 = undefined;
+    root_bus = try alloc.create(Device);
+    root_bus.init(null);
+    root_bus.props.hardware_ids = try util.dupe_list(u8, &.{"ROOT"});
+    root_bus.props.compatible_ids = try util.dupe_list(u8, &.{"ROOT"});
+
     var token: QueuedSpinLock.Token = undefined;
     while (b: {
         driver_queue_lock.lock(&token);
-        defer QueuedSpinLock.unlock(&token);
+        defer token.unlock();
         break :b driver_load_queue.clear();
     }) |head| {
         var node: ?*Driver = head;
         while (node) |n| : (node = DriverQueue.next(n)) {
             if (try n.load()) |root_device| {
-                try devices_dir.insert(alloc, &root_device.header, try std.fmt.bufPrint(&uid_print_buf, "{{{s}}}", .{root_device.header.id}));
-                root_device.enumeration_state.test_drivers = .fromOwnedSlice(try alloc.dupe(*Driver, all_drivers));
+                root_device.attach_parent(root_bus);
+                report_device(alloc, root_device);
             }
         }
     }
+}
+
+pub fn report_device(alloc: std.mem.Allocator, dev: *Device) !void {
+    if (@cmpxchgStrong(bool, &dev.queued_for_probe, false, true, .acq_rel, .acquire) != null) {
+        @branchHint(.unlikely);
+        return;
+    }
+    if (@cmpxchgStrong(bool, &dev.inserted_in_directory, false, true, .acq_rel, .acquire) == null) {
+        @branchHint(.likely);
+        try devices_dir.insert(alloc, &dev.header, try std.fmt.bufPrint(&uid_print_buf, "{{{s}}}", .{dev.header.id}));
+    }
+    var token: QueuedSpinLock.Token = undefined;
+    enumeration_queue_lock.lock(&token);
+    defer token.unlock();
+    enumeration_queue.append(dev);
 }

@@ -21,7 +21,7 @@ fn resolve(o: *Object, alloc: std.mem.Allocator, path: [:0]const u8) Object.Reso
     if (b: {
         var token: QueuedSpinLock.Token = undefined;
         dir.lock.lock(&token);
-        defer QueuedSpinLock.unlock(&token);
+        defer token.unlock();
         break :b dir.children.get(name);
     }) |child| {
         if (rest.len > 0) {
@@ -37,7 +37,7 @@ pub fn insert(dir: *Directory, alloc: std.mem.Allocator, obj: *Object, name: []c
     const result = b: {
         var token: QueuedSpinLock.Token = undefined;
         dir.lock.lock(&token);
-        defer QueuedSpinLock.unlock(&token);
+        defer token.unlock();
         break :b try dir.children.getOrPutValue(alloc, name, obj);
     };
     return if (result.found_existing) result.value_ptr.* else null;
@@ -48,7 +48,7 @@ fn insert_impl(o: *Object, alloc: std.mem.Allocator, obj: *Object, path: [:0]con
     const dir: *Directory = @fieldParentPtr("header", o);
     var token: QueuedSpinLock.Token = undefined;
     dir.lock.lock(&token);
-    defer QueuedSpinLock.unlock(&token);
+    defer token.unlock();
     if (dir.children.get(name)) |child| {
         try child.insert(alloc, obj, rest);
         return;

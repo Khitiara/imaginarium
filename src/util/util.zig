@@ -38,6 +38,25 @@ pub inline fn CopyPtrAttrs(
     });
 }
 
+pub fn dupe_list(alloc: std.mem.Allocator, comptime T: type, list: []const []const T) ![]const []const T {
+    const lst = try alloc.alloc([]const T, list.len);
+    var cnt: usize = 0;
+    errdefer free_list(alloc, T, lst[0..cnt]);
+
+    for (list, lst) |org, *new| {
+        new.* = try alloc.dupe(T, org);
+        cnt += 1;
+    }
+    return lst;
+}
+
+pub fn free_list(alloc: std.mem.Allocator, comptime T: type, list: []const []const T) void {
+    for (list) |item| {
+        alloc.free(item);
+    }
+    alloc.free(list);
+}
+
 pub inline fn ArrayTuple(comptime Arr: type) type {
     return std.meta.Tuple(&(.{std.meta.Elem(Arr)} ** @typeInfo(Arr).array.len));
 }

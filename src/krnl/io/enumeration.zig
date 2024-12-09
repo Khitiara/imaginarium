@@ -6,6 +6,8 @@ const std = @import("std");
 const hal = @import("../hal/hal.zig");
 const alloc = hal.arch.vmm.gpa.allocator();
 
+// pub fn enumerate_devices()
+
 fn schedule_id_load(device: *Device) void {
     @atomicStore(u8, &device.enumeration_state.left, 2, .release);
     Dpc.init_and_schedule(.p2, &populate_hid_dpc, .{ device, null, null }) catch @panic("Could not create DPC for hardware enumeration");

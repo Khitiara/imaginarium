@@ -10,6 +10,45 @@ pub const Token = struct {
     next: ?*Token,
     /// the saved irql to restore on unlock
     saved_irql: hal.InterruptRequestPriority,
+
+
+    pub fn unlock(token: *Token) void {
+        unlock_unsafe(token);
+        _ = hal.set_irql(token.saved_irql, .lower);
+    }
+
+    pub fn unlock_unsafe(token: *Token) void {
+        // quick load of the next in line
+    var next = @atomicLoad(?*Token, &token.next, .acquire);
+        if (next == null) {
+            // if noone else is in line, then we are the tail.
+            // thus, do a compare-exchange to null out the lock's
+            // entry pointer atomically.
+        const l: *QueuedSpinLock = @ptrFromInt(@intFromPtr(token.lock) & (~@as(usize, 1)));
+            if (@cmpxchgStrong(?*Token, &l.entry, token, null, .release, .monotonic) == null) {
+                // the compare-exchange succeeded, which means that the atomicRmw in lock_unsafe
+                // was not executed since the atomicLoad above (ergo our free occurs BEFORE a queue-join).
+                // therefore, the lock is properly freed and we can just return
+            return;
+            }
+
+            // the compare-exchange failed. therefore, someone else has
+            // joined the queue. we want to free the head, so wait for our
+            // next pointer to be set
+        while (next == null) {
+                asm volatile ("pause");
+                next = @atomicLoad(?*Token, &token.next, .acquire);
+            }
+        }
+        // since our next should only be set after the next's wait flag is set,
+        // and the only way to unset the flag should be this function,
+        // the next token's wait flag should thus always be set here.
+    std.debug.assert(@as(*u64, @ptrCast(&next.?.lock)).* & 1 != 0);
+
+        // since the next token's wait flag is guaranteed set here, an xor is
+        // a quick and easy way to atomically unset the flag
+    _ = @atomicRmw(u64, @as(*u64, @ptrCast(&next.?.lock)), .Xor, 1, .acq_rel);
+    }
 };
 
 /// the TAIL of the wait queue, if anyone is waiting.
@@ -53,42 +92,4 @@ pub fn lock_unsafe(self: *QueuedSpinLock, token: *Token) void {
             asm volatile ("pause");
         }
     }
-}
-
-pub fn unlock(token: *Token) void {
-    unlock_unsafe(token);
-    _ = hal.set_irql(token.saved_irql, .lower);
-}
-
-pub fn unlock_unsafe(token: *Token) void {
-    // quick load of the next in line
-    var next = @atomicLoad(?*Token, &token.next, .acquire);
-    if (next == null) {
-        // if noone else is in line, then we are the tail.
-        // thus, do a compare-exchange to null out the lock's
-        // entry pointer atomically.
-        const l: *QueuedSpinLock = @ptrFromInt(@intFromPtr(token.lock) & (~@as(usize, 1)));
-        if (@cmpxchgStrong(?*Token, &l.entry, token, null, .release, .monotonic) == null) {
-            // the compare-exchange succeeded, which means that the atomicRmw in lock_unsafe
-            // was not executed since the atomicLoad above (ergo our free occurs BEFORE a queue-join).
-            // therefore, the lock is properly freed and we can just return
-            return;
-        }
-
-        // the compare-exchange failed. therefore, someone else has
-        // joined the queue. we want to free the head, so wait for our
-        // next pointer to be set
-        while (next == null) {
-            asm volatile ("pause");
-            next = @atomicLoad(?*Token, &token.next, .acquire);
-        }
-    }
-    // since our next should only be set after the next's wait flag is set,
-    // and the only way to unset the flag should be this function,
-    // the next token's wait flag should thus always be set here.
-    std.debug.assert(@as(*u64, @ptrCast(&next.?.lock)).* & 1 != 0);
-
-    // since the next token's wait flag is guaranteed set here, an xor is
-    // a quick and easy way to atomically unset the flag
-    _ = @atomicRmw(u64, @as(*u64, @ptrCast(&next.?.lock)), .Xor, 1, .acq_rel);
 }
