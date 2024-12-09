@@ -20,14 +20,7 @@ pub fn signal(self: *Semaphore) void {
     self.permits += 1;
     if (@intFromEnum(smp.lcb.*.irql) > @intFromEnum(InterruptRequestPriority.dpc)) {
         if (self.decrement_dpc == null) {
-            const dpc: *dispatcher.Dpc = dispatcher.Dpc.pool.create() catch @panic("Could not allocate DPC");
-            self.decrement_dpc = dpc;
-            dpc.* = .{
-                .args = .{ self, null, null },
-                .routine = &dec_dpc,
-                .priority = .p2,
-            };
-            dispatcher.Dpc.schedule(dpc);
+            self.decrement_dpc = dispatcher.Dpc.init_and_schedule(.p2, &dec_dpc, .{ self, null, null }) catch @panic("Could not allocate DPC");
         }
     } else {
         self.decrement();
@@ -40,16 +33,17 @@ pub fn reset(self: *Semaphore) void {
     self.permits = 0;
 }
 
-fn dec_dpc(_: *const dispatcher.Dpc, self_opaque: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque) void {
-    const self: *Semaphore = @alignCast(@ptrCast(self_opaque.?));
+fn dec_dpc(dpc: *dispatcher.Dpc, self: *Semaphore, _: ?*anyopaque, _: ?*anyopaque) void {
     const irql = self.spinlock.lock();
     defer self.spinlock.unlock(irql);
     self.decrement();
+    dpc.deinit();
+    self.decrement_dpc = null;
 }
 
 fn decrement(self: *Semaphore) void {
     while (self.permits > 0) : (self.permits -= 1) {
-        if(!self.wait_handle.release_one()) break;
+        if (!self.wait_handle.release_one()) break;
     }
 }
 

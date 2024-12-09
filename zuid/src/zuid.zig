@@ -20,7 +20,7 @@ fn hexCharToInt(c: u8) u8 {
     }
 }
 
-pub const UUID = packed struct {
+pub const UUID = packed struct(u128) {
     // sets of octets, when in string form seperated by hyphens
     set_5: u48,
     set_4: u14,
@@ -38,8 +38,9 @@ pub const UUID = packed struct {
             "{x:0>8}-{x:0>4}-{x:0>4}-{x:0>4}-{x:0>12}"
         else if (std.mem.eql(u8, fmt, "S"))
             "{X:0>8}-{X:0>4}-{X:0>4}-{X:0>4}-{X:0>12}"
-        else null;
-        if(fmt_str) |s| {
+        else
+            null;
+        if (fmt_str) |s| {
             try std.fmt.format(writer, s, .{
                 self.set_1,
                 self.set_2,

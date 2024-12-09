@@ -58,18 +58,18 @@ fn find_load_table(sig: sdt.Signature) !void {
 const namespace = uacpi.namespace;
 
 fn obj_cb_asc(_: ?*anyopaque, node: *namespace.NamespaceNode, depth: u32) callconv(arch.cc) namespace.IterationDecision {
-    const path = namespace.uacpi_namespace_node_generate_absolute_path(node) orelse return .@"continue";
-    defer namespace.uacpi_free_absolute_path(path);
+    const path = namespace.node_generate_absolute_path(node) orelse return .@"continue";
+    defer namespace.free_absolute_path(path);
     log.debug("ACPI Enumerated object {s}, depth {d}, of type {s}", .{ path, depth, @tagName(namespace.node_type(node) catch .uninitialized) });
     return .@"continue";
 }
 fn obj_cb_desc(_: ?*anyopaque, node: *namespace.NamespaceNode, depth: u32) callconv(arch.cc) namespace.IterationDecision {
-    const path = namespace.uacpi_namespace_node_generate_absolute_path(node) orelse return .@"continue";
-    defer namespace.uacpi_free_absolute_path(path);
+    const path = namespace.node_generate_absolute_path(node) orelse return .@"continue";
+    defer namespace.free_absolute_path(path);
     log.debug("ACPI left object {s}, depth {d}, of type {s}", .{ path, depth, @tagName(namespace.node_type(node) catch .uninitialized) });
     return .@"continue";
 }
 
 pub fn enumerate_stuff() !void {
-    try namespace.for_each_child(namespace.uacpi_namespace_root(), &obj_cb_asc, &obj_cb_desc, .{ .device = true, .processor = true, .thermal_zone = true }, std.math.maxInt(u32), undefined);
+    try namespace.for_each_child(namespace.get_root(), &obj_cb_asc, &obj_cb_desc, .{ .device = true, .processor = true, .thermal_zone = true }, std.math.maxInt(u32), undefined);
 }

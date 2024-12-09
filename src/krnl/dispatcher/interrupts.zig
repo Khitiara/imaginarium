@@ -58,7 +58,6 @@ fn dispatch_interrupt_tail(frame: *arch.SavedRegisterState) void {
         while (node) |dpc| {
             node = smp.LocalControlBlock.DpcQueueType.ref_from_optional_node(dpc.hook.next);
             dpc.run();
-            dispatcher.Dpc.pool.destroy(dpc);
         }
         _ = hal.set_irql(lcb.*.irql.lower(), .lower);
     }

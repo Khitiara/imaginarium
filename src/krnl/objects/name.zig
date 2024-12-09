@@ -1,4 +1,15 @@
-const Name = [:0]const u8;
+const std = @import("std");
+
+pub fn split(buffer: [:0]const u8) ?struct { []const u8, [:0]const u8 } {
+    var index: usize = 0;
+    while (buffer[index] == '/') : (index += 1) {}
+    if (index > 0 and index < buffer.len) {
+        index -= 1;
+    } else if(index >= buffer.len) return null;
+
+    const end = std.mem.indexOfScalarPos(u8, buffer, index + 1, '/') orelse buffer.len;
+    return .{buffer[index..end], buffer[end..]};
+}
 
 /// a modified version of std.mem.TokenIterator that includes the last leading delimeter in the returned token
 pub const NameTokenIterator = struct {

@@ -8,14 +8,11 @@ const zuid = @import("zuid");
 const std = @import("std");
 const atomic = std.atomic;
 
+pub const name = @import("name.zig");
+
 pub const Directory = @import("Directory.zig");
 
-pub const root: Directory = .{
-    .header = .{
-        .kind = .directory,
-        .id = zuid.new.v5(namespace, "/?"),
-    },
-};
+pub var root: *Directory = undefined;
 
 pub const ObjectKind = enum(u7) {
     directory,
@@ -29,6 +26,27 @@ pub const ObjectKind = enum(u7) {
 
 pub const namespace = zuid.deserialize("2d7e52f8-0d27-4a40-a967-828c2900c33c");
 
+var initialized: bool = false;
+
+pub fn init(alloc: std.mem.Allocator) !void {
+    if (@cmpxchgStrong(bool, &initialized, false, true, .acq_rel, .monotonic) != null) return;
+    root = try .init(alloc);
+}
+
+pub fn insert(alloc: std.mem.Allocator, object: *Object, n: [:0]const u8) !void {
+    try init(alloc);
+
+    if (name.split(n)) |s| {
+        if (std.mem.eql(u8, s[0], "/?")) {
+            return root.header.insert(alloc, object, s[1]);
+        } else {
+            return error.UnknownRoot;
+        }
+    } else {
+        return error.InvalidPath;
+    }
+}
+
 pub inline fn DeinitImpl(comptime Parent: type, comptime T: type, comptime field_name: []const u8) type {
     return struct {
         pub fn deinit_inner(self: *Parent, alloc: std.mem.Allocator) void {
@@ -38,6 +56,13 @@ pub inline fn DeinitImpl(comptime Parent: type, comptime T: type, comptime field
             self.vtable.deinit(self, alloc);
         }
     };
+}
+
+fn no_resolve(_: *Object, _: std.mem.Allocator, _: [:0]const u8) !*Object {
+    return error.Unsupported;
+}
+fn no_insert(_: *Object, _: std.mem.Allocator, _: *Object, _: [:0]const u8) !void {
+    return error.Unsupported;
 }
 
 pub const Object = struct {
@@ -52,13 +77,20 @@ pub const Object = struct {
     vtable: *const VTable,
 
     pub const VTable = struct {
-        resolve: ?*const fn (self: *Object, alloc: std.mem.Allocator, path: [:0]const u8, options: *const anyopaque) Object.ResolveError!*Object = null,
+        resolve: ?*const fn (self: *Object, alloc: std.mem.Allocator, path: [:0]const u8) ResolveError!*Object = null,
+        insert: ?*const fn (self: *Object, alloc: std.mem.Allocator, ob: *Object, path: [:0]const u8) InsertError!void = null,
         deinit: *const fn (self: *Object, alloc: std.mem.Allocator) void,
     };
-    pub const ResolveError = error{NotFound} || std.mem.Allocator.Error;
 
-    pub fn resolve(self: *Object, alloc: std.mem.Allocator, path: [:0]const u8, options: *const anyopaque) !*Object {
-        return (self.vtable.resolve orelse return error.ResolveNotSupported)(self, alloc, path, options);
+    pub const ResolveError = error{ NotFound, InvalidPath, Unsupported } || std.mem.Allocator.Error;
+    pub const InsertError = error{ NotFound, InvalidPath, Unsupported } || std.mem.Allocator.Error;
+
+    pub fn resolve(self: *Object, alloc: std.mem.Allocator, path: [:0]const u8) ResolveError!*Object {
+        return (self.vtable.resolve orelse &no_resolve)(self, alloc, path);
+    }
+
+    pub fn insert(self: *Object, alloc: std.mem.Allocator, ob: *Object, path: [:0]const u8) InsertError!void {
+        return (self.vtable.insert orelse &no_insert)(self, alloc, ob, path);
     }
 
     pub fn add_ref(self: anytype) @TypeOf(self) {

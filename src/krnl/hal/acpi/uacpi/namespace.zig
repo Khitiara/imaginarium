@@ -30,13 +30,19 @@ pub fn for_each_child(parent: *NamespaceNode, descending_cb: *const IterationCal
 
 pub const PredefinedNamespace = enum(u32) { root, gpe, pr, sb, si, tz, gl, os, osi, rev };
 
-pub extern fn uacpi_namespace_get_predefined(ns: PredefinedNamespace) callconv(arch.cc) *NamespaceNode;
-pub extern fn uacpi_namespace_root() callconv(arch.cc) *NamespaceNode;
+extern fn uacpi_namespace_get_predefined(ns: PredefinedNamespace) callconv(arch.cc) *NamespaceNode;
+pub const get_predefined = uacpi_namespace_get_predefined;
+extern fn uacpi_namespace_root() callconv(arch.cc) *NamespaceNode;
+pub const get_root = uacpi_namespace_root;
 
-pub extern fn uacpi_namespace_node_name(node: *const NamespaceNode) callconv(arch.cc) [4]u8;
+extern fn uacpi_namespace_node_name(node: *const NamespaceNode) callconv(arch.cc) [4]u8;
+pub const node_name = uacpi_namespace_node_name;
 
-pub extern fn uacpi_namespace_node_generate_absolute_path(node: *const NamespaceNode) callconv(arch.cc) ?[*:0]const u8;
-pub extern fn uacpi_free_absolute_path(path: [*:0]const u8) callconv(arch.cc) void;
+extern fn uacpi_namespace_node_generate_absolute_path(node: *const NamespaceNode) callconv(arch.cc) ?[*:0]const u8;
+pub const node_generate_absolute_path = uacpi_namespace_node_generate_absolute_path;
+
+extern fn uacpi_free_absolute_path(path: [*:0]const u8) callconv(arch.cc) void;
+pub const free_absolute_path = uacpi_free_absolute_path;
 
 extern fn uacpi_namespace_node_type(node: *const NamespaceNode, out_type: *uacpi.ObjectType) callconv(arch.cc) uacpi.uacpi_status;
 pub fn node_type(node: *const NamespaceNode) !uacpi.ObjectType {

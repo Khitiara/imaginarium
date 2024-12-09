@@ -5,9 +5,6 @@ pub const namespace = @import("namespace.zig");
 
 const std = @import("std");
 
-pub const uacpi_object = opaque {};
-pub const uacpi_handle = *anyopaque;
-
 pub const ObjectType = enum(u32) {
     uninitialized,
     integer,
@@ -31,7 +28,6 @@ pub const ObjectType = enum(u32) {
 
 pub const ObjectTypeBits = @import("util").EnumMask(ObjectType);
 
-pub const namespace_node = opaque {};
 pub const log_level = enum(u32) {
     err = 1,
     warn = 2,
@@ -235,9 +231,11 @@ pub inline fn leave_acpi_mode() Error!void {
     return uacpi_leave_acpi_mode().err();
 }
 
-pub extern fn uacpi_state_reset() void;
+extern fn uacpi_state_reset() void;
+pub const state_reset = uacpi_state_reset;
 
-pub extern fn uacpi_status_to_string(uacpi_status) [*:0]const u8;
+extern fn uacpi_status_to_string(uacpi_status) [*:0]const u8;
+pub const status_to_string = uacpi_status_to_string;
 
 pub const InterruptRet = enum(u32) {
     not_handled,
