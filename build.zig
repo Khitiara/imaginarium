@@ -126,6 +126,7 @@ pub fn build(b: *Build) !void {
 
     const krnlexe, const krnlstep, const elf, const debug = try add_krnl(b, arch, target, optimize);
     const stage2exe, const stage2step, const s2elf, const s2debug = try add_stage2(b, arch, target, optimize);
+    _ = stage2exe; // autofix
     _ = stage2step; // autofix
     _ = s2elf; // autofix
     _ = s2debug; // autofix
@@ -203,5 +204,5 @@ pub fn build(b: *Build) !void {
 
     const noemit = b.step("buildnoemit", "");
     noemit.dependOn(&krnlexe.step);
-    noemit.dependOn(&stage2exe.step);
+    // noemit.dependOn(&stage2exe.step);
 }

@@ -4,8 +4,10 @@ const util = @import("util");
 
 const DeviceProperties = @This();
 
-pub const dev_props_ns = UUID.deserialize("0269d673-5f45-4c15-909d-f625a37cbe9a") catch unreachable;
-pub const ids_ns = UUID.new.v5(dev_props_ns, "IDs");
+pub const known_properties = struct {
+    pub const pci_downstream_segment = UUID.deserialize("b017d0cd-fb23-43d4-bf6b-dfe3875a3b4e") catch unreachable;
+    pub const pci_downstream_bus = UUID.deserialize("afc19b6b-30b0-4d15-81f3-a868fc101866") catch unreachable;
+};
 
 hardware_ids: ?[]const []const u8 = null,
 compatible_ids: ?[]const []const u8 = null,

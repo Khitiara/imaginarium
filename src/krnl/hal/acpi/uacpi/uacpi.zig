@@ -2,6 +2,7 @@ pub const tables = @import("tables.zig");
 pub const event = @import("event.zig");
 pub const utilities = @import("utilities.zig");
 pub const namespace = @import("namespace.zig");
+pub const eval = @import("eval.zig");
 
 const std = @import("std");
 

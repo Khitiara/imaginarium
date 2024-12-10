@@ -31,9 +31,18 @@ pub const PciAddress = struct {
 const mcfg = @import("../acpi/mcfg.zig");
 
 pub fn config_read(address: PciAddress, comptime T: type) !T {
-    const host_bridge_map = for (mcfg.host_bridges) |*b| {
+    const bridge = for (mcfg.host_bridges) |*b| {
         if (b.segment_group == address.segment)
             break b;
+    } else null;
+    return try config_read_with_bridge(address, bridge, T);
+}
+
+pub fn config_read_with_bridge(address: PciAddress, bridge: ?*const mcfg.PciHostBridge, comptime T: type) !T {
+    if (bridge) |host_bridge_map| {
+        const w = address.offset & 0x3;
+        const value = host_bridge_map.block(address.bus, address.device, address.function)[address.offset / 4];
+        return @intCast((value >> @intCast(8 * w)) & std.math.maxInt(T));
     } else {
         if (address.segment != 0) return error.InvalidArgument;
         return config_read_legacy(.{
@@ -43,16 +52,23 @@ pub fn config_read(address: PciAddress, comptime T: type) !T {
             .function = address.function,
             .register_offset = @intCast(address.offset),
         }, T);
-    };
-    const w = address.offset & 0x3;
-    const value = host_bridge_map.block(address.bus, address.device, address.function)[address.offset / 4];
-    return @intCast((value >> @intCast(8 * w)) & std.math.maxInt(T));
+    }
 }
 
 pub fn config_write(address: PciAddress, value: anytype) !void {
     const host_bridge_map = for (mcfg.host_bridges) |*b| {
         if (b.segment_group == address.segment)
             break b;
+    } else null;
+    try config_write_with_bridge(address, host_bridge_map, value);
+}
+
+pub fn config_write_with_bridge(address: PciAddress, bridge: ?*const mcfg.PciHostBridge, value: anytype) !void {
+    if (bridge) |host_bridge_map| {
+        const w = address.offset & 0x3;
+        const old_mask: u32 = @as(u32, std.math.maxInt(@TypeOf(value))) << @intCast(8 * w);
+        const old = host_bridge_map.block(address.bus, address.device, address.function)[address.offset / 4] & old_mask;
+        host_bridge_map.block(address.bus, address.device, address.function)[address.offset / 4] = @intCast(old | (value << @intCast(8 * w)));
     } else {
         if (address.segment != 0) return error.InvalidArgument;
         config_write_legacy(.{
@@ -62,12 +78,7 @@ pub fn config_write(address: PciAddress, value: anytype) !void {
             .function = address.function,
             .register_offset = @intCast(address.offset),
         }, value);
-        return;
-    };
-    const w = address.offset & 0x3;
-    const old_mask: u32 = @as(u32, std.math.maxInt(@TypeOf(value))) << @intCast(8 * w);
-    const old = host_bridge_map.block(address.bus, address.device, address.function)[address.offset / 4] & old_mask;
-    host_bridge_map.block(address.bus, address.device, address.function)[address.offset / 4] = @intCast(old | (value << @intCast(8 * w)));
+    }
 }
 
 pub fn config_read_legacy(address: ConfigAddress, comptime T: type) T {

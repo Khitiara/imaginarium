@@ -16,7 +16,7 @@ pub const Mcfg = extern struct {
     }
 };
 
-pub var host_bridges: []align(1) const PciHostBridge = undefined;
+pub var host_bridges: []const PciHostBridge = undefined;
 
 pub const PciHostBridge = extern struct {
     base: u64,
@@ -32,7 +32,7 @@ pub const PciHostBridge = extern struct {
         bus: u8,
         _2: u36 = 0,
     };
-    pub fn block(self: *align(1) const PciHostBridge, bus: u8, device: u5, function: u3) *align(4096) volatile [4096 / 32]u32 {
+    pub fn block(self: *const PciHostBridge, bus: u8, device: u5, function: u3) *align(4096) volatile [4096 / 32]u32 {
         assert(bus >= self.bus_start);
         assert(bus <= self.bus_end);
         var breakdown: AddrBreakdown = @bitCast(self.base);
@@ -48,7 +48,7 @@ const log = @import("acpi.zig").log;
 pub fn set_table(table: *align(1) const Mcfg) !void {
     log.info("PCI(E) MCFG table loaded at {*}", .{table});
     const b = table.bridges();
-    const b2 = try arch.vmm.gpa.allocator().alignedAlloc(PciHostBridge, 1, b.len);
+    const b2 = try arch.vmm.gpa.allocator().alloc(PciHostBridge, b.len);
     @memcpy(b2, b);
     host_bridges = b2;
     for (host_bridges, 0..) |host_bridge, i| {

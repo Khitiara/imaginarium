@@ -23,20 +23,16 @@ pub const DriverStackEntry = struct {
     /// device crosses a logical device boundary (e.g. volume to disk or disk to disk controller)
     /// then a new io request should be sent to a separate device object stored internally
     /// in the @fieldParentPtr extension of this stack entry
-    stack_hook: queue.Node = .{},
+    next: ?*DriverStackEntry = null,
+    prev: ?*DriverStackEntry = null,
     /// a list entry for hooking this stack entry into queues as needed internally
     queue_hook: queue.Node = .{},
     /// the driver which processes this entry in the driver stack
     driver: *Driver,
     device: *Device = undefined,
-
-    pub fn next(self: *DriverStackEntry) ?*DriverStackEntry {
-        return DriverStack.next(self);
-    }
 };
 
-const DriverStack = queue.Queue(DriverStackEntry, "stack_hook");
-const SiblingList = queue.DoublyLinkedList(Device, "siblings");
+pub const SiblingList = queue.DoublyLinkedList(Device, "siblings");
 
 header: ob.Object,
 queue_hook: util.queue.Node = .{},
@@ -47,7 +43,8 @@ queue_hook: util.queue.Node = .{},
 /// with resources provided by ACPI will have an ACPI driver entry from initial enumeration, a
 /// PCI driver entry from re-enumeration by the PCI bus, and a UART driver entry to perform actual
 /// primary device functions
-driver_stack: DriverStack = .{},
+driver_stack: ?*DriverStackEntry = null,
+bus_stack: ?*DriverStackEntry = null,
 
 // device tree fields
 parent: ?*Device = null,
@@ -55,7 +52,7 @@ children: SiblingList = .{},
 siblings: queue.DoublyLinkedNode = .{},
 
 // INTERNAL pnp enumeration state
-queued_for_probe: bool = false,
+needs_driver: bool = false,
 inserted_in_directory: bool = false,
 
 // enumerated device properties
@@ -82,9 +79,36 @@ pub fn attach_parent(self: *Device, parent: ?*Device) void {
     }
 }
 
+pub fn attach_bus(self: *Device, entry: *DriverStackEntry) void {
+    entry.device = self;
+
+    if (self.bus_stack) |d| {
+        // if there is a function driver stack, this makes sure the two are attached
+        if (d.prev) |p| {
+            entry.prev = p;
+            p.next = entry;
+        }
+        // and stuff ourself on front
+        d.prev = entry;
+        entry.next = d;
+    }
+    // if theres no function stack then the whole stack should point to the function driver
+    if (self.driver_stack == null) {
+        self.driver_stack = entry;
+    }
+    self.bus_stack = entry;
+}
+
 pub fn attach_driver(self: *Device, entry: *DriverStackEntry) void {
     entry.device = self;
-    self.driver_stack.append(entry);
+
+    if (self.driver_stack) |d| {
+        d.prev = entry;
+        entry.next = d;
+    } else {
+        entry.next = null;
+    }
+    self.driver_stack = entry;
 }
 
 const vtable: ob.Object.VTable = .{

@@ -105,7 +105,7 @@ noinline fn main(ldr_info: *bootelf.BootelfData) !noreturn {
     try uacpi.event.finalize_gpe_initialization();
 
     try @import("objects/ob.zig").init(gpa);
-    try @import("io/io.zig").register_drivers(gpa);
+    try @import("io/io.zig").init(gpa);
 
     const current_apic_id = hal.apic.get_lapic_id();
 

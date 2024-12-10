@@ -1,6 +1,8 @@
 const Driver = @import("../Driver.zig");
 const Device = @import("../Device.zig");
+const Irp = @import("../Irp.zig");
 const ob = @import("../../objects/ob.zig");
+const io = @import("../io.zig");
 const std = @import("std");
 const util = @import("util");
 const uacpi = @import("../../hal/acpi/uacpi/uacpi.zig");
@@ -15,26 +17,28 @@ const vtable: Driver.VTable = .{
     .load = &load,
     .attach = &attach,
     .deinit = &ob.DeinitImpl(Driver, @This(), "drv").deinit_inner,
-    .dispatch = undefined,
+    .dispatch = &dispatch,
 };
 
 pub fn register(alloc: std.mem.Allocator) !void {
     const d = try alloc.create(@This());
+    errdefer d.deinit(alloc);
     d.drv.init_internal();
     d.drv.vtable = &vtable;
     d.drv.supported_devices = .{
-        .hardware_id = "ROOT\\ACPI_HAL",
+        .hardware_ids = &.{ "ROOT\\ACPI_HAL" },
         .compatible_ids = &.{ "ROOT\\ACPI_HAL", "ACPI_HAL" },
     };
+    log.debug("registered acpi enumerating driver", .{});
     try ob.insert(alloc, &d.drv.header, "/?/Drivers/acpi");
 }
 
-fn load(_: *Driver, alloc: std.mem.Allocator) Driver.InitError!?*Device {
+fn load(_: *Driver, alloc: std.mem.Allocator) anyerror!?*Device {
     const acpi_bus = try alloc.create(Device);
     acpi_bus.init(null);
     acpi_bus.props.hardware_ids = try util.dupe_list(alloc, u8, &.{"ROOT\\ACPI_HAL"});
     acpi_bus.props.compatible_ids = try util.dupe_list(alloc, u8, &.{ "ROOT\\ACPI_HAL", "ACPI_HAL" });
-    return null;
+    return acpi_bus;
 }
 
 const AcpiBusExtension = struct {
@@ -42,7 +46,8 @@ const AcpiBusExtension = struct {
     node: ?*uacpi.namespace.NamespaceNode,
 };
 
-fn attach(drv: *Driver, dev: *Device, alloc: std.mem.Allocator) Driver.AttachError!bool {
+fn attach(drv: *Driver, dev: *Device, alloc: std.mem.Allocator) anyerror!bool {
+    log.debug("attaching acpi root bus", .{});
     const entry: *AcpiBusExtension = try alloc.create(AcpiBusExtension);
     entry.* = .{
         .core = .{
@@ -50,7 +55,7 @@ fn attach(drv: *Driver, dev: *Device, alloc: std.mem.Allocator) Driver.AttachErr
         },
         .node = null,
     };
-    dev.attach_driver(&entry.core);
+    dev.attach_bus(&entry.core);
 
     var ctx: EnumerationContext = .{
         .alloc = alloc,
@@ -60,7 +65,7 @@ fn attach(drv: *Driver, dev: *Device, alloc: std.mem.Allocator) Driver.AttachErr
     var ctx2: AttachPassThru.IterationContext = .{
         .user = &ctx,
     };
-    @as(void, try @errorCast(uacpi.namespace.for_each_child(
+    try uacpi.namespace.for_each_child(
         uacpi.namespace.get_root(),
         &AttachPassThru.create_callback(descend),
         &AttachPassThru.create_callback(ascend),
@@ -70,9 +75,35 @@ fn attach(drv: *Driver, dev: *Device, alloc: std.mem.Allocator) Driver.AttachErr
         },
         std.math.maxInt(u32),
         &ctx2,
-    )));
+    );
+    if (ctx2.err) |e| return e;
 
     return true;
+}
+
+fn dispatch(_: *Driver, irp: *Irp) anyerror!Irp.InvocationResult {
+    const sp: *AcpiBusExtension = @fieldParentPtr("core", irp.stack_position orelse return error.DriverExtensionMissing);
+
+    switch (irp.parameters) {
+        .enumeration => |e| switch (e) {
+            .properties => |p| {
+                if (UUID.eql(p.id, Device.Properties.known_properties.pci_downstream_segment)) {
+                    if (sp.node == null) return error.Unsupported;
+                    @as(*u16, @alignCast(@ptrCast(p.result))).* = @truncate(uacpi.eval.eval_simple_integer(sp.node.?, "_SEG") catch |err| switch (err) {
+                        error.NotFound => 0,
+                        else => return err,
+                    });
+                    return .complete;
+                } else if (UUID.eql(p.id, Device.Properties.known_properties.pci_downstream_bus)) {
+                    if (sp.node == null) return error.Unsupported;
+                    @as(*u8, @alignCast(@ptrCast(p.result))).* = @truncate(try uacpi.eval.eval_simple_integer(sp.node.?, "_BBN"));
+                    return .complete;
+                }
+
+                return .pass;
+            },
+        },
+    }
 }
 
 const EnumerationContext = struct {
@@ -80,11 +111,11 @@ const EnumerationContext = struct {
     drv: *Driver,
     alloc: std.mem.Allocator,
 };
-const AttachPassThru = iter_passthru.IterationErrorPasser(Driver.AttachError);
+const AttachPassThru = iter_passthru.IterationErrorPasser(anyerror);
 
 pub const ACPI_PATH = UUID.deserialize("3db3689f-fbe7-4e7f-8055-a0225ad32e04") catch unreachable;
 
-fn descend(user: ?*anyopaque, ns_node: *uacpi.namespace.NamespaceNode, _: u32) Driver.AttachError!uacpi.namespace.IterationDecision {
+noinline fn descend(user: ?*anyopaque, ns_node: *uacpi.namespace.NamespaceNode, _: u32) anyerror!uacpi.namespace.IterationDecision {
     const ctx: *EnumerationContext = @alignCast(@ptrCast(user.?));
     const dev: *Device = try ctx.alloc.create(Device);
     errdefer dev.deinit(ctx.alloc);
@@ -98,7 +129,7 @@ fn descend(user: ?*anyopaque, ns_node: *uacpi.namespace.NamespaceNode, _: u32) D
     };
     errdefer ctx.alloc.destroy(ext);
     ext.node = ns_node;
-    dev.attach_driver(&ext.core);
+    dev.attach_bus(&ext.core);
     const info = try uacpi.utilities.get_namespace_node_info(ns_node);
     defer uacpi.utilities.free_namespace_node_info(info);
     if (info.flags.has_hid) {
@@ -119,16 +150,18 @@ fn descend(user: ?*anyopaque, ns_node: *uacpi.namespace.NamespaceNode, _: u32) D
     b: {
         const adr_str = std.fmt.allocPrint(ctx.alloc, "{x}", .{info.adr}) catch break :b;
         defer ctx.alloc.free(adr_str);
-        log.debug("ACPI bus enumerated device of {s} {?any} at path {s}", .{
+        log.debug("ACPI bus enumerated device of {s} {?s} at path {s}", .{
             if (info.flags.has_hid) "hid" else if (info.flags.has_adr) "adr" else "unidentified kind",
             if (info.flags.has_hid) info.hid.str_const() else if (info.flags.has_adr) adr_str else null,
             path,
         });
     }
+    ctx.dev = dev;
+    try io.report_device(ctx.alloc, dev);
     return .@"continue";
 }
 
-fn ascend(user: ?*anyopaque, _: *uacpi.namespace.NamespaceNode, _: u32) Driver.AttachError!uacpi.namespace.IterationDecision {
+noinline fn ascend(user: ?*anyopaque, _: *uacpi.namespace.NamespaceNode, _: u32) anyerror!uacpi.namespace.IterationDecision {
     const ctx: *EnumerationContext = @alignCast(@ptrCast(user.?));
     ctx.dev = ctx.dev.parent.?;
     return .@"continue";

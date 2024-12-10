@@ -110,7 +110,7 @@ fn render_function(gpa: std.mem.Allocator, func: *const Function, writer: Serial
     }
 }
 
-fn enumerate_function(gpa: std.mem.Allocator, bridge: *align(1) const mcfg.PciHostBridge, bus: u8, device: u5, function: u3, multifunction: ?*bool) std.mem.Allocator.Error!?*Function {
+fn enumerate_function(gpa: std.mem.Allocator, bridge: *const mcfg.PciHostBridge, bus: u8, device: u5, function: u3, multifunction: ?*bool) std.mem.Allocator.Error!?*Function {
     const block = bridge.block(bus, device, function);
     const ids: [2]u16 = @bitCast(block[0]);
     if (ids[0] == 0xFFFF) {
@@ -148,7 +148,7 @@ fn enumerate_function(gpa: std.mem.Allocator, bridge: *align(1) const mcfg.PciHo
     return f;
 }
 
-fn enumerate(gpa: std.mem.Allocator, bridge: *align(1) const mcfg.PciHostBridge, bus: u8) std.mem.Allocator.Error!?*TreeNode {
+fn enumerate(gpa: std.mem.Allocator, bridge: *const mcfg.PciHostBridge, bus: u8) std.mem.Allocator.Error!?*TreeNode {
     var start: ?*TreeNode = null;
     var end: ?*TreeNode = null;
     for (0..32) |d| {
