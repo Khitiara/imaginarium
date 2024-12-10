@@ -3,6 +3,11 @@ pub const event = @import("event.zig");
 pub const utilities = @import("utilities.zig");
 pub const namespace = @import("namespace.zig");
 pub const eval = @import("eval.zig");
+pub const resources = @import("resources.zig");
+
+comptime {
+    _ = resources;
+}
 
 const std = @import("std");
 

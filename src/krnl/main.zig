@@ -86,7 +86,7 @@ export fn __kstart2(ldr_info: *bootelf.BootelfData) callconv(arch.cc) noreturn {
 const uacpi = @import("hal/acpi/uacpi/uacpi.zig");
 const zuacpi = @import("hal/acpi/zuacpi.zig");
 
-noinline fn main(ldr_info: *bootelf.BootelfData) !noreturn {
+noinline fn main(ldr_info: *bootelf.BootelfData) anyerror!noreturn {
     const bootelf_magic_check = ldr_info.magic == bootelf.magic;
     std.debug.assert(bootelf_magic_check);
 
@@ -143,12 +143,6 @@ noinline fn main(ldr_info: *bootelf.BootelfData) !noreturn {
     const ap_trampoline_start = @as([*]const u8, @ptrFromInt(ext("__ap_trampoline_begin__")));
 
     log.debug("ap_trampoline: {*} (len {X})", .{ ap_trampoline_start, ap_trampoline_length });
-
-    log.info("Enumerating PCI(e)", .{});
-    try @import("hal/pci/pcie.zig").init(gpa);
-
-    log.info("Enumerating ACPI", .{});
-    try zuacpi.enumerate_stuff();
 
     // try debug.dump_hex(ap_trampoline_start[0..ap_trampoline_length]);
     // debug.dump_stack_trace(log, null);

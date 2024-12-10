@@ -11,7 +11,7 @@ pub const Device = @import("Device.zig");
 pub const Driver = @import("Driver.zig");
 pub const Irp = @import("Irp.zig");
 
-pub fn get_device_property(alloc: std.mem.Allocator, dev: *Device, id: UUID, ptr: anytype) !void {
+pub fn get_device_property(alloc: std.mem.Allocator, dev: *Device, id: UUID, ptr: anytype) anyerror!void {
     const irp: *Irp = try .init(alloc, dev, .{
         .enumeration = .{
             .properties = .{
@@ -28,7 +28,7 @@ pub fn get_device_property(alloc: std.mem.Allocator, dev: *Device, id: UUID, ptr
     }
 }
 
-pub fn execute_irp(irp: *Irp) !Irp.InvocationResult {
+pub fn execute_irp(irp: *Irp) anyerror!Irp.InvocationResult {
     defer irp.stack_position = null;
     var entry: ?*Device.DriverStackEntry = irp.stack_position orelse irp.device.driver_stack orelse return error.NoDriver;
     while (entry) |e| : (entry = e.next) {
@@ -55,7 +55,7 @@ pub fn register_drivers(alloc: std.mem.Allocator) !void {
     try @import("drv/PciBusEnumerator.zig").register(alloc);
 }
 
-const DeviceQueue = queue.Queue(Device, "queue_hook");
+const DeviceQueue = queue.DoublyLinkedList(Device, "queue_hook");
 const DriverQueue = queue.Queue(Driver, "queue_hook");
 
 var driver_load_queue: DriverQueue = .{};
@@ -78,13 +78,13 @@ var uid_print_buf: [38]u8 = undefined;
 
 var root_bus: *Device = undefined;
 
-pub fn init(alloc: std.mem.Allocator) !void {
+pub noinline fn init(alloc: std.mem.Allocator) !void {
     try register_drivers(alloc);
     try load_drivers(alloc);
     try enumerate_devices(alloc);
 }
 
-pub fn load_drivers(alloc: std.mem.Allocator) !void {
+pub noinline fn load_drivers(alloc: std.mem.Allocator) !void {
     {
         // FIXME: using internal state of directory object
         var token: QueuedSpinLock.Token = undefined;
@@ -113,43 +113,67 @@ pub fn load_drivers(alloc: std.mem.Allocator) !void {
     }
 }
 
-pub fn report_device(alloc: std.mem.Allocator, dev: *Device) !void {
-    if (@cmpxchgStrong(bool, &dev.needs_driver, false, true, .acq_rel, .acquire) != null) {
+pub noinline fn report_device(alloc: std.mem.Allocator, dev: *Device) !void {
+    if (@atomicLoad(bool, &dev.has_driver, .acquire)) {
         @branchHint(.unlikely);
+        log.debug("device with driver reported for re-enumeration, skipping", .{});
         return;
     }
     if (@cmpxchgStrong(bool, &dev.inserted_in_directory, false, true, .acq_rel, .acquire) == null) {
         @branchHint(.likely);
         _ = try devices_dir.insert(alloc, &dev.header, try std.fmt.bufPrint(&uid_print_buf, "{{{s}}}", .{dev.header.id}));
     }
-    // log.debug("Device reported for load", .{});
+    // if (comptime std.log.logEnabled(.debug, .io)) {
+    //     const hids = if (dev.props.hardware_ids) |hids| try std.mem.join(alloc, ", ", hids) else try alloc.dupe(u8, "");
+    //     defer alloc.free(hids);
+    //     const cids = if (dev.props.compatible_ids) |cids| try std.mem.join(alloc, ", ", cids) else try alloc.dupe(u8, "");
+    //     defer alloc.free(cids);
+    //     log.debug("Device reported for load with HID [{s}] CIDS [{s}] ADR {?x}", .{ hids, cids, dev.props.address });
+    // }
     var token: QueuedSpinLock.Token = undefined;
     enumeration_queue_lock.lock(&token);
     defer token.unlock();
-    enumeration_queue.append(dev);
+    if (@atomicRmw(bool, &dev.find_driver_queued, .Xchg, true, .acq_rel)) {
+        // log.debug("moving device to rear of queue", .{});
+        enumeration_queue.remove(dev);
+    }
+    enumeration_queue.add_back(dev);
 }
 
-pub fn enumerate_devices(alloc: std.mem.Allocator) !void {
+pub noinline fn enumerate_devices(alloc: std.mem.Allocator) !void {
     var token: QueuedSpinLock.Token = undefined;
     while (b: {
         enumeration_queue_lock.lock(&token);
         defer token.unlock();
-        break :b enumeration_queue.clear();
-    }) |head| {
-        var node: ?*Device = head;
-        while (node) |n| : (node = DeviceQueue.next(n)) {
-            try find_driver(n, alloc);
-        }
+        break :b enumeration_queue.remove_front();
+    }) |dev| {
+        @atomicStore(bool, &dev.find_driver_queued, false, .release);
+        try find_driver(dev, alloc);
     }
 }
 
-fn find_driver(device: *Device, alloc: std.mem.Allocator) !void {
+const debug = @import("../debug.zig");
+
+noinline fn find_driver(device: *Device, alloc: std.mem.Allocator) !void {
     if (device.props.hardware_ids) |hids| {
         for (hids) |hid| {
             for (all_drivers) |drv| {
                 for (drv.supported_devices.hardware_ids) |hid2| {
                     if (std.mem.eql(u8, hid2, hid)) {
-                        if (try drv.attach(device, alloc)) return;
+                        if (drv.attach(device, alloc) catch |err| {
+                            debug.print_err_trace(log, "ATTACHING DRIVER", err, @errorReturnTrace());
+                            continue;
+                        }) {
+                            if (comptime std.log.logEnabled(.debug, .io)) {
+                                const hids1 = try std.mem.join(alloc, ", ", hids);
+                                defer alloc.free(hids1);
+                                const cids = if (device.props.compatible_ids) |cids| try std.mem.join(alloc, ", ", cids) else try alloc.dupe(u8, "");
+                                defer alloc.free(cids);
+                                log.debug("Driver accepted device with HID [{s}] CIDS [{s}] ADR {?x}", .{ hids1, cids, device.props.address });
+                            }
+                            @atomicStore(bool, &device.has_driver, true, .release);
+                            return;
+                        }
                     }
                 }
             }
@@ -160,11 +184,30 @@ fn find_driver(device: *Device, alloc: std.mem.Allocator) !void {
             for (all_drivers) |drv| {
                 for (drv.supported_devices.compatible_ids) |cid2| {
                     if (std.mem.eql(u8, cid2, cid1)) {
-                        if (try drv.attach(device, alloc)) return;
+                        if (drv.attach(device, alloc) catch |err| {
+                            debug.print_err_trace(log, "ATTACHING DRIVER", err, @errorReturnTrace());
+                            continue;
+                        }) {
+                            if (comptime std.log.logEnabled(.debug, .io)) {
+                                const hids = if (device.props.hardware_ids) |hids| try std.mem.join(alloc, ", ", hids) else try alloc.dupe(u8, "");
+                                defer alloc.free(hids);
+                                const cids1 = try std.mem.join(alloc, ", ", cids);
+                                defer alloc.free(cids1);
+                                log.debug("Driver accepted device with HID [{s}] CIDS [{s}] ADR {?x}", .{ hids, cids1, device.props.address });
+                            }
+                            @atomicStore(bool, &device.has_driver, true, .release);
+                            return;
+                        }
                     }
                 }
             }
         }
     }
-    @atomicStore(bool, &device.needs_driver, false, .release);
+    if (comptime std.log.logEnabled(.debug, .io)) {
+        const hids = if (device.props.hardware_ids) |hids| try std.mem.join(alloc, ", ", hids) else try alloc.dupe(u8, "");
+        defer alloc.free(hids);
+        const cids = if (device.props.compatible_ids) |cids| try std.mem.join(alloc, ", ", cids) else try alloc.dupe(u8, "");
+        defer alloc.free(cids);
+        log.debug("No driver found for device with HID [{s}] CIDS [{s}] ADR {?x}", .{ hids, cids, device.props.address });
+    }
 }

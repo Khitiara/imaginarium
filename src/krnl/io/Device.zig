@@ -35,7 +35,7 @@ pub const DriverStackEntry = struct {
 pub const SiblingList = queue.DoublyLinkedList(Device, "siblings");
 
 header: ob.Object,
-queue_hook: util.queue.Node = .{},
+queue_hook: queue.DoublyLinkedNode = .{},
 /// the driver stack for this device. drivers in the stack should use a @fieldParentPtr extension
 /// of their DriverStackEntry to manage internal device state, and pass on any io request they
 /// do not know how to handle. most devices will have one or two entries in the stack, but some
@@ -52,8 +52,9 @@ children: SiblingList = .{},
 siblings: queue.DoublyLinkedNode = .{},
 
 // INTERNAL pnp enumeration state
-needs_driver: bool = false,
+find_driver_queued: bool = false,
 inserted_in_directory: bool = false,
+has_driver: bool = false,
 
 // enumerated device properties
 props: Properties = .{},

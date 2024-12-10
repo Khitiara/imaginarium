@@ -31,6 +31,15 @@ pub fn dump_stack_trace(logger: anytype, ret_addr: ?usize) void {
     print_stack_trace(logger, &trace);
 }
 
+pub fn print_err_trace(logger: anytype, msg: []const u8, err: anyerror, error_return_trace: ?*std.builtin.StackTrace) void {
+    logger.err("ERROR {s} {s}, trace:", .{msg, @errorName(err)});
+    if (error_return_trace) |stk| {
+        print_stack_trace(log, stk);
+    } else {
+        log.err("    ---", .{});
+    }
+}
+
 pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_addr: ?usize) noreturn {
     log.err("PANIC {s}, RETURN={X:0>16}; error return trace:", .{ msg, ret_addr orelse 0 });
     if (error_return_trace) |stk| {

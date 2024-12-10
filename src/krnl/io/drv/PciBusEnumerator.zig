@@ -43,12 +43,13 @@ fn load(_: *Driver, _: std.mem.Allocator) anyerror!?*Device {
 }
 
 fn attach(drv: *Driver, dev: *Device, alloc: std.mem.Allocator) anyerror!bool {
+    @atomicStore(bool, &dev.has_driver, true, .release);
     var seg: u16 = undefined;
     try io.get_device_property(alloc, dev, Device.Properties.known_properties.pci_downstream_segment, &seg);
-    log.info("PCI attaching to segment {d}", .{seg});
     var bus: u8 = undefined;
     try io.get_device_property(alloc, dev, Device.Properties.known_properties.pci_downstream_bus, &bus);
-    log.info("PCI attaching to segment {d} bus {d}", .{seg, bus});
+
+    log.debug("attaching to pci bridge downstream bus {X:0>4}:{X:0>2}", .{seg, bus});
 
     const bridge = for (mcfg.host_bridges) |*hb| {
         if (hb.segment_group == seg) break hb;
@@ -117,23 +118,26 @@ fn enumerate_function(
         return false;
     }
 
-    const props_adr = (@as(u32, device) << 16) & @as(u32, function);
+    const props_adr = (@as(u32, device) << 16) | @as(u32, function);
 
     var peer: ?*Device = dev.children.peek_front();
+    var found: bool = false;
     const d: *Device = while (peer) |p| : (peer = Device.SiblingList.next(p)) {
         if (p.props.address == props_adr) {
-            log.debug("PCI found existing devobj for segment {d} bus {d} device {d} function {d}", .{seg, bus, device, function});
+            // log.debug("PCI found existing devobj for segment {d} bus {d} device {d} function {d}", .{ seg, bus, device, function });
+            found = true;
             break p;
         }
     } else b: {
-        log.debug("PCI creating new devobj for segment {d} bus {d} device {d} function {d}", .{seg, bus, device, function});
+        // log.debug("PCI creating new devobj for segment {d} bus {d} device {d} function {d}", .{ seg, bus, device, function });
         const d1 = try gpa.create(Device);
-        errdefer d1.deinit(gpa);
         d1.init(dev);
-        try io.report_device(gpa, d1);
         d1.props.address = props_adr;
         break :b d1;
     };
+    d.props.address = props_adr;
+
+    errdefer if (!found) d.deinit(gpa);
 
     adr.offset = 8;
     const classes: [4]u8 = @bitCast(try pci.config_read_with_bridge(adr, bridge, u32));
@@ -145,6 +149,7 @@ fn enumerate_function(
     }
 
     const e: *PciBusExtension = try gpa.create(PciBusExtension);
+    errdefer gpa.destroy(e);
     e.* = .{
         .core = .{
             .driver = drv,
@@ -160,23 +165,63 @@ fn enumerate_function(
             },
         },
     };
+    d.attach_bus(&e.core);
 
-    d.props.hardware_ids = try gpa.dupe([]const u8, &.{
-        try std.fmt.allocPrint(gpa, "PCI\\VEN_{X:0>4}&DEV_{X:0>4}&REV_{X:0>2}", .{ ids[0], ids[1], classes[0] }),
-        try std.fmt.allocPrint(gpa, "PCI\\VEN_{X:0>4}&DEV_{X:0>4}", .{ ids[0], ids[1] }),
-        try std.fmt.allocPrint(gpa, "PCI\\VEN_{X:0>4}&DEV_{X:0>4}&CC_{X:0>2}{X:0>2}{X:0>2}", .{ ids[0], ids[1], classes[3], classes[2], classes[1] }),
-        try std.fmt.allocPrint(gpa, "PCI\\VEN_{X:0>4}&DEV_{X:0>4}&CC_{X:0>2}{X:0>2}", .{ ids[0], ids[1], classes[3], classes[2] }),
-    });
-    d.props.compatible_ids = try gpa.dupe([]const u8, &.{
-        try std.fmt.allocPrint(gpa, "PCI\\VEN_{X:0>4}&DEV_{X:0>4}&REV_{X:0>2}", .{ ids[0], ids[1], classes[0] }),
-        try std.fmt.allocPrint(gpa, "PCI\\VEN_{X:0>4}&DEV_{X:0>4}", .{ ids[0], ids[1] }),
-        try std.fmt.allocPrint(gpa, "PCI\\VEN_{X:0>4}&CC_{X:0>2}{X:0>2}{X:0>2}", .{ ids[0], classes[3], classes[2], classes[1] }),
-        try std.fmt.allocPrint(gpa, "PCI\\VEN_{X:0>4}&CC_{X:0>2}{X:0>2}", .{ ids[0], classes[3], classes[2] }),
-        try std.fmt.allocPrint(gpa, "PCI\\VEN_{X:0>4}", .{ids[0]}),
-        try std.fmt.allocPrint(gpa, "PCI\\CC_{X:0>2}{X:0>2}{X:0>2}", .{ classes[3], classes[2], classes[1] }),
-        try std.fmt.allocPrint(gpa, "PCI\\CC_{X:0>2}{X:0>2}", .{ classes[3], classes[2] }),
+    {
+        var lst: std.ArrayListUnmanaged([]const u8) = .{};
+        defer lst.deinit(gpa);
+        if (d.props.hardware_ids) |hids| {
+            try lst.appendSlice(gpa, hids);
+            gpa.free(hids);
+        }
+        try lst.ensureUnusedCapacity(gpa, 4);
+        try lst.append(gpa, try std.fmt.allocPrint(gpa, "PCI\\VEN_{X:0>4}&DEV_{X:0>4}&REV_{X:0>2}", .{ ids[0], ids[1], classes[0] }));
+        try lst.append(gpa, try std.fmt.allocPrint(gpa, "PCI\\VEN_{X:0>4}&DEV_{X:0>4}", .{ ids[0], ids[1] }));
+        try lst.append(gpa, try std.fmt.allocPrint(gpa, "PCI\\VEN_{X:0>4}&DEV_{X:0>4}&CC_{X:0>2}{X:0>2}{X:0>2}", .{ ids[0], ids[1], classes[3], classes[2], classes[1] }));
+        try lst.append(gpa, try std.fmt.allocPrint(gpa, "PCI\\VEN_{X:0>4}&DEV_{X:0>4}&CC_{X:0>2}{X:0>2}", .{ ids[0], ids[1], classes[3], classes[2] }));
+        d.props.hardware_ids = try lst.toOwnedSlice(gpa);
+    }
+
+    {
+        var lst: std.ArrayListUnmanaged([]const u8) = .{};
+        defer lst.deinit(gpa);
+        if (d.props.compatible_ids) |cids| {
+            try lst.appendSlice(gpa, cids);
+            gpa.free(cids);
+        }
+        try lst.ensureUnusedCapacity(gpa, 7);
+
+        try lst.append(gpa, try std.fmt.allocPrint(gpa, "PCI\\VEN_{X:0>4}&DEV_{X:0>4}&REV_{X:0>2}", .{ ids[0], ids[1], classes[0] }));
+        try lst.append(gpa, try std.fmt.allocPrint(gpa, "PCI\\VEN_{X:0>4}&DEV_{X:0>4}", .{ ids[0], ids[1] }));
+        try lst.append(gpa, try std.fmt.allocPrint(gpa, "PCI\\VEN_{X:0>4}&CC_{X:0>2}{X:0>2}{X:0>2}", .{ ids[0], classes[3], classes[2], classes[1] }));
+        try lst.append(gpa, try std.fmt.allocPrint(gpa, "PCI\\VEN_{X:0>4}&CC_{X:0>2}{X:0>2}", .{ ids[0], classes[3], classes[2] }));
+        try lst.append(gpa, try std.fmt.allocPrint(gpa, "PCI\\VEN_{X:0>4}", .{ids[0]}));
+        try lst.append(gpa, try std.fmt.allocPrint(gpa, "PCI\\CC_{X:0>2}{X:0>2}{X:0>2}", .{ classes[3], classes[2], classes[1] }));
+        try lst.append(gpa, try std.fmt.allocPrint(gpa, "PCI\\CC_{X:0>2}{X:0>2}", .{ classes[3], classes[2] }));
+        d.props.compatible_ids = try lst.toOwnedSlice(gpa);
+    }
+
+    log.debug("PCI enumerated at segment {d} bus {d} device {d} function {d}: class {x}:{x}:{x} devid {x:0>4}:{x:0>4}", .{
+        seg,
+        bus,
+        device,
+        function,
+        classes[3],
+        classes[2],
+        classes[1],
+        ids[0],
+        ids[1],
     });
 
+    // if (comptime std.log.logEnabled(.debug, .io)) {
+    //     const hids1 = if (d.props.hardware_ids) |hids| try std.mem.join(gpa, ", ", hids) else try gpa.dupe(u8, "");
+    //     defer gpa.free(hids1);
+    //     const cids = if (d.props.compatible_ids) |cids| try std.mem.join(gpa, ", ", cids) else try gpa.dupe(u8, "");
+    //     defer gpa.free(cids);
+    //     log.debug("PCI set props with HID [{s}] CIDS [{s}] ADR {?x}", .{ hids1, cids, d.props.address });
+    // }
+
+    try io.report_device(gpa, d);
     return true;
 }
 
@@ -196,22 +241,21 @@ const PciBusExtension = struct {
 };
 
 fn dispatch(_: *Driver, irp: *Irp) anyerror!Irp.InvocationResult {
+    log.debug("pci bridge dispatch", .{});
     const sp: *PciBusExtension = @fieldParentPtr("core", irp.stack_position orelse return error.DriverExtensionMissing);
 
     switch (irp.parameters) {
         .enumeration => |e| switch (e) {
             .properties => |p| {
                 if (UUID.eql(p.id, Device.Properties.known_properties.pci_downstream_segment)) {
-                    switch (sp.bus_location) {
-                        .location => |l| {
-                            if (l.header_type != .pci_pci_bridge)
-                                return .pass;
-
-                            @as(*u16, @alignCast(@ptrCast(p.result))).* = sp.segment;
-                            return .complete;
-                        },
-                        else => return .pass,
-                    }
+                    const is_bridge = switch (sp.bus_location) {
+                        .root_complex => true,
+                        .location => |l| l.header_type == .pci_pci_bridge,
+                    };
+                    if (!is_bridge)
+                        return .pass;
+                    @as(*u16, @alignCast(@ptrCast(p.result))).* = sp.segment;
+                    return .complete;
                 } else if (UUID.eql(p.id, Device.Properties.known_properties.pci_downstream_bus)) {
                     switch (sp.bus_location) {
                         .location => |l| {
@@ -227,7 +271,10 @@ fn dispatch(_: *Driver, irp: *Irp) anyerror!Irp.InvocationResult {
                             }, sp.bridge, u8);
                             return .complete;
                         },
-                        else => return .pass,
+                        .root_complex => {
+                            @as(*u8, @alignCast(@ptrCast(p.result))).* = sp.bus;
+                            return .complete;
+                        }
                     }
                 }
 

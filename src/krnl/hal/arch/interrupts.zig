@@ -50,7 +50,7 @@ pub fn init() void {
     disable_8259pic();
     log.info("setting up idt", .{});
     for (0..256) |i| {
-        idt.add_handler(.{ .int = @truncate(i) }, &unhandled_interrupt, .interrupt, 0, 0);
+        idt.add_handler(.{ .int = @truncate(i) }, &unhandled_interrupt, .trap, 0, 0);
     }
     idt.add_handler(.{ .exception = .breakpoint }, &breakpoint, .interrupt, 0, 0);
     idt.add_handler(.{ .int = @truncate(0xFF) }, &spurious, .interrupt, 0, 0);

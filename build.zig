@@ -166,6 +166,10 @@ pub fn build(b: *Build) !void {
         try std.mem.join(b.allocator, ",", try cpu_flags.toOwnedSlice()),
         "-m",
         "4G",
+        "-device",
+        "pxb-pcie,id=pcie.1,bus_nr=1",
+        "-device",
+        "pcie-pci-bridge,id=pcie_pci_bridge1,bus=pcie.1",
     });
 
     qemu.setCwd(b.path("test"));

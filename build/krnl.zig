@@ -26,6 +26,7 @@ pub fn add_krnl(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, 
         // .single_threaded = true,
         .omit_frame_pointer = false,
         .zig_lib_dir = b.path("zig-std/lib"),
+        .error_tracing = true,
     });
     exe.build_id = .uuid;
     exe.pie = false;

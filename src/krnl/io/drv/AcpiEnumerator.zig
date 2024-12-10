@@ -26,7 +26,7 @@ pub fn register(alloc: std.mem.Allocator) !void {
     d.drv.init_internal();
     d.drv.vtable = &vtable;
     d.drv.supported_devices = .{
-        .hardware_ids = &.{ "ROOT\\ACPI_HAL" },
+        .hardware_ids = &.{"ROOT\\ACPI_HAL"},
         .compatible_ids = &.{ "ROOT\\ACPI_HAL", "ACPI_HAL" },
     };
     log.debug("registered acpi enumerating driver", .{});
@@ -89,7 +89,6 @@ fn dispatch(_: *Driver, irp: *Irp) anyerror!Irp.InvocationResult {
             .properties => |p| {
                 if (UUID.eql(p.id, Device.Properties.known_properties.pci_downstream_segment)) {
                     if (sp.node == null) return error.Unsupported;
-                    log.debug("getting seg from acpi", .{});
                     @as(*u16, @alignCast(@ptrCast(p.result))).* = @truncate(uacpi.eval.eval_simple_integer(sp.node.?, "_SEG") catch |err| switch (err) {
                         error.NotFound => 0,
                         else => return err,
@@ -97,9 +96,16 @@ fn dispatch(_: *Driver, irp: *Irp) anyerror!Irp.InvocationResult {
                     return .complete;
                 } else if (UUID.eql(p.id, Device.Properties.known_properties.pci_downstream_bus)) {
                     if (sp.node == null) return error.Unsupported;
-                    log.debug("getting bbn from acpi", .{});
-                    const bbn: u64 = try uacpi.eval.eval_simple_integer(sp.node.?, "_BBN");
-                    log.debug("got bbn {d}", .{bbn});
+                    const bbn: u64 = uacpi.eval.eval_simple_integer(sp.node.?, "_BBN") catch |err| switch (err) {
+                        error.NotFound => b: {
+                            log.debug("no bbn found", .{});
+                            break :b 0;
+                        },
+                        else => {
+                            log.err("Error {} fetching BBN from ACPI", .{err});
+                            return err;
+                        },
+                    };
                     @as(*u8, @alignCast(@ptrCast(p.result))).* = @truncate(bbn);
                     return .complete;
                 }
@@ -136,14 +142,26 @@ noinline fn descend(user: ?*anyopaque, ns_node: *uacpi.namespace.NamespaceNode, 
     dev.attach_bus(&ext.core);
     const info = try uacpi.utilities.get_namespace_node_info(ns_node);
     defer uacpi.utilities.free_namespace_node_info(info);
-    if (info.flags.has_hid) {
-        dev.props.hardware_ids = try util.dupe_list(ctx.alloc, u8, &.{info.hid.str_const()});
-    }
-    if (info.flags.has_cid) {
-        dev.props.compatible_ids = try info.cid.dupe(ctx.alloc);
+
+    if (info.typ == .processor) {
+        dev.props.hardware_ids = try util.dupe_list(ctx.alloc, u8, &.{"ACPI0007"});
+        dev.props.compatible_ids = try util.dupe_list(ctx.alloc, u8, &.{"ACPI\\Processor"});
+    } else {
+        if (info.flags.has_hid) {
+            dev.props.hardware_ids = try util.dupe_list(ctx.alloc, u8, &.{info.hid.str_const()});
+        }
+        if (info.flags.has_cid) {
+            dev.props.compatible_ids = try info.cid.dupe(ctx.alloc);
+        }
     }
     if (info.flags.has_adr) {
         dev.props.address = info.adr;
+    }
+    if (info.flags.has_uid) {
+        try dev.props.bag.put(ctx.alloc, Device.Properties.known_properties.acpi_uid, .{ .str = try ctx.alloc.dupe(u8, info.uid.str_const()) });
+        if (info.typ == .processor) {
+            try dev.props.bag.put(ctx.alloc, Device.Properties.known_properties.processor_apic_id, .{ .str = try ctx.alloc.dupe(u8, info.uid.str_const()) });
+        }
     }
     const path = b: {
         const path = uacpi.namespace.node_generate_absolute_path(ns_node) orelse break :b "";
