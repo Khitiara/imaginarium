@@ -45,6 +45,7 @@ fn load(_: *Driver, _: std.mem.Allocator) anyerror!?*Device {
 fn attach(drv: *Driver, dev: *Device, alloc: std.mem.Allocator) anyerror!bool {
     var seg: u16 = undefined;
     try io.get_device_property(alloc, dev, Device.Properties.known_properties.pci_downstream_segment, &seg);
+    log.info("PCI attaching to segment {d}", .{seg});
     var bus: u8 = undefined;
     try io.get_device_property(alloc, dev, Device.Properties.known_properties.pci_downstream_bus, &bus);
     log.info("PCI attaching to segment {d} bus {d}", .{seg, bus});

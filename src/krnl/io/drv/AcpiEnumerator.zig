@@ -89,6 +89,7 @@ fn dispatch(_: *Driver, irp: *Irp) anyerror!Irp.InvocationResult {
             .properties => |p| {
                 if (UUID.eql(p.id, Device.Properties.known_properties.pci_downstream_segment)) {
                     if (sp.node == null) return error.Unsupported;
+                    log.debug("getting seg from acpi", .{});
                     @as(*u16, @alignCast(@ptrCast(p.result))).* = @truncate(uacpi.eval.eval_simple_integer(sp.node.?, "_SEG") catch |err| switch (err) {
                         error.NotFound => 0,
                         else => return err,
@@ -96,7 +97,10 @@ fn dispatch(_: *Driver, irp: *Irp) anyerror!Irp.InvocationResult {
                     return .complete;
                 } else if (UUID.eql(p.id, Device.Properties.known_properties.pci_downstream_bus)) {
                     if (sp.node == null) return error.Unsupported;
-                    @as(*u8, @alignCast(@ptrCast(p.result))).* = @truncate(try uacpi.eval.eval_simple_integer(sp.node.?, "_BBN"));
+                    log.debug("getting bbn from acpi", .{});
+                    const bbn: u64 = try uacpi.eval.eval_simple_integer(sp.node.?, "_BBN");
+                    log.debug("got bbn {d}", .{bbn});
+                    @as(*u8, @alignCast(@ptrCast(p.result))).* = @truncate(bbn);
                     return .complete;
                 }
 
