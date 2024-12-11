@@ -43,7 +43,7 @@ pub inline fn rdtsc() u64 {
     return asm volatile (
         \\ rdtsc
         \\ shlq $32, %rax
-        \\ shrdq $32, %rdx, %rdx
+        \\ shrdq $32, %rdx, %rax
         : [tsc] "={rax}" (-> u64),
         :
         : "edx"
@@ -56,11 +56,19 @@ pub inline fn rdtscp() struct { tsc: u64, pid: u32 } {
     asm volatile (
         \\ rdtscp
         \\ shlq $32, %rax
-        \\ shrdq $32, %rdx, %rdx
+        \\ shrdq $32, %rdx, %rax
         : [tsc] "={rax}" (tsc),
           [pid] "={ecx}" (pid),
         :
         : "edx"
     );
     return .{ .tsc = tsc, .pid = pid };
+}
+
+pub fn ns_since_boot_tsc() !u64 {
+    if (computed_tsc_freq_khz) |freq| {
+        const tsc = rdtsc();
+        return tsc *% 1_000_000 / freq;
+    }
+    return error.NoTscFreq;
 }

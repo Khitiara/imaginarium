@@ -73,6 +73,8 @@ pub fn platform_init(memmap: []cmn.memmap.Entry) !void {
     log.info("interrupt table initialized", .{});
     try vmm.init(memmap);
     log.info("vmm initialized", .{});
+    time.init_timing();
+    log.info("timekeeping initialized", .{});
     idt.load();
     log.info("interrupt table loaded", .{});
     var cr4 = control_registers.read(.cr4);
@@ -89,8 +91,6 @@ pub fn platform_init(memmap: []cmn.memmap.Entry) !void {
     apic.init();
     log.info("checked for x2apic compat and enabled apic in {s} mode", .{if (apic.x2apic.x2apic_enabled) "x2apic" else "xapic"});
     apic.bspid = apic.get_lapic_id();
-    time.init_timing();
-    log.info("timekeeping initialized", .{});
     log.info("early platform init complete", .{});
 }
 

@@ -200,7 +200,7 @@ export fn uacpi_kernel_get_thread_id() callconv(arch.cc) u64 {
 }
 
 export fn uacpi_kernel_get_nanoseconds_since_boot() callconv(arch.cc) u64 {
-    return 0;
+    return arch.time.ns_since_boot_tsc() catch 0;
 }
 
 export fn uacpi_kernel_stall(usec: u8) callconv(arch.cc) void {
