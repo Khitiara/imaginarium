@@ -10,6 +10,7 @@ const zuacpi = @import("../../hal/acpi/zuacpi.zig");
 const iter_passthru = @import("../../hal/acpi/zuacpi/iteration_error_passthrough.zig");
 const UUID = @import("zuid").UUID;
 const log = std.log.scoped(.@"drv.acpi");
+const QueuedSpinLock = @import("../../hal/QueuedSpinLock.zig");
 
 drv: Driver,
 
@@ -89,14 +90,21 @@ fn dispatch(_: *Driver, irp: *Irp) anyerror!Irp.InvocationResult {
             .properties => |p| {
                 if (UUID.eql(p.id, Device.Properties.known_properties.pci_downstream_segment)) {
                     if (sp.node == null) return error.Unsupported;
-                    @as(*u16, @alignCast(@ptrCast(p.result))).* = @truncate(uacpi.eval.eval_simple_integer(sp.node.?, "_SEG") catch |err| switch (err) {
+                    const seg: u16 = @truncate(uacpi.eval.eval_simple_integer(sp.node.?, "_SEG") catch |err| switch (err) {
                         error.NotFound => 0,
                         else => return err,
                     });
+                    {
+                        var tok: QueuedSpinLock.Token = undefined;
+                        irp.device.props.bag_lock.lock(&tok);
+                        defer tok.unlock();
+                        _ = try irp.device.props.bag.getOrPutValue(irp.alloc, p.id, .{ .int = seg });
+                    }
+                    @as(*u16, @alignCast(@ptrCast(p.result))).* = seg;
                     return .complete;
                 } else if (UUID.eql(p.id, Device.Properties.known_properties.pci_downstream_bus)) {
                     if (sp.node == null) return error.Unsupported;
-                    const bbn: u64 = uacpi.eval.eval_simple_integer(sp.node.?, "_BBN") catch |err| switch (err) {
+                    const bbn: u8 = @truncate(uacpi.eval.eval_simple_integer(sp.node.?, "_BBN") catch |err| switch (err) {
                         error.NotFound => b: {
                             log.debug("no bbn found", .{});
                             break :b 0;
@@ -105,7 +113,13 @@ fn dispatch(_: *Driver, irp: *Irp) anyerror!Irp.InvocationResult {
                             log.err("Error {} fetching BBN from ACPI", .{err});
                             return err;
                         },
-                    };
+                    });
+                    {
+                        var tok: QueuedSpinLock.Token = undefined;
+                        irp.device.props.bag_lock.lock(&tok);
+                        defer tok.unlock();
+                        _ = try irp.device.props.bag.getOrPutValue(irp.alloc, p.id, .{ .int = bbn });
+                    }
                     @as(*u8, @alignCast(@ptrCast(p.result))).* = @truncate(bbn);
                     return .complete;
                 }
@@ -122,8 +136,6 @@ const EnumerationContext = struct {
     alloc: std.mem.Allocator,
 };
 const AttachPassThru = iter_passthru.IterationErrorPasser(anyerror);
-
-pub const ACPI_PATH = UUID.deserialize("3db3689f-fbe7-4e7f-8055-a0225ad32e04") catch unreachable;
 
 noinline fn descend(user: ?*anyopaque, ns_node: *uacpi.namespace.NamespaceNode, _: u32) anyerror!uacpi.namespace.IterationDecision {
     const ctx: *EnumerationContext = @alignCast(@ptrCast(user.?));
@@ -168,7 +180,7 @@ noinline fn descend(user: ?*anyopaque, ns_node: *uacpi.namespace.NamespaceNode, 
         defer uacpi.namespace.free_absolute_path(path);
         break :b try ctx.alloc.dupe(u8, std.mem.span(path));
     };
-    try dev.props.bag.put(ctx.alloc, ACPI_PATH, .{ .str = path });
+    try dev.props.bag.put(ctx.alloc, Device.Properties.known_properties.acpi_path, .{ .str = path });
     b: {
         const adr_str = std.fmt.allocPrint(ctx.alloc, "{x}", .{info.adr}) catch break :b;
         defer ctx.alloc.free(adr_str);

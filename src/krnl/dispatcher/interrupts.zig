@@ -8,25 +8,45 @@ const apic = hal.apic;
 const InterruptRequestPriority = hal.InterruptRequestPriority;
 const InterruptVector = hal.InterruptVector;
 const lcb = smp.lcb;
+const log = std.log.scoped(.@"dispatcher.interrupts");
 
-pub inline fn handle_interrupt(comptime handler: fn (*arch.SavedRegisterState) void) fn (*arch.SavedRegisterState) callconv(.SysV) void {
-    return struct {
-        fn f(frame: *arch.SavedRegisterState) callconv(.SysV) void {
-            const is_root_interrupt: bool = lcb.*.frame == null;
-            defer if (is_root_interrupt) dispatch_interrupt_tail(frame);
-            lcb.*.frame = lcb.*.frame orelse frame;
-            const vector: InterruptVector = frame.vector.vector;
-            _ = hal.set_irql(vector.level, .raise);
-            @call(.always_inline, handler, .{frame});
-        }
-    }.f;
+pub var dispatch_vector: InterruptVector = undefined;
+pub var dpc_vector: InterruptVector = undefined;
+
+pub fn init_dispatch_interrupts() !void {
+    dispatch_vector = try arch.idt.allocate_vector(.dispatch);
+    log.debug("dispatch vector: 0x{X:0>2}", .{@as(u8, @bitCast(dispatch_vector))});
+    arch.idt.add_handler(.{ .vector = dispatch_vector }, &handle_interrupt(true, dispatcher.scheduler.dispatch), .trap, 0, 0);
+    dpc_vector = try arch.idt.allocate_vector(.dispatch);
+    log.debug("dpc vector: 0x{X:0>2}", .{@as(u8, @bitCast(dpc_vector))});
+    arch.idt.add_handler(.{ .vector = dpc_vector }, &handle_interrupt(true, dispatch_dpcs), .trap, 0, 0);
 }
 
-fn enter_scheduling_1(_: *arch.SavedRegisterState) void {}
-export const enter_scheduling_2 = handle_interrupt(enter_scheduling_1);
+pub inline fn handle_interrupt(comptime eoi: bool, comptime handler: fn (*arch.SavedRegisterState) void) fn (*arch.SavedRegisterState) callconv(.SysV) void {
+    return struct {
+        fn func(frame: *arch.SavedRegisterState) callconv(.SysV) void {
+            lcb.*.frame = lcb.*.frame orelse frame;
+            handler(frame);
+            if (lcb.*.frame) |f| {
+                frame.* = f.*;
+                lcb.*.frame = null;
+            }
+            if (comptime eoi) {
+                hal.apic.eoi();
+            }
+        }
+    }.func;
+}
 
 pub noinline fn enter_scheduling() void {
-    arch.idt.spoof_isr(&enter_scheduling_2);
+    hal.apic.send_ipi(.{
+        .vector = @bitCast(dispatch_vector),
+        .delivery = .fixed,
+        .shorthand = .self,
+        .dest_mode = .physical,
+        .dest = hal.apic.get_lapic_id(),
+        .trigger_mode = .edge,
+    });
 }
 
 fn enter_thread_ctx_1(frame: *arch.SavedRegisterState) callconv(.SysV) void {
@@ -39,41 +59,14 @@ pub noinline fn enter_thread_ctx() void {
     arch.idt.spoof_isr(&enter_thread_ctx_1);
 }
 
-/// progresses downward through the IRQL levels and addresses each in turn if needed
-/// this may result in nested interrupts from other IRQLs, *but* the nested interrupt
-/// is guaranteed to correctly handle
-fn dispatch_interrupt_tail(frame: *arch.SavedRegisterState) void {
-    arch.idt.enable();
-    var level = lcb.*.irql;
-    // higher IRQLs do processing through ISRs rather than fixed logic. loop through to process each IRQL in turn
-    while (@intFromEnum(level) > @intFromEnum(InterruptRequestPriority.dpc)) : (level = hal.set_irql(level.lower(), .lower)) {}
-
-    // IRQL:DPC
-    {
-        var node = blk: {
-            const irql = lcb.*.dpc_lock.lock_at(.dpc);
-            defer lcb.*.dpc_lock.unlock(irql);
-            break :blk lcb.*.dpc_queue.clear();
-        };
-        while (node) |dpc| {
-            node = smp.LocalControlBlock.DpcQueueType.ref_from_optional_node(dpc.hook.next);
-            dpc.run();
-        }
-        _ = hal.set_irql(lcb.*.irql.lower(), .lower);
+fn dispatch_dpcs(_: *arch.SavedRegisterState) void {
+    var node = blk: {
+        const irql = lcb.*.dpc_lock.lock();
+        defer lcb.*.dpc_lock.unlock(irql);
+        break :blk lcb.*.dpc_queue.clear();
+    };
+    while (node) |dpc| {
+        node = smp.LocalControlBlock.DpcQueueType.ref_from_optional_node(dpc.hook.next);
+        dpc.run();
     }
-
-    // IRQL:DISPATCH
-    {
-        // once we get here, the frame in the LCB might have been swapped if we reach here
-        // from kernel-mode code which is setting a new thread when one previously did not
-        // exist, e.g. during startup. if the frame in the LCB is null, the frame in our
-        // function parameter should still be correct
-        if (lcb.*.frame) |f| {
-            frame.* = f.*;
-            lcb.*.frame = null;
-        }
-        dispatcher.scheduler.dispatch(frame);
-        _ = hal.set_irql(lcb.*.irql.lower(), .lower);
-    }
-    std.debug.assert(lcb.*.irql == .passive);
 }

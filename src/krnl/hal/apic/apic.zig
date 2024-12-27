@@ -4,6 +4,8 @@ const cpuid = @import("../arch/cpuid.zig");
 pub const x2apic = @import("x2apic.zig");
 pub const ioapic = @import("ioapic.zig");
 
+const log = std.log.scoped(.apic);
+
 pub const DeliveryMode = enum(u3) {
     fixed = 0,
     lowest = 1,
@@ -38,8 +40,8 @@ pub const SpuriousInterrupt = packed struct(u32) {
     apic_software_enabled: bool,
     focus_processor_checking: bool,
     _reserved1: u2,
-    suppress_eoi_bcasts: bool,
-    _reserved2: u20,
+    suppress_eoi_broadcast: bool,
+    _reserved2: u19,
 };
 
 pub const TriggerMode = enum(u1) {
@@ -58,7 +60,7 @@ pub const Icr = packed struct(u64) {
     dest_mode: DestinationMode,
     pending: bool = false,
     _1: u1 = 0,
-    assert: bool,
+    assert: bool = true,
     trigger_mode: TriggerMode,
     _2: u2 = 0,
     shorthand: enum(u2) {
@@ -127,10 +129,19 @@ pub const LvtErrorEntry = packed struct(u32) {
     _3: u17 = 0,
 };
 
+pub const LapicVersion = packed struct(u32) {
+    version: u8,
+    _1: u8 = 0,
+    max_lvt_entry: u8 = 0,
+    supports_eoi_broadcast_suppression: bool,
+    _2: u7 = 0,
+};
+
 pub const RegisterId = enum(u7) {
     id = 0x02,
     version = 0x03,
     eoi = 0x0B,
+    spurious = 0x0F,
     isr = 0x10,
     tmr = 0x18,
     irr = 0x20,
@@ -148,7 +159,9 @@ pub const RegisterId = enum(u7) {
 
 pub inline fn RegisterType(comptime reg: RegisterId) type {
     return switch (@intFromEnum(reg)) {
-        0x02, 0x03, 0x0B => u32,
+        0x02, 0x0B => u32,
+        0x03 => LapicVersion,
+        0x0F => SpuriousInterrupt,
         0x28 => ErrorStatusRegister,
         0x37 => LvtErrorEntry,
         0x35, 0x36 => LvtLintEntry,
@@ -188,6 +201,8 @@ pub const LapicNmiPin = packed struct(u8) {
 
 pub var lapic_ptr: [*]volatile u32 = undefined;
 
+pub var supports_eoi_broadcast_suppression: bool = false;
+
 pub const Lapic = struct {
     id: u8,
     enabled: bool,
@@ -203,6 +218,17 @@ pub var lapic_indices: [255]u8 = undefined;
 
 pub fn init() void {
     _ = x2apic.check_enable_x2apic();
+    supports_eoi_broadcast_suppression = read_register(.version).supports_eoi_broadcast_suppression;
+    if (supports_eoi_broadcast_suppression) {
+        log.info("EOI broadcast suppression supported", .{});
+    } else {
+        log.info("EOI broadcast suppression not supported", .{});
+    }
+    var spur: SpuriousInterrupt = read_register(.spurious);
+    spur.spurious_vector = 0xFF;
+    spur.apic_software_enabled = true;
+    spur.suppress_eoi_broadcast = supports_eoi_broadcast_suppression;
+    write_register(.spurious, spur);
 }
 
 pub inline fn read_register(comptime reg: RegisterId) RegisterType(reg) {
@@ -210,7 +236,7 @@ pub inline fn read_register(comptime reg: RegisterId) RegisterType(reg) {
         return x2apic.read_apic_register(reg);
     } else {
         if (reg == RegisterId.icr) {
-            return @bitCast((@as(u64, get_register_ptr(0x31, u32).*) << 32) + get_register_ptr(0x30, u32).*);
+            return @bitCast((@as(u64, get_register_ptr(0x31, u32).*) << 32) | get_register_ptr(0x30, u32).*);
         } else {
             return get_register_ptr(@intFromEnum(reg), RegisterType(reg)).*;
         }
@@ -238,6 +264,19 @@ pub inline fn get_lapic_id() u8 {
 
 inline fn get_register_ptr(reg: u7, comptime T: type) *volatile T {
     return @ptrCast(lapic_ptr + (reg << 4));
+}
+
+pub fn send_ipi(ipi: Icr) void {
+    std.debug.assert(!read_register(.icr).pending);
+    std.debug.assert(ipi.pending == false);
+    write_register(.icr, ipi);
+    while (read_register(.icr).pending) {
+        std.atomic.spinLoopHint();
+    }
+}
+
+pub fn eoi() void {
+    write_register(.eoi, 0);
 }
 
 test {

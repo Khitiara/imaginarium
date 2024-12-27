@@ -2,7 +2,7 @@ const std = @import("std");
 
 const util = @import("util");
 
-inline fn cast_signature(comptime sig: *const [4]u8) u32 {
+inline fn cast_signature(sig: *const [4]u8) u32 {
     return @bitCast(sig.*);
 }
 
@@ -16,6 +16,10 @@ pub const Signature = enum(u32) {
     // WAET = cast_signature("WAET"),
     // BGRT = cast_signature("BGRT"),
     _,
+
+    pub fn from_string(sig: *const [4]u8) Signature {
+        return @enumFromInt(cast_signature(sig));
+    }
 
     pub fn to_string(self: Signature) [4]u8 {
         return @bitCast(@intFromEnum(self));

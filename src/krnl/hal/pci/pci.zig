@@ -22,26 +22,39 @@ pub const ConfigAddress = packed struct(u32) {
 
 pub const PciAddress = struct {
     segment: u16,
-    offset: u64,
     function: u3,
     device: u5,
     bus: u8,
 };
 
+pub const PciBridgeAddress = struct {
+    segment: u16,
+    function: u3,
+    device: u5,
+    bus: u8,
+    bridge: ?*const mcfg.PciHostBridge,
+};
+
 const mcfg = @import("../acpi/mcfg.zig");
 
-pub fn config_read(address: PciAddress, comptime T: type) !T {
+pub fn config_read(address: PciAddress, offset: u64, comptime T: type) !T {
     const bridge = for (mcfg.host_bridges) |*b| {
         if (b.segment_group == address.segment)
             break b;
     } else null;
-    return try config_read_with_bridge(address, bridge, T);
+    return try config_read_with_bridge(.{
+        .segment = address.segment,
+        .bus = address.bus,
+        .device = address.device,
+        .function = address.function,
+        .bridge = bridge,
+    }, offset, T);
 }
 
-pub fn config_read_with_bridge(address: PciAddress, bridge: ?*const mcfg.PciHostBridge, comptime T: type) !T {
-    if (bridge) |host_bridge_map| {
-        const w = address.offset & 0x3;
-        const value = host_bridge_map.block(address.bus, address.device, address.function)[address.offset / 4];
+pub fn config_read_with_bridge(address: PciBridgeAddress, offset: u64, comptime T: type) !T {
+    if (address.bridge) |host_bridge_map| {
+        const w = offset & 0x3;
+        const value = host_bridge_map.block(address.bus, address.device, address.function)[offset / 4];
         return @intCast((value >> @intCast(8 * w)) & std.math.maxInt(T));
     } else {
         if (address.segment != 0) return error.InvalidArgument;
@@ -50,25 +63,31 @@ pub fn config_read_with_bridge(address: PciAddress, bridge: ?*const mcfg.PciHost
             .device = address.device,
             .enable = true,
             .function = address.function,
-            .register_offset = @intCast(address.offset),
+            .register_offset = @intCast(offset),
         }, T);
     }
 }
 
-pub fn config_write(address: PciAddress, value: anytype) !void {
-    const host_bridge_map = for (mcfg.host_bridges) |*b| {
+pub fn config_write(address: PciAddress, offset: u64, value: anytype) !void {
+    const bridge = for (mcfg.host_bridges) |*b| {
         if (b.segment_group == address.segment)
             break b;
     } else null;
-    try config_write_with_bridge(address, host_bridge_map, value);
+    try config_write_with_bridge(.{
+        .segment = address.segment,
+        .bus = address.bus,
+        .device = address.device,
+        .function = address.function,
+        .bridge = bridge,
+    }, offset, value);
 }
 
-pub fn config_write_with_bridge(address: PciAddress, bridge: ?*const mcfg.PciHostBridge, value: anytype) !void {
-    if (bridge) |host_bridge_map| {
-        const w = address.offset & 0x3;
+pub fn config_write_with_bridge(address: PciBridgeAddress, offset: u64, value: anytype) !void {
+    if (address.bridge) |host_bridge_map| {
+        const w = offset & 0x3;
         const old_mask: u32 = @as(u32, std.math.maxInt(@TypeOf(value))) << @intCast(8 * w);
-        const old = host_bridge_map.block(address.bus, address.device, address.function)[address.offset / 4] & old_mask;
-        host_bridge_map.block(address.bus, address.device, address.function)[address.offset / 4] = @intCast(old | (value << @intCast(8 * w)));
+        const old = host_bridge_map.block(address.bus, address.device, address.function)[offset / 4] & old_mask;
+        host_bridge_map.block(address.bus, address.device, address.function)[offset / 4] = @intCast(old | (value << @intCast(8 * w)));
     } else {
         if (address.segment != 0) return error.InvalidArgument;
         config_write_legacy(.{
@@ -76,7 +95,7 @@ pub fn config_write_with_bridge(address: PciAddress, bridge: ?*const mcfg.PciHos
             .device = address.device,
             .enable = true,
             .function = address.function,
-            .register_offset = @intCast(address.offset),
+            .register_offset = @intCast(offset),
         }, value);
     }
 }

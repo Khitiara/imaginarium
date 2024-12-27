@@ -13,44 +13,41 @@ pub fn add_krnl(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, 
     ?LazyPath,
 } {
     const exe_name = "imaginarium.krnl.b";
-    const exe = b.addExecutable(.{
-        .name = "imaginarium.elf",
+
+    const exe_module = b.createModule(.{
         .root_source_file = b.path("src/krnl/main.zig"),
         .target = target,
         .optimize = optimize,
         .code_model = .kernel,
         .pic = false,
-        .use_llvm = true,
-        .use_lld = true,
         .strip = false,
-        // .single_threaded = true,
         .omit_frame_pointer = false,
-        .zig_lib_dir = b.path("zig-std/lib"),
         .error_tracing = true,
+        // .single_threaded = true,
+        // .red_zone = false;
+        // .dwarf_format = .@"64";
     });
-    exe.build_id = .uuid;
-    exe.pie = false;
-    // exe.want_lto = false;
-    // b.verbose_llvm_ir = "agony.ir";
-    // b.verbose_llvm_bc = "agony.bc";
-    // const ir = exe.getEmittedLlvmIr();
-    // exe.export_memory = true;
-    exe.entry = .disabled;
 
-
-    const exe_module = &exe.root_module;
-    // exe_module.red_zone = false;
+    exe_module.addAssemblyFile(b.path("src/krnl/hal/arch/ap_trampoline.S"));
 
     uacpi.add_uacpi_to_module(b, exe_module);
-
-    // exe_module.dwarf_format = .@"64";
-
-    exe.addAssemblyFile(b.path("src/krnl/hal/arch/ap_trampoline.S"));
 
     utils.addImportFromTable(exe_module, "util");
     utils.addImportFromTable(exe_module, "config");
     utils.addImportFromTable(exe_module, "zuid");
     utils.addImportFromTable(exe_module, "cmn");
+    utils.addImportFromTable(exe_module, "collections");
+
+    const exe = b.addExecutable(.{
+        .name = "imaginarium.elf",
+        .root_module = exe_module,
+        .use_llvm = true,
+        .use_lld = true,
+        .zig_lib_dir = b.path("zig-std/lib"),
+    });
+    exe.build_id = .uuid;
+    exe.pie = false;
+    exe.entry = .disabled;
 
     exe.setLinkerScript(b.path("src/krnl/link.ld"));
 

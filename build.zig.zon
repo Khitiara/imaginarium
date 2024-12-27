@@ -3,19 +3,20 @@
     .version = "0.0.0",
     .dependencies = .{
         .bootelf = .{
-            .path = "bootelf/",
+            .path = "libs/bootelf/",
         },
         .zuid = .{
-            .path = "zuid/",
+            .path = "libs/zuid/",
         },
         .uacpi = .{
-            .url = "git+https://github.com/UltraOS/uACPI?ref=master#2772bb5f7cae985d08f74997ca316ed56c0a79cd",
-            .hash = "12200504b037182ac0eb20900e8dd46878aed48c1883a4a19b94e786b453f03d9f25",
+            .url = "git+https://github.com/UltraOS/uACPI?ref=master#c0a82c02d90269625f9ba383aab9720163c1fa90",
+            .hash = "122014a1276878ffa59cb0ca2b1aaf49c4a1d4e59116fffb8bb06fde4dc53fc1f835",
         },
     },
     .paths = .{
         "src/",
         "build/",
         "docs/",
+        "include/",
     },
 }

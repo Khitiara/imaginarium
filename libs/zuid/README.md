@@ -1,6 +1,6 @@
 <div align="center">
   <br /><br />
-  <img src="./zuid-dynamic.svg" alt="Banner" />
+  <img src="zuid-dynamic.svg" alt="Banner" />
   <br /><br />
 </div>
 

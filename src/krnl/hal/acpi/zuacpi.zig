@@ -14,9 +14,14 @@ comptime {
     _ = @import("uacpi/shims.zig");
 }
 
-pub fn init() !void {
-    try uacpi.initialize(.{});
-    log.info("uacpi initialized", .{});
+var buf: []u8 = undefined;
+var early_tables_alloc: std.mem.Allocator = undefined;
+
+pub fn early_tables(alloc: std.mem.Allocator) !void {
+    buf = try alloc.alloc(u8, 8192);
+    early_tables_alloc = alloc;
+    try uacpi.setup_early_table_access(buf);
+    log.info("uacpi early table access setup", .{});
     try find_load_table(.APIC);
     log.debug("madt initialized", .{});
     try find_load_table(.MCFG);
@@ -25,11 +30,18 @@ pub fn init() !void {
     log.debug("hpet initialized", .{});
 }
 
+pub fn init() !void {
+    defer early_tables_alloc.free(buf);
+    try uacpi.initialize(.{});
+    log.info("uacpi initialized", .{});
+}
+
 pub fn load_namespace() !void {
     const fadt = try uacpi.tables.table_fadt();
     const isa_irq = ioapic.isa_irqs[fadt.sci_int];
+    const vector = try arch.idt.allocate_vector(.dispatch);
     try ioapic.redirect_irq(fadt.sci_int, .{
-        .vector = @bitCast(@as(u8, 0x20)),
+        .vector = vector,
         .delivery_mode = .fixed,
         .dest_mode = .physical,
         .polarity = isa_irq.polarity,
@@ -53,23 +65,4 @@ fn find_load_table(sig: sdt.Signature) !void {
     var tbl = (try uacpi.tables.find_table_by_signature(sig)) orelse return;
     try acpi.load_table(tbl.location.hdr);
     try uacpi.tables.table_unref(&tbl);
-}
-
-const namespace = uacpi.namespace;
-
-fn obj_cb_asc(_: ?*anyopaque, node: *namespace.NamespaceNode, depth: u32) callconv(arch.cc) namespace.IterationDecision {
-    const path = namespace.node_generate_absolute_path(node) orelse return .@"continue";
-    defer namespace.free_absolute_path(path);
-    log.debug("ACPI Enumerated object {s}, depth {d}, of type {s}", .{ path, depth, @tagName(namespace.node_type(node) catch .uninitialized) });
-    return .@"continue";
-}
-fn obj_cb_desc(_: ?*anyopaque, node: *namespace.NamespaceNode, depth: u32) callconv(arch.cc) namespace.IterationDecision {
-    const path = namespace.node_generate_absolute_path(node) orelse return .@"continue";
-    defer namespace.free_absolute_path(path);
-    log.debug("ACPI left object {s}, depth {d}, of type {s}", .{ path, depth, @tagName(namespace.node_type(node) catch .uninitialized) });
-    return .@"continue";
-}
-
-pub fn enumerate_stuff() !void {
-    try namespace.for_each_child(namespace.get_root(), &obj_cb_asc, &obj_cb_desc, .{ .device = true, .processor = true, .thermal_zone = true }, std.math.maxInt(u32), undefined);
 }

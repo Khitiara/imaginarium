@@ -1,6 +1,6 @@
 const std = @import("std");
 const Device = @import("Device.zig");
-const queue = @import("util").queue;
+const queue = @import("collections").queue;
 const UUID = @import("zuid").UUID;
 
 const Irp = @This();

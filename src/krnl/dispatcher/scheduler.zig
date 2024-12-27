@@ -10,6 +10,7 @@ const lcb = smp.lcb;
 const Thread = @import("../thread/Thread.zig");
 const Dpc = dispatcher.Dpc;
 const WaitBlock = dispatcher.WaitBlock;
+const QueuedSpinlock = hal.QueuedSpinLock;
 
 fn schedule_dpc(_: *const Dpc, thread_opaque: ?*anyopaque, _: ?*anyopaque, _: ?*anyopaque) void {
     const thread: *Thread = @ptrCast(thread_opaque.?);
@@ -50,18 +51,20 @@ pub fn schedule(thread: *Thread, processor: ?u8) void {
 
 pub fn signal_wait_block(block: *WaitBlock, already_removed: bool) void {
     const thread = block.thread;
+    var tltok: QueuedSpinlock.Token = undefined;
+    var wltok: QueuedSpinlock.Token = undefined;
     {
         // grab the wait lock
-        const irql = thread.wait_lock.lock();
-        defer thread.wait_lock.unlock(irql);
+        thread.wait_lock.lock(&tltok);
+        defer tltok.unlock();
         switch (thread.wait_type) {
             .all => {
                 // remove the block from the list
                 thread.wait_list.remove(block);
                 if (!already_removed) {
                     // remove it from its handle's wait queue
-                    block.target.wait_lock.lock_unsafe();
-                    defer block.target.wait_lock.unlock_unsafe();
+                    block.target.wait_lock.lock_unsafe(&wltok);
+                    defer wltok.unlock_unsafe();
                     block.target.wait_queue.remove(block);
                 }
                 // and destroy it
@@ -78,8 +81,8 @@ pub fn signal_wait_block(block: *WaitBlock, already_removed: bool) void {
                     n = Thread.WaitListType.ref_from_optional_node(node.thread_wait_list.next);
                     if(node != block or !already_removed){
                         // remove it from its handle's wait queue
-                        node.target.wait_lock.lock_unsafe();
-                        defer node.target.wait_lock.unlock_unsafe();
+                        node.target.wait_lock.lock_unsafe(&wltok);
+                        defer wltok.unlock_unsafe();
                         node.target.wait_queue.remove(node);
                     }
                     // and destroy the node
@@ -106,6 +109,7 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
 
     // if we need to yield the thread then do that
     if (l.force_yield) if (l.current_thread) |thread| {
+        thread.saved_state.registers = frame.*;
         const irql = smp.lcb.*.local_dispatcher_lock.lock_at(.sync);
         defer smp.lcb.*.local_dispatcher_lock.unlock(irql);
         thread.set_state(.running, .assigned);
@@ -130,7 +134,6 @@ pub fn dispatch(frame: *arch.SavedRegisterState) void {
                     std.debug.assert(l.frame != null);
                     cur.saved_state.registers = frame.*;
                     cur.set_state(.running, .assigned);
-                    frame.* = stby.saved_state.registers;
                     set_running(l, stby, .standby, frame);
 
                     // grab the lock a bit early to put the old running thread into the queue

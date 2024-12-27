@@ -8,9 +8,9 @@ zig-cache/
 zig-out/
 
 !**/.keep
-bootelf/.github/
-bootelf/bootelf
-zuid/.github/
+libs/bootelf/.github/
+libs/bootelf/bootelf
+libs/zuid/.github/
 
 listing.txt
 syms.txt

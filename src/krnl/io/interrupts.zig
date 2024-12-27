@@ -1,5 +1,5 @@
-const util = @import("util");
-const queue = util.queue;
+const collections = @import("collections");
+const queue = collections.queue;
 const hal = @import("../hal/hal.zig");
 const arch = hal.arch;
 const std = @import("std");

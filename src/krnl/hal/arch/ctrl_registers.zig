@@ -77,7 +77,7 @@ pub fn ControlRegisterValueType(comptime cr: ControlRegister) type {
             _reserved4: u39 = 0,
         },
         .cr8 => packed struct(u64) {
-            tpr: u4,
+            tpr: @import("../hal.zig").InterruptRequestPriority,
             _reserved: u60 = 0,
         },
     };

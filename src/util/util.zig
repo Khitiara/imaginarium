@@ -4,7 +4,6 @@ pub const WindowStructIndexerMut = @import("window_struct_indexer.zig").WindowSt
 pub const masking = @import("masking.zig");
 pub const sentinel_bit_set = @import("sentinel_bit_set.zig");
 pub const extern_address = @import("externs.zig").extern_address;
-pub const queue = @import("queue.zig");
 pub const multi_bounded_array = @import("multi_bounded_array.zig");
 pub const MultiBoundedArray = multi_bounded_array.MultiBoundedArray;
 pub const MultiBoundedArrayAligned = multi_bounded_array.MultiBoundedArrayAligned;
@@ -24,19 +23,22 @@ pub inline fn CopyPtrAttrs(
     comptime size: std.builtin.Type.Pointer.Size,
     comptime child: type,
 ) type {
-    const info = @typeInfo(source).Pointer;
-    return @Type(.{
-        .Pointer = .{
-            .size = size,
-            .is_const = info.is_const,
-            .is_volatile = info.is_volatile,
-            .is_allowzero = info.is_allowzero,
-            .alignment = info.alignment,
-            .address_space = info.address_space,
-            .child = child,
-            .sentinel = null,
-        },
-    });
+    switch (@typeInfo(source)) {
+        .optional => |o| return CopyPtrAttrs(o.child, size, child),
+        .pointer => |info| return @Type(.{
+            .pointer = .{
+                .size = size,
+                .is_const = info.is_const,
+                .is_volatile = info.is_volatile,
+                .is_allowzero = info.is_allowzero,
+                .alignment = info.alignment,
+                .address_space = info.address_space,
+                .child = child,
+                .sentinel = null,
+            },
+        }),
+        else => @compileError("Invalid source for CopyPtrAttrs"),
+    }
 }
 
 pub fn dupe_list(alloc: std.mem.Allocator, comptime T: type, list: []const []const T) ![]const []const T {

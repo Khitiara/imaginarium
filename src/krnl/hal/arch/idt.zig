@@ -68,6 +68,11 @@ pub const InterruptGateDescriptor = packed struct(u128) {
     offset_upper: u48,
     _reserved3: u32 = 0,
 
+    pub fn set_addr(desc: *InterruptGateDescriptor, addr: usize) void {
+        desc.offset_low = @truncate(addr);
+        desc.offset_upper = @truncate(addr >> 16);
+    }
+
     pub fn init(addr: usize, ist: u3, typ: GateType, dpl: u2) InterruptGateDescriptor {
         return .{
             .offset_low = @truncate(addr),
@@ -356,7 +361,7 @@ pub const raw_handlers: [256]RawHandler = blk: {
     break :blk result;
 };
 
-var vectors = blk: {
+var vectors: std.StaticBitSet(256) = blk: {
     var v1 = std.StaticBitSet(256).initEmpty();
     v1.setRangeValue(.{ .start = 0x0, .end = 0x1F }, true);
     v1.setRangeValue(.{ .start = 0xFE, .end = 0xFF }, true);
@@ -393,7 +398,7 @@ pub noinline fn allocate_vector(level: InterruptRequestPriority) !InterruptVecto
 }
 
 pub noinline fn allocate_vector_any(min: InterruptRequestPriority) !InterruptVector {
-    for(@intFromEnum(min)..16) |irql| {
+    for (@intFromEnum(min)..16) |irql| {
         return allocate_vector(@enumFromInt(irql)) catch continue;
     }
     return error.OutOfVectors;
@@ -402,7 +407,12 @@ pub noinline fn allocate_vector_any(min: InterruptRequestPriority) !InterruptVec
 /// handler can be a pointer to any function which takes *InterruptFrame(SomeErrorCodeType) as its only parameter
 pub noinline fn add_handler(int: Interrupt, handler: anytype, typ: GateType, dpl: u2, ist: u3) void {
     // put a descriptor in the IDT pointing to the raw handler for the specified vector
-    idt[int.int] = InterruptGateDescriptor.init(@intFromPtr(raw_handlers[int.int]), ist, typ, dpl);
+    var descriptor = idt[int.int];
+    descriptor.ist = ist;
+    descriptor.dpl = dpl;
+    descriptor.type = typ;
+    idt[int.int] = descriptor;
+
     // and put the managed isr into the function pointer array so __isr_common calls into it
     __isrs[int.int] = @ptrCast(handler);
     vectors.set(int.int);
@@ -418,8 +428,11 @@ pub inline fn enable() void {
     asm volatile ("sti");
 }
 
-pub fn clear() void {
-    @memset(&idt, InterruptGateDescriptor.nul);
+pub fn clear(unhandled_handler: anytype) void {
+    for (0..256) |i| {
+        idt[i] = InterruptGateDescriptor.init(@intFromPtr(raw_handlers[i]), 0, .interrupt, 0);
+    }
+    @memset(&__isrs, @ptrCast(unhandled_handler));
 }
 
 pub fn load() void {

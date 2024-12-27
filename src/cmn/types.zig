@@ -7,7 +7,13 @@ pub const cc: std.builtin.CallingConvention = switch (builtin.target.cpu.arch) {
     else => |a| @compileError(std.fmt.comptimePrint("Unsupported imaginarium architecture {s}", .{@tagName(a)})),
 };
 
-pub const PhysAddr = enum(usize) { nul = 0, _ };
+pub const PhysAddr = enum(usize) {
+    nul = 0,
+    _,
+    pub fn page(self: PhysAddr) u52 {
+        return @intFromEnum(self) >> comptime std.math.log2(std.mem.page_size);
+    }
+};
 pub const LinearAddr = usize;
 
 pub const Flags = packed struct(usize) {

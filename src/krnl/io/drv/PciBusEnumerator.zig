@@ -49,7 +49,7 @@ fn attach(drv: *Driver, dev: *Device, alloc: std.mem.Allocator) anyerror!bool {
     var bus: u8 = undefined;
     try io.get_device_property(alloc, dev, Device.Properties.known_properties.pci_downstream_bus, &bus);
 
-    log.debug("attaching to pci bridge downstream bus {X:0>4}:{X:0>2}", .{seg, bus});
+    log.debug("attaching to pci bridge downstream bus {X:0>4}:{X:0>2}", .{ seg, bus });
 
     const bridge = for (mcfg.host_bridges) |*hb| {
         if (hb.segment_group == seg) break hb;
@@ -64,10 +64,14 @@ fn attach(drv: *Driver, dev: *Device, alloc: std.mem.Allocator) anyerror!bool {
                         .core = .{
                             .driver = drv,
                         },
-                        .bus = bus,
-                        .segment = seg,
-                        .bus_location = .root_complex,
-                        .bridge = bridge,
+                        .addr = .{
+                            .segment = seg,
+                            .bus = bus,
+                            .device = 0,
+                            .function = 0,
+                            .bridge = bridge,
+                        },
+                        .kind = .root_complex,
                     };
                     dev.attach_bus(&e.core);
                 }
@@ -77,11 +81,24 @@ fn attach(drv: *Driver, dev: *Device, alloc: std.mem.Allocator) anyerror!bool {
 
     for (0..32) |d| {
         var multifunction: bool = false;
-        if (!try enumerate_function(alloc, bridge, seg, drv, dev, bus, @intCast(d), 0, &multifunction)) continue;
+
+        if (!try enumerate_function(alloc, .{
+            .segment = seg,
+            .bus = bus,
+            .device = @intCast(d),
+            .function = 0,
+            .bridge = bridge,
+        }, drv, dev, &multifunction)) continue;
 
         if (multifunction) {
             for (1..8) |fnum| {
-                _ = try enumerate_function(alloc, bridge, seg, drv, dev, bus, @intCast(d), @intCast(fnum), null);
+                _ = try enumerate_function(alloc, .{
+                    .segment = seg,
+                    .bus = bus,
+                    .device = @intCast(d),
+                    .function = @intCast(fnum),
+                    .bridge = bridge,
+                }, drv, dev, null);
             }
         }
     }
@@ -96,35 +113,23 @@ const PciHeaderType = enum {
 
 fn enumerate_function(
     gpa: std.mem.Allocator,
-    bridge: ?*const mcfg.PciHostBridge,
-    seg: u16,
+    adr: pci.PciBridgeAddress,
     drv: *Driver,
     dev: *Device,
-    bus: u8,
-    device: u5,
-    function: u3,
     multifunction: ?*bool,
 ) !bool {
-    var adr: pci.PciAddress = .{
-        .segment = seg,
-        .bus = bus,
-        .device = device,
-        .function = function,
-        .offset = 0,
-    };
-
-    const ids: [2]u16 = @bitCast(try pci.config_read_with_bridge(adr, bridge, u32));
+    const ids: [2]u16 = @bitCast(try pci.config_read_with_bridge(adr, 0, u32));
     if (ids[0] == 0xFFFF) {
         return false;
     }
 
-    const props_adr = (@as(u32, device) << 16) | @as(u32, function);
+    const props_adr = (@as(u32, adr.device) << 16) | @as(u32, adr.function);
 
     var peer: ?*Device = dev.children.peek_front();
     var found: bool = false;
     const d: *Device = while (peer) |p| : (peer = Device.SiblingList.next(p)) {
         if (p.props.address == props_adr) {
-            // log.debug("PCI found existing devobj for segment {d} bus {d} device {d} function {d}", .{ seg, bus, device, function });
+            log.debug("PCI found existing devobj for segment {d} bus {d} device {d} function {d}", .{ adr.segment, adr.bus, adr.device, adr.function });
             found = true;
             break p;
         }
@@ -139,10 +144,8 @@ fn enumerate_function(
 
     errdefer if (!found) d.deinit(gpa);
 
-    adr.offset = 8;
-    const classes: [4]u8 = @bitCast(try pci.config_read_with_bridge(adr, bridge, u32));
-    adr.offset = 12;
-    const stuff: [4]u8 = @bitCast(try pci.config_read_with_bridge(adr, bridge, u32));
+    const classes: [4]u8 = @bitCast(try pci.config_read_with_bridge(adr, 8, u32));
+    const stuff: [4]u8 = @bitCast(try pci.config_read_with_bridge(adr, 12, u32));
 
     if (multifunction) |mf| {
         mf.* = stuff[2] & 0x80 != 0;
@@ -154,16 +157,8 @@ fn enumerate_function(
         .core = .{
             .driver = drv,
         },
-        .bus = bus,
-        .segment = seg,
-        .bridge = bridge,
-        .bus_location = .{
-            .location = .{
-                .device = device,
-                .function = function,
-                .header_type = @enumFromInt(stuff[2] & 0x7F),
-            },
-        },
+        .addr = adr,
+        .kind = .{ .location = @enumFromInt(stuff[2] & 0x7F) },
     };
     d.attach_bus(&e.core);
 
@@ -202,10 +197,10 @@ fn enumerate_function(
     }
 
     log.debug("PCI enumerated at segment {d} bus {d} device {d} function {d}: class {x}:{x}:{x} devid {x:0>4}:{x:0>4}", .{
-        seg,
-        bus,
-        device,
-        function,
+        adr.segment,
+        adr.bus,
+        adr.device,
+        adr.function,
         classes[3],
         classes[2],
         classes[1],
@@ -227,17 +222,11 @@ fn enumerate_function(
 
 const PciBusExtension = struct {
     core: Device.DriverStackEntry,
-    segment: u16,
-    bus: u8,
-    bridge: ?*const mcfg.PciHostBridge,
-    bus_location: union(enum) {
+    kind: union(enum) {
         root_complex,
-        location: struct {
-            header_type: PciHeaderType,
-            device: u5,
-            function: u3,
-        },
+        location: PciHeaderType,
     },
+    addr: pci.PciBridgeAddress,
 };
 
 fn dispatch(_: *Driver, irp: *Irp) anyerror!Irp.InvocationResult {
@@ -248,33 +237,27 @@ fn dispatch(_: *Driver, irp: *Irp) anyerror!Irp.InvocationResult {
         .enumeration => |e| switch (e) {
             .properties => |p| {
                 if (UUID.eql(p.id, Device.Properties.known_properties.pci_downstream_segment)) {
-                    const is_bridge = switch (sp.bus_location) {
+                    const is_bridge = switch (sp.kind) {
                         .root_complex => true,
-                        .location => |l| l.header_type == .pci_pci_bridge,
+                        .location => |typ| typ == .pci_pci_bridge,
                     };
                     if (!is_bridge)
                         return .pass;
-                    @as(*u16, @alignCast(@ptrCast(p.result))).* = sp.segment;
+                    @as(*u16, @alignCast(@ptrCast(p.result))).* = sp.addr.segment;
                     return .complete;
                 } else if (UUID.eql(p.id, Device.Properties.known_properties.pci_downstream_bus)) {
-                    switch (sp.bus_location) {
-                        .location => |l| {
-                            if (l.header_type != .pci_pci_bridge)
+                    switch (sp.kind) {
+                        .location => |typ| {
+                            if (typ != .pci_pci_bridge)
                                 return .pass;
 
-                            @as(*u8, @alignCast(@ptrCast(p.result))).* = try pci.config_read_with_bridge(.{
-                                .segment = sp.segment,
-                                .bus = sp.bus,
-                                .device = l.device,
-                                .function = l.function,
-                                .offset = 0x19,
-                            }, sp.bridge, u8);
+                            @as(*u8, @alignCast(@ptrCast(p.result))).* = try pci.config_read_with_bridge(sp.addr, 0x19, u8);
                             return .complete;
                         },
                         .root_complex => {
-                            @as(*u8, @alignCast(@ptrCast(p.result))).* = sp.bus;
+                            @as(*u8, @alignCast(@ptrCast(p.result))).* = sp.addr.bus;
                             return .complete;
-                        }
+                        },
                     }
                 }
 

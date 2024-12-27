@@ -82,12 +82,10 @@ pub fn platform_init(memmap: []cmn.memmap.Entry) !void {
     control_registers.write(.cr4, cr4);
     idt.enable();
     log.info("interrupts enabled", .{});
-    try zuacpi.init();
-    log.info("loaded acpi sdt", .{});
-    try @import("../../io/interrupts.zig").init();
-    apic.ioapic.process_isa_redirections();
-    try zuacpi.load_namespace();
-    log.info("loaded acpi namespace", .{});
+    try @import("../../dispatcher/interrupts.zig").init_dispatch_interrupts();
+    log.info("dispatcher interrupt handlers added", .{});
+    try zuacpi.early_tables(vmm.raw_page_allocator.allocator());
+    log.info("acpi early table access setup", .{});
     apic.init();
     log.info("checked for x2apic compat and enabled apic in {s} mode", .{if (apic.x2apic.x2apic_enabled) "x2apic" else "xapic"});
     apic.bspid = apic.get_lapic_id();
@@ -95,6 +93,12 @@ pub fn platform_init(memmap: []cmn.memmap.Entry) !void {
 }
 
 pub fn late_init() !void {
+    try zuacpi.init();
+    log.info("loaded acpi sdt", .{});
+    try @import("../../io/interrupts.zig").init();
+    apic.ioapic.process_isa_redirections();
+    try zuacpi.load_namespace();
+    log.info("loaded acpi namespace", .{});
     try zuacpi.initialize_namespace();
     log.info("late platform init complete", .{});
 }

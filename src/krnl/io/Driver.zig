@@ -4,6 +4,7 @@ const std = @import("std");
 const Device = @import("Device.zig");
 const Irp = @import("Irp.zig");
 const UUID = @import("zuid").UUID;
+const queue = @import("collections").queue;
 
 const Driver = @This();
 
@@ -52,13 +53,13 @@ const obvtbl: ob.Object.VTable = .{
 };
 
 header: ob.Object,
-devices: util.queue.Queue(Device, "hook") = .{},
+devices: queue.Queue(Device, "hook") = .{},
 vtable: *const VTable,
 supported_devices: struct {
     hardware_ids: []const []const u8,
     compatible_ids: []const []const u8,
 },
-queue_hook: util.queue.Node = .{},
+queue_hook: queue.Node = .{},
 
 pub const ObjectKind = ob.ObjectKind.driver;
 

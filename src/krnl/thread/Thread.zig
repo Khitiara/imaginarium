@@ -4,7 +4,8 @@ const util = @import("util");
 const hal = @import("../hal/hal.zig");
 const arch = hal.arch;
 const std = @import("std");
-const queue = util.queue;
+const collections = @import("collections");
+const queue = collections.queue;
 const smp = @import("../smp.zig");
 const zuid = @import("zuid");
 const atomic = std.atomic;
@@ -56,7 +57,7 @@ pub const Affinity = struct {
 };
 
 header: ob.Object,
-wait_lock: @import("../hal/SpinLock.zig") = .{},
+wait_lock: @import("../hal/QueuedSpinLock.zig") = .{},
 wait_type: WaitType = undefined,
 wait_list: WaitListType = .{},
 wait_timer: Timer = undefined,

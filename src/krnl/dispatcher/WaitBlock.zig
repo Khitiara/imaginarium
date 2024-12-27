@@ -1,5 +1,5 @@
 const std = @import("std");
-const queue = @import("util").queue;
+const queue = @import("collections").queue;
 const Thread = @import("../thread/Thread.zig");
 const dispatcher = @import("dispatcher.zig");
 const ob = @import("../objects/ob.zig");

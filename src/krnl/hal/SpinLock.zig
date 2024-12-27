@@ -16,7 +16,8 @@ pub fn lock(self: *SpinLock) hal.InterruptRequestPriority {
 }
 
 pub fn lock_at(self: *SpinLock, i: hal.InterruptRequestPriority) hal.InterruptRequestPriority {
-    const irql = hal.fetch_set_irql(i, .raise);
+    const irql = hal.get_irql();
+    hal.raise_irql(i);
     self.lock_unsafe();
     return irql;
 }
@@ -41,7 +42,7 @@ pub fn lock_unsafe(self: *SpinLock) void {
 /// release the spinlock, restoring the interrupt flag to the state saved when the spinlock was acquired
 pub fn unlock(self: *SpinLock, irql: hal.InterruptRequestPriority) void {
     self.unlock_unsafe();
-    _ = hal.set_irql(irql, .lower);
+    hal.lower_irql(irql);
 }
 
 /// release the spinlock, leaving the interrupt flag as is

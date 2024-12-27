@@ -2,16 +2,32 @@ const std = @import("std");
 const ob = @import("../objects/ob.zig");
 const UUID = @import("zuid").UUID;
 const util = @import("util");
-const queue = util.queue;
+const queue = @import("collections").queue;
 const hal = @import("../hal/hal.zig");
 const QueuedSpinLock = hal.QueuedSpinLock;
 const log = std.log.scoped(.io);
+const Event = @import("../thread/Event.zig");
 
 pub const Device = @import("Device.zig");
 pub const Driver = @import("Driver.zig");
 pub const Irp = @import("Irp.zig");
 
 pub fn get_device_property(alloc: std.mem.Allocator, dev: *Device, id: UUID, ptr: anytype) anyerror!void {
+    if (b: {
+        var tok: QueuedSpinLock.Token = undefined;
+        dev.props.bag_lock.lock(&tok);
+        defer tok.unlock();
+        break :b dev.props.bag.get(id);
+    }) |val| {
+        switch (val) {
+            .int => |i| if (@typeInfo(std.meta.Child(@TypeOf(ptr))) == .int) {
+                ptr.* = @intCast(i);
+            } else return error.InvalidPropertyType,
+            inline .str, .multi_str => |u| @as(util.CopyPtrAttrs(@TypeOf(ptr), .One, @TypeOf(u)), @ptrCast(ptr)).* = u,
+        }
+        return;
+    }
+
     const irp: *Irp = try .init(alloc, dev, .{
         .enumeration = .{
             .properties = .{
@@ -21,7 +37,10 @@ pub fn get_device_property(alloc: std.mem.Allocator, dev: *Device, id: UUID, ptr
         },
     });
     defer irp.deinit();
-    switch (try execute_irp(irp)) {
+    switch (execute_irp(irp) catch |err| switch (err) {
+        error.IrpNotHandled => return error.NotFound,
+        else => return err,
+    }) {
         .complete => {},
         .pending => @panic("UNIMPLEMENTED"),
         .pass => unreachable,
@@ -208,6 +227,6 @@ noinline fn find_driver(device: *Device, alloc: std.mem.Allocator) !void {
         defer alloc.free(hids);
         const cids = if (device.props.compatible_ids) |cids| try std.mem.join(alloc, ", ", cids) else try alloc.dupe(u8, "");
         defer alloc.free(cids);
-        log.debug("No driver found for device with HID [{s}] CIDS [{s}] ADR {?x}", .{ hids, cids, device.props.address });
+        log.warn("No driver found for device with HID [{s}] CIDS [{s}] ADR {?x}", .{ hids, cids, device.props.address });
     }
 }

@@ -82,6 +82,10 @@ fn add_img(b: *Build, arch: Target.Cpu.Arch, krnlstep: *Build.Step, elf: LazyPat
     return .{ step, disk_image.getOutput() };
 }
 
+const LoaderProtocol = enum {
+    bootelf,
+};
+
 pub fn build(b: *Build) !void {
     utils.init(b);
     const arch = b.option(Target.Cpu.Arch, "arch", "The CPU architecture to build for") orelse .x86_64;
@@ -100,6 +104,7 @@ pub fn build(b: *Build) !void {
     const force_hypervisor = b.option(bool, "force-hypervisor", "force assume a hypervisor is present (running in a VM, default false)") orelse false;
 
     const options = b.addOptions();
+    options.addOption(LoaderProtocol, "boot_protocol", .bootelf);
     options.addOption(u32, "max_ioapics", max_ioapics);
     options.addOption(u32, "max_hpets", max_hpets);
     options.addOption(usize, "max_elf_size", 1 << 30);
@@ -114,10 +119,20 @@ pub fn build(b: *Build) !void {
 
     const util = b.createModule(.{
         .root_source_file = b.path("src/util/util.zig"),
+        .target = b.resolveTargetQuery(.{}),
+        .optimize = optimize,
     });
     utils.name_module("util", util);
     utils.addImportFromTable(util, "config");
     utils.addImportFromTable(util, "zuid");
+
+    const collections = b.createModule(.{
+        .root_source_file = b.path("libs/collections/collections.zig"),
+        .target = b.resolveTargetQuery(.{}),
+        .optimize = optimize,
+    });
+    utils.name_module("collections", collections);
+    utils.addImportFromTable(collections, "util");
 
     const common_module = b.createModule(.{
         .root_source_file = b.path("src/cmn/common.zig"),
@@ -195,13 +210,15 @@ pub fn build(b: *Build) !void {
     run.dependOn(&qemu.step);
 
     const test_step = b.step("test", "Run tests.");
-    const util_test = b.addTest(.{
-        .root_source_file = b.path("src/util/util.zig"),
-        .target = b.resolveTargetQuery(.{}),
-        .optimize = optimize,
-    });
+
+    const util_test = b.addTest(.{ .root_module = util });
     const run_util_test = b.addRunArtifact(util_test);
     test_step.dependOn(&run_util_test.step);
+
+    const collections_test = b.addTest(.{ .root_module = collections });
+    const run_collections_test = b.addRunArtifact(collections_test);
+    test_step.dependOn(&run_collections_test.step);
+
     if (zuid_dep.builder.top_level_steps.get("test")) |zuid_tests| {
         test_step.dependOn(&zuid_tests.step);
     }

@@ -3,30 +3,40 @@ const Thread = @import("../thread/Thread.zig");
 const smp = @import("../smp.zig");
 const InterruptRequestPriority = @import("../hal/hal.zig").InterruptRequestPriority;
 const std = @import("std");
+const builtin = @import("builtin");
+const QueuedSpinlock = @import("../hal/QueuedSpinLock.zig");
 
 const Mutex = @This();
 
 spinlock: @import("../hal/SpinLock.zig") = .{},
 wait_handle: dispatcher.WaitHandle = .{ .check_wait = &check_wait },
-held: ?u64 = null,
-reentrant: bool = false,
+state: std.atomic.Value(u32) = std.atomic.Value(u32).init(unlocked),
+
+const unlocked: u32 = 0b00;
+const locked: u32 = 0b01;
+
+pub fn try_lock(self: *Mutex) bool {
+    if (comptime builtin.target.cpu.arch.isX86()) {
+        const locked_bit = comptime @ctz(locked);
+        return self.state.bitSet(locked_bit, .acquire) == 0;
+    }
+    return self.state.cmpxchgWeak(unlocked, locked, .acquire, .monotonic) == null;
+}
 
 fn check_wait(handle: *dispatcher.WaitHandle, thread: *Thread) !bool {
     const self: *Mutex = @fieldParentPtr("wait_handle", handle);
-    const irql = self.spinlock.lock();
-    defer self.spinlock.unlock(irql);
-    if (self.held) |h| if (!self.reentrant or h != thread.client_ids.threadid) {
+    if (!self.try_lock()) {
         try handle.enqueue_wait(thread);
         return true;
-    };
-    self.held = thread.client_ids.threadid;
+    }
     return false;
 }
 
 pub fn release(self: *Mutex) void {
-    const irql = self.spinlock.lock();
-    defer self.spinlock.unlock(irql);
-    const tid = smp.lcb.*.current_thread.?.client_ids.threadid;
-    std.debug.assert(tid == self.held);
-    self.held = null;
+    var tok: QueuedSpinlock.Token = undefined;
+    self.wait_handle.wait_lock.lock(&tok);
+    defer tok.unlock();
+    if(!self.wait_handle.release_one()) {
+        self.state.store(unlocked, .release);
+    }
 }

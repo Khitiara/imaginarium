@@ -61,7 +61,7 @@ pub fn add_stage2(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget
     exe.addAssemblyFile(b.path("src/ldr/init.S"));
     exe.addAssemblyFile(b.path("src/ldr/real.S"));
 
-    const exe_module = &exe.root_module;
+    const exe_module = exe.root_module;
     utils.addImportFromTable(exe_module, "util");
     utils.addImportFromTable(exe_module, "config");
     utils.addImportFromTable(exe_module, "cmn");

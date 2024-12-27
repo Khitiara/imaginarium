@@ -2,6 +2,7 @@ const dispatcher = @import("../dispatcher/dispatcher.zig");
 const Thread = @import("../thread/Thread.zig");
 const smp = @import("../smp.zig");
 const InterruptRequestPriority = @import("../hal/hal.zig").InterruptRequestPriority;
+const hal = @import("../hal/hal.zig");
 
 const Semaphore = @This();
 
@@ -15,10 +16,11 @@ pub fn init(count: usize) Semaphore {
 }
 
 pub fn signal(self: *Semaphore) void {
-    const irql = self.spinlock.lock();
-    defer self.spinlock.unlock(irql);
+    var tok: hal.QueuedSpinLock.Token = undefined;
+    self.wait_handle.wait_lock.lock(&tok);
+    defer tok.unlock();
     self.permits += 1;
-    if (@intFromEnum(smp.lcb.*.irql) > @intFromEnum(InterruptRequestPriority.dpc)) {
+    if (@intFromEnum(hal.get_irql()) > @intFromEnum(InterruptRequestPriority.dispatch)) {
         if (self.decrement_dpc == null) {
             self.decrement_dpc = dispatcher.Dpc.init_and_schedule(.p2, &dec_dpc, .{ self, null, null }) catch @panic("Could not allocate DPC");
         }
@@ -45,6 +47,17 @@ fn decrement(self: *Semaphore) void {
     while (self.permits > 0) : (self.permits -= 1) {
         if (!self.wait_handle.release_one()) break;
     }
+}
+
+pub fn try_wait(self: *Semaphore) bool {
+    const irql = self.spinlock.lock();
+    defer self.spinlock.unlock(irql);
+
+    if (self.permits > 0) {
+        self.permits -= 1;
+        return true;
+    }
+    return true;
 }
 
 fn check_wait(handle: *dispatcher.WaitHandle, thread: *Thread) !bool {

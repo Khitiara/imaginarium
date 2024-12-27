@@ -1,26 +1,10 @@
-// THIS FILE ALONE IS LICENSED UNDER THE BSD 0-CLAUSE LICENSE
-//
-// Zero-Clause BSD
-// =============
-//
-// Permission to use, copy, modify, and/or distribute this software for
-// any purpose with or without fee is hereby granted.
-//
-// THE SOFTWARE IS PROVIDED “AS IS” AND THE AUTHOR DISCLAIMS ALL
-// WARRANTIES WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES
-// OF MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE
-// FOR ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY
-// DAMAGES WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN
-// AN ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT
-// OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
-
 //! a selection of intrusive collections
 //! these implementations are derived from N00byEdge's work in
 //! https://github.com/FlorenceOS/Florence/blob/aaa5a9e568197ad24780ec9adb421217530d4466/lib/containers/queue.zig
 //! which was released under the BSD 0-clause
 
 const std = @import("std");
-const CopyPtrAttrs = @import("util.zig").CopyPtrAttrs;
+const CopyPtrAttrs = @import("util").CopyPtrAttrs;
 
 pub const Node = extern struct {
     next: ?*Node = null,
@@ -92,15 +76,16 @@ pub fn Queue(comptime T: type, comptime field_name: []const u8) type {
             return self.impl.len;
         }
 
-        pub inline fn node_from_ref(ref: *T) *Node {
+        pub inline fn node_from_ref(ref: anytype) CopyPtrAttrs(@TypeOf(ref), .One, Node) {
             return &@field(ref, field_name);
         }
 
-        pub inline fn ref_from_node(node: *Node) *T {
+        pub inline fn ref_from_node(node: anytype) CopyPtrAttrs(@TypeOf(node), .One, T) {
+            if(@typeInfo(@TypeOf(node)) == .optional) return ref_from_optional_node(node);
             return @fieldParentPtr(field_name, node);
         }
 
-        pub inline fn ref_from_optional_node(node: ?*Node) ?*T {
+        pub inline fn ref_from_optional_node(node: anytype) ?CopyPtrAttrs(@typeInfo(@TypeOf(node)).optional.child, .One, T) {
             return @fieldParentPtr(field_name, node orelse return null);
         }
 
@@ -182,15 +167,16 @@ pub fn PriorityQueue(comptime T: type, comptime node_field_name: []const u8, com
         tails: Tails = Tails.initFill(null),
         len: usize = 0,
 
-        pub inline fn node_from_ref(ref: *T) *Node {
+        pub inline fn node_from_ref(ref: anytype) CopyPtrAttrs(@TypeOf(ref), .One, Node) {
             return &@field(ref, node_field_name);
         }
 
-        pub inline fn ref_from_node(node: *Node) *T {
+        pub inline fn ref_from_node(node: anytype) CopyPtrAttrs(@TypeOf(node), .One, T) {
+            if(@typeInfo(@TypeOf(node)) == .optional) return ref_from_optional_node(node);
             return @fieldParentPtr(node_field_name, node);
         }
 
-        pub inline fn ref_from_optional_node(node: ?*Node) ?*T {
+        pub inline fn ref_from_optional_node(node: anytype) ?CopyPtrAttrs(@typeInfo(@TypeOf(node)).optional.child, .One, T) {
             return @fieldParentPtr(node_field_name, node orelse return null);
         }
 
@@ -391,15 +377,16 @@ pub fn DoublyLinkedList(comptime T: type, comptime field_name: []const u8) type 
             return self.impl.len;
         }
 
-        pub inline fn node_from_ref(ref: *T) *DoublyLinkedNode {
+        pub inline fn node_from_ref(ref: anytype) CopyPtrAttrs(@TypeOf(ref), .One, DoublyLinkedNode) {
             return &@field(ref, field_name);
         }
 
-        pub inline fn ref_from_node(node: *DoublyLinkedNode) *T {
+        pub inline fn ref_from_node(node: anytype) CopyPtrAttrs(@TypeOf(node), .One, T) {
+            if(@typeInfo(@TypeOf(node)) == .optional) return ref_from_optional_node(node);
             return @fieldParentPtr(field_name, node);
         }
 
-        pub inline fn ref_from_optional_node(node: ?*DoublyLinkedNode) ?*T {
+        pub inline fn ref_from_optional_node(node: anytype) ?CopyPtrAttrs(@typeInfo(@TypeOf(node)).optional.child, .One, T) {
             return @fieldParentPtr(field_name, node orelse return null);
         }
 

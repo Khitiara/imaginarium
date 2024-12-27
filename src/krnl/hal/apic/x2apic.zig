@@ -52,5 +52,5 @@ pub fn read_apic_register(comptime register: RegisterId) RegisterType(register) 
 
 pub fn write_apic_register(comptime register: RegisterId, value: RegisterType(register)) void {
     const v: u64 = @as(@Type(.{ .int = .{ .signedness = .unsigned, .bits = @bitSizeOf(@TypeOf(value)) } }), @bitCast(value));
-    msr.write_unsafe(0x800 + @intFromEnum(register), v);
+    msr.write_unsafe(@as(u32, 0x800) + @intFromEnum(register), v);
 }
