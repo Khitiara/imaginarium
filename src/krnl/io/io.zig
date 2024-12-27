@@ -160,6 +160,8 @@ pub noinline fn report_device(alloc: std.mem.Allocator, dev: *Device) !void {
 }
 
 pub noinline fn enumerate_devices(alloc: std.mem.Allocator) !void {
+    var devices: usize = 0;
+    const start_ns = try hal.arch.time.ns_since_boot_tsc();
     var token: QueuedSpinLock.Token = undefined;
     while (b: {
         enumeration_queue_lock.lock(&token);
@@ -167,8 +169,12 @@ pub noinline fn enumerate_devices(alloc: std.mem.Allocator) !void {
         break :b enumeration_queue.remove_front();
     }) |dev| {
         @atomicStore(bool, &dev.find_driver_queued, false, .release);
+        devices += 1;
         try find_driver(dev, alloc);
     }
+    const end_ns = try hal.arch.time.ns_since_boot_tsc();
+    const elapsed = (end_ns - start_ns) / 1_000_000;
+    log.info("Device enumeration completed in {d}ms ({d:.3} ms/device)", .{ elapsed, @as(f64, @floatFromInt(elapsed)) / @as(f64, @floatFromInt(devices)) });
 }
 
 const debug = @import("../debug.zig");
