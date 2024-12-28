@@ -83,6 +83,10 @@ export fn __kstart2(ldr_info: *bootelf.BootelfData) callconv(arch.cc) noreturn {
     };
 }
 
+pub fn nanoTimestamp() i128 {
+    return arch.time.ns_since_boot_tsc() catch @panic("");
+}
+
 const uacpi = @import("hal/acpi/uacpi/uacpi.zig");
 const zuacpi = @import("hal/acpi/zuacpi.zig");
 

@@ -65,10 +65,10 @@ pub inline fn rdtscp() struct { tsc: u64, pid: u32 } {
     return .{ .tsc = tsc, .pid = pid };
 }
 
-pub fn ns_since_boot_tsc() !u64 {
+pub fn ns_since_boot_tsc() !i128 {
     if (computed_tsc_freq_khz) |freq| {
-        const tsc = rdtsc();
-        return tsc *% 1_000_000 / freq;
+        const tsc: i128 = rdtsc();
+        return @divFloor(tsc *% std.time.ns_per_ms, freq);
     }
     return error.NoTscFreq;
 }
