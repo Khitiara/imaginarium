@@ -3,6 +3,7 @@ ENTRY(__kstart)
 PHDRS
 {
   none      PT_NULL FLAGS(0);
+  init      PT_LOAD FLAGS((1 << 2) | (1 << 1) | (1 << 0) /* Read | Write | Execute */);
   text      PT_LOAD FLAGS((1 << 2) | (1 << 0) /* Readable | Executable */);
   stk       PT_LOAD FLAGS((1 << 2) | (1 << 1) /* Readable | Writeable  */);
   data      PT_LOAD FLAGS((1 << 2) | (1 << 1) /* Readable | Writeable  */);
@@ -18,6 +19,13 @@ SECTIONS
     . += 0x200000;
 
     __kernel_begin__ = .;
+    __kernel_init_begin__ = .;
+    .init . : {
+        *(.init*)
+    } :init
+    . = ALIGN(4K);
+    __kernel_init_end__ = .;
+
     __kernel_text_begin__ = .;
     .text . : {
         *(.text*)
@@ -25,11 +33,12 @@ SECTIONS
         __ap_trampoline_begin__ = .;
         KEEP(*(.ap_trampoline*));
         __ap_trampoline_end__ = .;
-    }:text
+    } :text
+    . = ALIGN(4K);
     __kernel_text_end__ = .;
 
     . = ALIGN(16K);
-    . += 16K;
+    . += 4K;
 
     .bss.stack (NOLOAD) : {
         . = ALIGN(16K);
@@ -39,14 +48,32 @@ SECTIONS
         __bootstrap_stack_top__ = .;
     } :stk
 
-    . += 16K;
+    . += 4K;
+
     .rodata . : {
         *(.rodata*)
     } :rodata
 
-    . = ALIGN(16);
+    . = ALIGN(4K);
     .data . : {
         *(.data*)
+    } :data
+
+    . = ALIGN(8);
+    .limine . : {
+        QUAD(0xf6b8f4b39de7d1ae);
+        QUAD(0xfab91a6940fcb9cf);
+        QUAD(0x785c6ed015d3e316);
+        QUAD(0x181e920a7852b9d9);
+
+        QUAD(0xf9562b2d5c95a6c8);
+        QUAD(0x6a7b384944536bdc);
+        QUAD(3);
+
+        KEEP(*(.limine*));
+        . = ALIGN(8);
+        QUAD(0xadc0e0531bb10d03);
+        QUAD(0x9572709f31764c62);
     } :data
 
 /*
@@ -73,6 +100,7 @@ SECTIONS
     . = ALIGN(4K);
     __kernel_end__ = .;
     __kernel_phys_end__ = . - __base__;
+    __kernel_length__ = . - __kernel_begin__;
 
     /DISCARD/ : { *(.eh_frame*) *(.comment*) *(.note*) }
 }

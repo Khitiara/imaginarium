@@ -12,6 +12,13 @@
             .url = "git+https://github.com/UltraOS/uACPI?ref=master#c0a82c02d90269625f9ba383aab9720163c1fa90",
             .hash = "122014a1276878ffa59cb0ca2b1aaf49c4a1d4e59116fffb8bb06fde4dc53fc1f835",
         },
+        .limine = .{
+            .url = "git+https://github.com/limine-bootloader/limine?ref=v8.x-binary#4ccea35dbb35a6fef17985bf56d655ff366e1f27",
+            .hash = "1220533e700e69d712c0a656739b83a5aa50c1ad1ee7b05781ca1ee97e28457d0807",
+        },
+        .disk_image_step = .{
+            .path = "build/complex-disk-image/"
+        }
     },
     .paths = .{
         "src/",

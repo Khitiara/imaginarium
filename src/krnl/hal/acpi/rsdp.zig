@@ -19,7 +19,7 @@ const RsdpAlignedPrologue = extern struct {
     _padding: [8]u8,
 };
 
-inline fn rsdp_search(region: []align(4) const u8) ?*align(4)const anyopaque {
+inline fn rsdp_search(region: []align(4) const u8) ?*align(4) const anyopaque {
     const slice = std.mem.bytesAsSlice(RsdpAlignedPrologue, region);
     for (slice) |*hay| {
         if (std.mem.eql(u8, &hay.signature, rsd_ptr_sig)) {
@@ -61,4 +61,11 @@ fn locate_rsdp_efi() !PhysAddr {
     return error.NotFound;
 }
 
-pub const locate_rsdp: fn () RsdpError!PhysAddr = if (@import("builtin").os.tag == .uefi or !@import("config").rsdp_search_bios) locate_rsdp_efi else locate_rsdp_bios;
+fn locate_rsdp_limine() !PhysAddr {
+    if (@import("../../boot/limine_requests.zig").rsdp_request.response) |response| {
+        return response.address;
+    }
+    return try locate_rsdp_bios();
+}
+
+pub const locate_rsdp: fn () RsdpError!PhysAddr = if (@import("builtin").os.tag == .uefi or !@import("config").rsdp_search_bios) locate_rsdp_efi else if (@import("config").boot_protocol == .limine) locate_rsdp_limine else locate_rsdp_bios;

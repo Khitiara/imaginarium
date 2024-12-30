@@ -77,10 +77,24 @@ pub const std_options: std.Options = .{
 /// __kstart is responsible for stack setup and jumps unconditionally into __kstart2
 /// __kstart2 is responsible for calling main and handling any zig errors returned from there
 /// as well as entering the final infinite loop if everything worked successfully
-export fn __kstart2(ldr_info: *bootelf.BootelfData) callconv(arch.cc) noreturn {
-    main(ldr_info) catch |e| {
+fn kstart2_bootelf(ldr_info: *bootelf.BootelfData) callconv(arch.cc) noreturn {
+    const bootelf_magic_check = ldr_info.magic == bootelf.magic;
+    std.debug.assert(bootelf_magic_check);
+    @import("boot/boot_info.zig").bootelf_data = ldr_info;
+
+    kstart3();
+}
+fn kstart3() callconv(arch.cc) noreturn {
+    main() catch |e| {
         std.builtin.panicUnwrapError(@errorReturnTrace(), e);
     };
+}
+
+comptime {
+    switch (@import("config").boot_protocol) {
+        .bootelf => @export(&kstart2_bootelf, .{ .name = "__kstart2" }),
+        .limine => @export(&kstart3, .{ .name = "__kstart2" }),
+    }
 }
 
 pub fn nanoTimestamp() i128 {
@@ -90,20 +104,16 @@ pub fn nanoTimestamp() i128 {
 const uacpi = @import("hal/acpi/uacpi/uacpi.zig");
 const zuacpi = @import("hal/acpi/zuacpi.zig");
 
-noinline fn main(ldr_info: *bootelf.BootelfData) anyerror!noreturn {
-    const bootelf_magic_check = ldr_info.magic == bootelf.magic;
-    std.debug.assert(bootelf_magic_check);
-
-    try arch.platform_init(ldr_info.memory_map());
+noinline fn main() anyerror!noreturn {
+    try arch.init.platform_init();
     // ldr_info.entries = arch.ptr_from_physaddr([*]hal.memory.MemoryMapEntry, @intFromPtr(ldr_info.entries));
     const page, const gpa = try arch.smp.init();
     try smp.allocate_lcbs(page);
     try smp.enter_threading(page, gpa);
 
-
     log.debug("current gs base: {x}", .{arch.msr.read(.gs_base)});
 
-    try arch.late_init();
+    try arch.init.late_init();
 
     try uacpi.event.install_fixed_event_handler(.power_button, &power_button_handler, null);
     try uacpi.event.finalize_gpe_initialization();
@@ -115,27 +125,27 @@ noinline fn main(ldr_info: *bootelf.BootelfData) anyerror!noreturn {
 
     log.info("local apic id {d}", .{current_apic_id});
 
-    if (ldr_info.framebuffer.base == .nul) {
-        log.warn("graphics-mode framebuffer not found by bootelf", .{});
-        return error.no_framebuffer;
-    }
-
-    log.info("graphics-mode framebuffer located at 0x{X:0>16}..{X:0>16}, {d}x{d}, hblank {d}", .{
-        @intFromEnum(ldr_info.framebuffer.base) + @as(usize, @bitCast(arch.pmm.phys_mapping_base)),
-        @intFromEnum(ldr_info.framebuffer.base) + @as(usize, @bitCast(arch.pmm.phys_mapping_base)) + ldr_info.framebuffer.pitch * ldr_info.framebuffer.height,
-        ldr_info.framebuffer.width,
-        ldr_info.framebuffer.height,
-        (ldr_info.framebuffer.pitch - ldr_info.framebuffer.width) / 4,
-    });
-    fb.init(&ldr_info.framebuffer);
-
-    const f = @import("psf.zig").font;
-
-    log.info("have a {d}x{d} font", .{ f.header.width, f.header.height });
-
-    font_rendering.init();
-    font_rendering.write("This is a test!\n=-+asbasdedfgwrgrgsae");
-    log.info("wrote to screen", .{});
+    // if (ldr_info.framebuffer.base == .nul) {
+    //     log.warn("graphics-mode framebuffer not found by bootelf", .{});
+    //     return error.no_framebuffer;
+    // }
+    //
+    // log.info("graphics-mode framebuffer located at 0x{X:0>16}..{X:0>16}, {d}x{d}, hblank {d}", .{
+    //     @intFromEnum(ldr_info.framebuffer.base) + @as(usize, @bitCast(arch.pmm.phys_mapping_base)),
+    //     @intFromEnum(ldr_info.framebuffer.base) + @as(usize, @bitCast(arch.pmm.phys_mapping_base)) + ldr_info.framebuffer.pitch * ldr_info.framebuffer.height,
+    //     ldr_info.framebuffer.width,
+    //     ldr_info.framebuffer.height,
+    //     (ldr_info.framebuffer.pitch - ldr_info.framebuffer.width) / 4,
+    // });
+    // fb.init(&ldr_info.framebuffer);
+    //
+    // const f = @import("psf.zig").font;
+    //
+    // log.info("have a {d}x{d} font", .{ f.header.width, f.header.height });
+    //
+    // font_rendering.init();
+    // font_rendering.write("This is a test!\n=-+asbasdedfgwrgrgsae");
+    // log.info("wrote to screen", .{});
 
     // log.debug("__isrs[0]: {*}: {*}", .{ &arch.x86_64.idt.__isrs[0], arch.x86_64.idt.__isrs[0] });
 

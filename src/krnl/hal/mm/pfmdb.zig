@@ -2,14 +2,15 @@ const std = @import("std");
 const cmn = @import("cmn");
 const pte = @import("pte.zig");
 const hal = @import("../hal.zig");
+const map = @import("map.zig");
 
 const MaxSupportedPhysAddrWidth = 48;
 pub const PageOffsetBits = std.math.log2_int(usize, std.mem.page_size);
 pub const PageBitsPerPageLevel = 9;
 pub const LargePageOffsetBits = PageOffsetBits + PageBitsPerPageLevel;
 pub const HugePageOffsetBits = LargePageOffsetBits + PageBitsPerPageLevel;
-pub const PageOffset = std.meta.Int(.unsigned, PageOffsetBits);
-pub const Pfi = std.meta.Int(.unsigned, MaxSupportedPhysAddrWidth - PageOffsetBits);
+pub const PageOffset: type = std.meta.Int(.unsigned, PageOffsetBits);
+pub const Pfi: type = std.meta.Int(.unsigned, MaxSupportedPhysAddrWidth - PageOffsetBits);
 
 test "bit widths" {
     const testing = std.testing;
@@ -25,8 +26,6 @@ test "bit widths" {
 comptime {
     _ = Pfm;
 }
-
-pub const pfm_db: [*]pte.Pfm = @ptrFromInt(0xFFFF_FA80_0000_0000);
 pub var free_list: PfmList = .{};
 
 pub const PfmStatus = enum(u3) {
@@ -86,7 +85,7 @@ pub const PfmList = struct {
     pub const terminator: Pfi = std.math.maxInt(Pfi);
 
     pub fn push(self: *PfmList, pfi: Pfi) void {
-        push_internal(self, pfi, pfm_db);
+        push_internal(self, pfi, map.pfm_db);
     }
 
     pub fn push_internal(self: *PfmList, pfi: Pfi, pfm_arr: [*]Pfm) void {

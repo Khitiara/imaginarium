@@ -29,6 +29,7 @@ pub fn add_krnl(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, 
     });
 
     exe_module.addAssemblyFile(b.path("src/krnl/hal/arch/ap_trampoline.S"));
+    exe_module.addAssemblyFile(b.path("src/krnl/hal/arch/kstart.S"));
 
     uacpi.add_uacpi_to_module(b, exe_module);
 

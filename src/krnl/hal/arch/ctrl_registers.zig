@@ -36,9 +36,10 @@ pub fn ControlRegisterValueType(comptime cr: ControlRegister) type {
                     pcd: bool,
                     _reserved2: u7 = 0,
                 },
-                pcid: u11,
+                pcid: u12,
             },
-            pml45_base_addr: u52,
+            pml45_base_addr: u51,
+            permit_keep_tlb_pcide: bool,
 
             // paging support functions
             pub fn get_phys_addr(self: @This()) PhysAddr {

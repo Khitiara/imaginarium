@@ -46,11 +46,15 @@ pub const Pte = packed union {
         committed: bool,
         _1: u51 = 0,
     },
-    normal: PresentPte,
+    valid: PresentPte,
     page_file: SwapFilePte,
+    uint: u64,
+    sint: i64,
     unset: packed struct(u64) {
         _: u64 = 0,
     },
+
+    pub const zero: Pte = .{ .unset = .{} };
 };
 
 pub const SwapFilePte = packed struct(u64) {
@@ -88,13 +92,13 @@ pub const PresentPte = packed struct(u64) {
     user_mode: bool,
     write_through: bool,
     cache_disable: bool,
-    hw_accessed: bool,
-    hw_dirty: bool,
+    hw_accessed: bool = false,
+    hw_dirty: bool = false,
     pat_size: bool,
     global: bool,
     _0: u1 = 0,
     copy_on_write: bool,
-    sw_dirty: bool,
+    sw_dirty: bool = false,
     addr: packed union {
         pfi: pfmdb.Pfi,
         large_page_flags: packed struct(pfmdb.Pfi) {
@@ -106,3 +110,5 @@ pub const PresentPte = packed struct(u64) {
     pk: u4,
     xd: bool,
 };
+
+pub const PageTable = *[std.mem.page_size / @sizeOf(Pte)]Pte;

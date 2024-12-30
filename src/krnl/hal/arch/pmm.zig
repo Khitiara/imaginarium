@@ -34,6 +34,7 @@ const ext = @import("util").extern_address;
 const std = @import("std");
 const cmn = @import("cmn");
 const PhysAddr = cmn.types.PhysAddr;
+const MemoryDescriptor = @import("../../boot/boot_info.zig").memory_map.MemoryDescriptor;
 
 // the base virtual address of the initial memory layout. should always be -2G but only set it once in the linkerscript
 pub var kernel_size: usize = undefined;
@@ -70,7 +71,7 @@ pub var max_phys_mem: usize = 0;
 const log = std.log.scoped(.pmm);
 
 // initialize the pmm. takes the physical address width and the memory map
-pub fn init(paddrwidth: u8, memmap: []cmn.memmap.Entry) void {
+pub fn init(paddrwidth: u8, memmap: []MemoryDescriptor) void {
     phys_mapping_base_unsigned = @intFromPtr(@extern(*u64, .{ .name = "__base__" }));
     phys_mapping_base = @bitCast(phys_mapping_base_unsigned);
     log.debug("initial physical mapping base 0x{X}", .{phys_mapping_base_unsigned});
@@ -88,9 +89,9 @@ pub fn init(paddrwidth: u8, memmap: []cmn.memmap.Entry) void {
     // we can switch to a larger region. the identity mapping will change as well once the vmm is set up but
     // the identity mapped region is mapped lazily by the vmm through the page fault handler
     for (memmap) |entry| {
-        if (entry.type == .normal) {
-            var base = @intFromEnum(entry.base);
-            var size = entry.size;
+        if (entry.memory_kind == .usable) {
+            var base = @as(usize, entry.base_page) * std.mem.page_size;
+            var size = @as(usize, entry.page_count) * std.mem.page_size;
             const end = base + size;
             if (end > max_phys_mem)
                 max_phys_mem = end;
@@ -122,17 +123,17 @@ pub fn init(paddrwidth: u8, memmap: []cmn.memmap.Entry) void {
 // switch to a complete identity map at a new base virtual address.
 // this allows the use of the full physical memory not just the first 2G that bootelf maps
 // current plan is to map all of physmem at -1 << 45 (ffff_e..._...._....)
-pub fn enlarge_mapped_physical(memmap: []cmn.memmap.Entry, new_base: isize) void {
+pub fn enlarge_mapped_physical(memmap: []MemoryDescriptor, new_base: isize) void {
     phys_mapping_base_unsigned = @bitCast(new_base);
     phys_mapping_base = new_base;
     const old_limit = phys_mapping_limit;
     phys_mapping_limit = @as(usize, 1) << @intCast(phys_addr_width);
     for (memmap) |entry| {
         // we already mapped entries which are wholly within our old limits
-        if (entry.type == .normal and @intFromEnum(entry.base) + entry.size >= old_limit) {
+        if (entry.memory_kind == .usable and @as(usize, entry.base_page + entry.page_count) * std.mem.page_size >= old_limit) {
             // all the alignment and other nonsense is handled by mark_free
-            log.debug("marking 0x{X}..0x{X} (0x{X} bytes)", .{ entry.base, @intFromEnum(entry.base) + entry.size, entry.size });
-            mark_free(entry.base, entry.size);
+            log.debug("marking 0x{X}000..0x{X}000 (0x{X}000 bytes)", .{ entry.base_page, entry.base_page + entry.page_count, entry.page_count });
+            mark_free(@enumFromInt(@as(usize, entry.base_page) * std.mem.page_size), @as(usize, entry.page_count) * std.mem.page_size);
         }
     }
 }

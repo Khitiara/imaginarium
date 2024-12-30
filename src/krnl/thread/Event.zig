@@ -49,8 +49,8 @@ pub fn get_status(self: *Event) bool {
 
 fn check_wait(handle: *dispatcher.WaitHandle, thread: *Thread) !bool {
     const self: *Event = @fieldParentPtr("wait_handle", handle);
-    var token: hal.QueuedSpinLock.Token = .{};
-    self.spinlock.lock(token);
+    var token: hal.QueuedSpinLock.Token = undefined;
+    self.spinlock.lock(&token);
     defer token.unlock();
     // if manual_reset is false then this is an auto-reset event and we need to set signalled to false when satisfying
     // the wait. if manual_reset is true and signalled is already true then we need to leave signalled as true anyway.

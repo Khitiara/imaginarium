@@ -4,3 +4,6 @@
 [submodule "disk-image"]
 	path = build/complex-disk-image
 	url = https://github.com/Khitiara/disk-image-step.git
+[submodule "zfat"]
+	path = libs/zfat
+	url = https://github.com/Khitiara/zfat

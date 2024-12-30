@@ -57,34 +57,95 @@ fn parseQemuGdbOption(v: ?[]const u8) QemuGdbOption {
     }
 }
 
-fn add_img(b: *Build, arch: Target.Cpu.Arch, krnlstep: *Build.Step, elf: LazyPath, symbols: ?LazyPath) !struct { *Build.Step, LazyPath } {
-    const ldr_img = b.dependency("bootelf", .{}).namedWriteFiles("bootelf").getDirectory().path(b, "bootelf.bin");
-    const disk_image = DiskImage.create(b, .{
-        .basename = "drive.bin",
-    });
-    disk_image.append(ldr_img);
-    disk_image.append(elf);
-    disk_image.step.dependOn(krnlstep);
-
-    b.getInstallStep().dependOn(&disk_image.step);
-
-    const step = b.step("img", "create bootable disk image for the target");
-    utils.installFrom(b, &disk_image.step, step, disk_image.getOutput(), b.fmt("{s}/img", .{@tagName(arch)}), disk_image.basename);
-
-    const copyToTestDir = b.addUpdateSourceFiles();
-    copyToTestDir.step.dependOn(&disk_image.step);
-    copyToTestDir.step.dependOn(krnlstep);
-    copyToTestDir.addCopyFileToSource(disk_image.getOutput(), "test/drive.bin");
-    if (symbols) |d| {
-        copyToTestDir.addCopyFileToSource(d, "test/krnl.debug");
-    }
-    step.dependOn(&copyToTestDir.step);
-    return .{ step, disk_image.getOutput() };
-}
-
 const LoaderProtocol = enum {
     bootelf,
+    limine,
 };
+
+const loader_protocol: LoaderProtocol = .limine;
+
+const complex_img = @import("disk_image_step");
+
+fn add_img(b: *Build, arch: Target.Cpu.Arch, krnlstep: *Build.Step, elf: LazyPath, symbols: ?LazyPath) !struct { *Build.Step, LazyPath } {
+    switch (loader_protocol) {
+        .bootelf => {
+            const ldr_img = b.dependency("bootelf", .{}).namedWriteFiles("bootelf").getDirectory().path(b, "bootelf.bin");
+            const disk_image = DiskImage.create(b, .{
+                .basename = "drive.bin",
+            });
+            disk_image.append(ldr_img);
+            disk_image.append(elf);
+            disk_image.step.dependOn(krnlstep);
+
+            b.getInstallStep().dependOn(&disk_image.step);
+
+            const step = b.step("img", "create bootable disk image for the target");
+            utils.installFrom(b, &disk_image.step, step, disk_image.getOutput(), b.fmt("{s}/img", .{@tagName(arch)}), disk_image.basename);
+
+            const copyToTestDir = b.addUpdateSourceFiles();
+            copyToTestDir.step.dependOn(&disk_image.step);
+            copyToTestDir.step.dependOn(krnlstep);
+            copyToTestDir.addCopyFileToSource(disk_image.getOutput(), "test/drive.bin");
+            if (symbols) |d| {
+                copyToTestDir.addCopyFileToSource(d, "test/krnl.debug");
+            }
+            step.dependOn(&copyToTestDir.step);
+            return .{ step, disk_image.getOutput() };
+        },
+        .limine => {
+            const limine = b.dependency("limine", .{});
+
+            var fs: complex_img.FileSystemBuilder = .init(b);
+            fs.addFile(b.path("src/krnl/boot/limine.conf"), "limine.conf");
+            fs.addFile(elf, "imaginarium.elf");
+            fs.addFile(limine.path("limine-bios.sys"), "limine-bios.sys");
+
+            const fs_final = fs.finalize(.{ .format = .fat16, .label = "ROOTFS" });
+            const img_step = complex_img.initializeDisk(b.dependencyFromBuildZig(complex_img, .{}), 0x100_0000, .{
+                .mbr = .{
+                    .partitions = .{
+                        &.{ .size = 0x90_0000, .offset = 0x8000, .bootable = true, .type = .fat16, .data = .{ .fs = fs_final } },
+                        null,
+                        null,
+                        null,
+                    },
+                },
+            });
+            img_step.step.dependOn(krnlstep);
+
+            const limine_bin = b.addExecutable(.{
+                .name = "limine",
+                .target = b.resolveTargetQuery(.{}),
+                .optimize = .ReleaseSafe,
+            });
+            limine_bin.addCSourceFile(.{
+                .file = limine.path("limine.c"),
+                .flags = &.{"-std=c99"},
+            });
+            limine_bin.linkLibC();
+
+            const add_limine_to_image = b.addRunArtifact(limine_bin);
+            add_limine_to_image.step.dependOn(&img_step.step);
+            add_limine_to_image.addArg("bios-install");
+            add_limine_to_image.addFileArg(img_step.getImageFile());
+            add_limine_to_image.has_side_effects = true;
+
+            const step = b.step("img", "create bootable disk image for the target");
+            utils.installFrom(b, &add_limine_to_image.step, step, img_step.getImageFile(), b.fmt("{s}/img", .{@tagName(arch)}), "drive.bin");
+
+            const copyToTestDir = b.addUpdateSourceFiles();
+            copyToTestDir.step.dependOn(&img_step.step);
+            copyToTestDir.step.dependOn(&add_limine_to_image.step);
+            copyToTestDir.step.dependOn(krnlstep);
+            copyToTestDir.addCopyFileToSource(img_step.getImageFile(), "test/drive.bin");
+            if (symbols) |d| {
+                copyToTestDir.addCopyFileToSource(d, "test/krnl.debug");
+            }
+            step.dependOn(&copyToTestDir.step);
+            return .{ step, img_step.getImageFile() };
+        },
+    }
+}
 
 pub fn build(b: *Build) !void {
     utils.init(b);
@@ -104,7 +165,7 @@ pub fn build(b: *Build) !void {
     const force_hypervisor = b.option(bool, "force-hypervisor", "force assume a hypervisor is present (running in a VM, default false)") orelse false;
 
     const options = b.addOptions();
-    options.addOption(LoaderProtocol, "boot_protocol", .bootelf);
+    options.addOption(LoaderProtocol, "boot_protocol", loader_protocol);
     options.addOption(u32, "max_ioapics", max_ioapics);
     options.addOption(u32, "max_hpets", max_hpets);
     options.addOption(usize, "max_elf_size", 1 << 30);
@@ -147,8 +208,8 @@ pub fn build(b: *Build) !void {
     _ = s2debug; // autofix
     const imgstep, const imgFile = try add_img(b, arch, krnlstep, elf, debug);
 
-    var cpu_flags = try std.ArrayList([]const u8).initCapacity(b.allocator, 8);
-    cpu_flags.appendSliceAssumeCapacity(&.{ "qemu64", "+la57", "+invtsc", "+pdpe1gb", "+rdrand", "+arat", "+rdseed" });
+    var cpu_flags = try std.ArrayList([]const u8).initCapacity(b.allocator, 12);
+    cpu_flags.appendSliceAssumeCapacity(&.{ "qemu64", "+invtsc", "+pdpe1gb", "+rdrand", "+arat", "+rdseed", "+hypervisor" });
 
     const qemu = b.addSystemCommand(&.{
         b.fmt("qemu-system-{s}", .{@tagName(arch)}),
@@ -185,6 +246,8 @@ pub fn build(b: *Build) !void {
         // "pxb-pcie,id=pcie.1,bus_nr=1",
         // "-device",
         // "pcie-pci-bridge,id=pcie_pci_bridge1,bus=pcie.1",
+        "-serial",
+        "stdio",
     });
 
     qemu.setCwd(b.path("test"));

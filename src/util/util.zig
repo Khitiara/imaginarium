@@ -18,6 +18,20 @@ const testing = std.testing;
 
 const Log2Int = std.math.Log2Int;
 
+pub inline fn convert_enum_by_name(comptime T: type, value: anytype) ?T {
+    if (@typeInfo(@TypeOf(value)).@"enum".is_exhaustive) {
+        return switch (value) {
+            inline else => |e| if (@hasField(T, @tagName(e))) @field(T, @tagName(e)) else null,
+        };
+    }
+    inline for (comptime std.enums.values(T)) |f| {
+        if (std.mem.eql(u8, @tagName(f), @tagName(value))) {
+            return f;
+        }
+    }
+    return null;
+}
+
 pub inline fn CopyPtrAttrs(
     comptime source: type,
     comptime size: std.builtin.Type.Pointer.Size,

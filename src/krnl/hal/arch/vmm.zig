@@ -8,6 +8,8 @@ const mcfg = @import("../acpi/mcfg.zig");
 const apic = @import("../apic/apic.zig");
 const cmn = @import("cmn");
 
+const MemoryDescriptor = @import("../../boot/memory_map.zig").MemoryDescriptor;
+
 // the base where we plan to id-map physical memory
 const idmap_base_4lvl: isize = -1 << 45;
 const idmap_base_5lvl: isize = -1 << 53;
@@ -18,7 +20,7 @@ const PhysAddr = pmm.PhysAddr;
 
 var phys_mapping_range_bits: u6 = undefined;
 
-pub fn init(memmap: []cmn.memmap.Entry) !void {
+pub fn init(memmap: []MemoryDescriptor) !void {
     // when this method is called we assume the following:
     // 1. the pmm is already initialized with the bottom 2G of the bios memory map
     // 2. cr3 points to the paging table set up by the bootloader
