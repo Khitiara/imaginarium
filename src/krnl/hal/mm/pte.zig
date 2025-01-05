@@ -48,6 +48,12 @@ pub const Pte = packed union {
     },
     valid: PresentPte,
     page_file: SwapFilePte,
+    list: packed struct(u64) {
+        present: bool = false,
+        singleton: bool,
+        _: u30 = 0,
+        next: u32,
+    },
     uint: u64,
     sint: i64,
     unset: packed struct(u64) {
@@ -96,14 +102,14 @@ pub const PresentPte = packed struct(u64) {
     hw_dirty: bool = false,
     pat_size: bool,
     global: bool,
-    _0: u1 = 0,
     copy_on_write: bool,
     sw_dirty: bool = false,
+    _0: u1 = 0,
     addr: packed union {
         pfi: pfmdb.Pfi,
         large_page_flags: packed struct(pfmdb.Pfi) {
             pat: bool,
-            _: std.meta.Int(.unsigned, @bitSizeOf(pfmdb.Pfi) - 1),
+            _: std.meta.Int(.unsigned, @bitSizeOf(pfmdb.Pfi) - 1) = 0,
         },
     },
     _pad: PtePfiPad = 0,

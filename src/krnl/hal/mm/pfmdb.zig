@@ -26,9 +26,26 @@ test "bit widths" {
 comptime {
     _ = Pfm;
 }
-pub var free_list: PfmList = .{};
+
+pub var free_list: PfmList = .{ .associated_status = .free_list };
+pub var zero_list: PfmList = .{ .associated_status = .zero_list };
+
+pub const pfm_db: [*]Pfm = @ptrFromInt(map.pfm_db_addr);
+const pfm_db_bitmap: [*]usize = @ptrFromInt(map.pfm_map_tracking_addr);
+
+pub var pfm_bitmap: std.DynamicBitSetUnmanaged = .{
+    .masks = pfm_db_bitmap,
+};
+
+pub inline fn pfm_for_pfi(pfi: Pfi) ?*Pfm {
+    if (pfi >= pfm_bitmap.bit_length) return null;
+    if (!pfm_bitmap.isSet(pfi)) return null;
+    return &pfm_db[pfi];
+}
 
 pub const PfmStatus = enum(u3) {
+    /// the page is not usable for general-purpose memory
+    invalid,
     /// the page is currently mapped. _2.index is valid, _3.share_count is valid,
     /// and _0.pte points to a present PTE mapping this page to virtual memory.
     /// when refcount hits 0, this page may be moved to either the writeback_pending
@@ -64,15 +81,6 @@ pub const PfmStatus = enum(u3) {
     /// allocating and freeing the event, and any other thread which faults the same
     /// page MUST wait on that event and re-check the fault condition.
     paging_io_in_progress,
-    /// the page is unsuitable for general-purpose memory uses and is currrently
-    /// mapped to a virtual memory location for memory-mapped io. _0.pte points
-    /// to a present PTE mapping this page to virtual memory.
-    mapped_for_system_io,
-    /// the page is unsuitable for general-purpose memory uses and is currently
-    /// not mapped to any virtual memory location. kernel-mode code may request
-    /// to map this page to a free virtual page in the nonpaged pool for the purpose
-    /// of performing memory-mapped io.
-    unsuitable_for_general_purpose,
 };
 
 pub const PfmList = struct {
@@ -85,18 +93,14 @@ pub const PfmList = struct {
     pub const terminator: Pfi = std.math.maxInt(Pfi);
 
     pub fn push(self: *PfmList, pfi: Pfi) void {
-        push_internal(self, pfi, map.pfm_db);
-    }
-
-    pub fn push_internal(self: *PfmList, pfi: Pfi, pfm_arr: [*]Pfm) void {
         // TODO: locking
         self.count += 1;
-        const pfm = &pfm_arr[pfi];
+        const pfm = &pfm_db[pfi];
         pfm._1.status = self.associated_status;
         pfm._3.flink.next = terminator;
         if (self.last != terminator) {
             pfm._2.blink.prev = self.last;
-            pfm_arr[self.last]._3.flink.next = pfi;
+            pfm_db[self.last]._3.flink.next = pfi;
         } else {
             std.debug.assert(self.first == terminator);
             self.first = pfi;
@@ -104,28 +108,28 @@ pub const PfmList = struct {
         self.last = pfi;
     }
 
-    pub fn pop_internal(self: *PfmList, pfm_arr: [*]Pfm) Pfi {
+    pub fn pop_internal(self: *PfmList) Pfi {
         // TODO: locking
         const pfi = self.first;
-        remove_internal(self, pfi, pfm_arr);
+        remove_internal(self, pfi);
         return pfi;
     }
 
-    pub fn remove_internal(self: *PfmList, pfi: Pfi, pfm_arr: [*]Pfm) void {
+    pub fn remove_internal(self: *PfmList, pfi: Pfi) void {
         // TODO: locking
         self.count -= 1;
-        const pfm = &pfm_arr[pfi];
+        const pfm = &pfm_db[pfi];
         const prev = pfm._2.blink.prev;
         const next = pfm._3.flink.next;
         if (prev != terminator) {
-            const p = &pfm_arr[prev];
+            const p = &pfm_db[prev];
             p._3.flink.next = next;
         } else {
             std.debug.assert(self.first == pfi);
             self.first = next;
         }
         if (next != terminator) {
-            const n = &pfm_arr[next];
+            const n = &pfm_db[next];
             n._2.blink.prev = prev;
         } else {
             std.debug.assert(self.last == pfi);
@@ -219,26 +223,6 @@ pub const Pfm = extern struct {
                 .share_count = 0,
             },
         };
-    }
-
-    pub fn init_free(idx: Pfi, arr: [*]Pfm) void {
-        arr[idx] = .{
-            ._0 = .{ .pte = null },
-            ._1 = .{
-                .page_size = .small,
-                .status = .free_list,
-                .pte_table_pfi = 0,
-                .pat_index = 0,
-                .refcnt = 0,
-            },
-            ._2 = .{
-                .index = 0,
-            },
-            ._3 = .{
-                .share_count = 0,
-            },
-        };
-        free_list.push_internal(idx, arr);
     }
 };
 

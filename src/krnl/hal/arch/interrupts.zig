@@ -4,7 +4,7 @@ const std = @import("std");
 
 const log = std.log.scoped(.interrupts);
 
-fn disable_8259pic() void {
+pub fn disable_8259pic() void {
     // remap the pic. idk how this works
     serial.out_serial(0x20, .data, 0x11);
     serial.io_wait();
@@ -45,8 +45,6 @@ fn breakpoint(frame: *idt.InterruptFrame(u64)) callconv(.SysV) void {
 }
 
 pub fn init() void {
-    log.info("disabling 8259 PIC", .{});
-    disable_8259pic();
     log.info("setting up idt", .{});
     idt.clear(&unhandled_interrupt);
     idt.add_handler(.{ .exception = .breakpoint }, &breakpoint, .interrupt, 0, 0);

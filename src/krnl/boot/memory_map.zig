@@ -11,6 +11,7 @@ pub const MemoryKind = enum {
     framebuffer,
     persistent,
     disabled,
+    bootstrap_in_use,
 };
 
 pub const MemoryDescriptor = struct {

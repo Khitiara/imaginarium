@@ -12,9 +12,10 @@
 //! 0xFFFF_FA80_0000_0000..0xFFFF_FB7F_C000_0000: PFMDB
 //! 0xFFFF_FB7F_C000_0000..0xFFFF_FB80_0000_0000: PFM bitmap so we dont need to alloc for literally everything
 //! 0xFFFF_FB80_0000_0000..0xFFFF_FC00_0000_0000: page tables (recursive map with index 0o767/0x1F7)
-//! 0xFFFF_FC00_0000_0000..0xFFFF_FC80_0000_0000: phys/mmio mapping space
-//! 0xFFFF_FC80_0000_0000..0xFFFF_FD00_0000_0000: kernel stacks & per-core data
-//! 0xFFFF_FD00_0000_0000..0xFFFF_FF00_0000_0000: framebuffer
+//! 0xFFFF_FC00_0000_0000..0xFFFF_FC80_0000_0000: system PTE pool (used for phys/mmio mapping and temporary access)
+//! 0xFFFF_FC80_0000_0000..0xFFFF_FCFF_C000_0000: kernel stacks
+//! 0xFFFF_FCFF_C000_0000..0xFFFF_FD00_0000_0000: per-core data
+//! 0xFFFF_FD00_0000_0000..0xFFFF_FF00_0000_0000: framebuffers
 //! 0xFFFF_FFFF_8000_0000..0xFFFF_FFFF_FFFF_F000: kernel image (location derived from bootloader behavior)
 
 const pfmdb = @import("pfmdb.zig");
@@ -48,14 +49,13 @@ comptime {
     std.testing.expectEqual(0o177777_767_767_767_767_7670, pxe_selfmap_addr) catch unreachable;
 }
 
-pub const pfm_db: [*]pfmdb.Pfm = @ptrFromInt(pfm_db_addr);
-pub const pfm_db_page_tracking: [*]u8 = @ptrFromInt(pfm_map_tracking_addr);
-
 pub const pte_base: [*]pte.Pte = @ptrFromInt(pte_base_addr);
 pub const pde_base: [*]pte.Pte = @ptrFromInt(pde_base_addr);
 pub const ppe_base: [*]pte.Pte = @ptrFromInt(ppe_base_addr);
 pub const pxe_base: [*]pte.Pte = @ptrFromInt(pxe_base_addr);
 pub const pxe_selfmap: *pte.Pte = @ptrFromInt(pxe_selfmap_addr);
+
+pub const syspte_space: [*]pte.Pte = @ptrCast(pte_from_addr(0xFFFF_FC00_0000_0000));
 
 pub fn pte_from_addr(addr: usize) *pte.Pte {
     return &pte_base[entry_index(addr, 1)];

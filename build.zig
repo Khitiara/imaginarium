@@ -201,11 +201,11 @@ pub fn build(b: *Build) !void {
     utils.name_module("cmn", common_module);
 
     const krnlexe, const krnlstep, const elf, const debug = try add_krnl(b, arch, target, optimize);
-    const stage2exe, const stage2step, const s2elf, const s2debug = try add_stage2(b, arch, target, optimize);
-    _ = stage2exe; // autofix
-    _ = stage2step; // autofix
-    _ = s2elf; // autofix
-    _ = s2debug; // autofix
+    // const stage2exe, const stage2step, const s2elf, const s2debug = try add_stage2(b, arch, target, optimize);
+    // _ = stage2exe; // autofix
+    // _ = stage2step; // autofix
+    // _ = s2elf; // autofix
+    // _ = s2debug; // autofix
     const imgstep, const imgFile = try add_img(b, arch, krnlstep, elf, debug);
 
     var cpu_flags = try std.ArrayList([]const u8).initCapacity(b.allocator, 12);
@@ -221,8 +221,10 @@ pub fn build(b: *Build) !void {
         switch (b.graph.host.result.os.tag) {
             .windows => qemu.addArgs(&.{ "-accel", "whpx" }),
             .linux => {
+                // cpu_flags.items[0] = "host";
                 qemu.addArgs(&.{ "-accel", "kvm" });
                 cpu_flags.appendAssumeCapacity("+x2apic");
+                // cpu_flags.appendAssumeCapacity("migratable=off");
             },
             .macos => qemu.addArgs(&.{ "-accel", "hvf" }),
             else => {},
@@ -231,7 +233,7 @@ pub fn build(b: *Build) !void {
 
     qemu.addArgs(&.{
         "-d",
-        "int,cpu_reset,guest_errors",
+        "int,guest_errors",
         "--no-reboot",
         // "--no-shutdown",
         // "-smp",
@@ -246,8 +248,10 @@ pub fn build(b: *Build) !void {
         // "pxb-pcie,id=pcie.1,bus_nr=1",
         // "-device",
         // "pcie-pci-bridge,id=pcie_pci_bridge1,bus=pcie.1",
-        "-serial",
-        "stdio",
+        // "-serial",
+        // "stdio",
+        // "-monitor",
+        // "stdio",
     });
 
     qemu.setCwd(b.path("test"));

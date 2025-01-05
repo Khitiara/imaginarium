@@ -60,7 +60,12 @@ pub fn AvlTree(
         }
 
         pub inline fn node_from_ref(ref: anytype) CopyPtrAttrs(@TypeOf(ref), .One, TreeNode) {
+            if (@typeInfo(@TypeOf(ref)) == .optional) return node_from_optional_ref(ref);
             return &@field(ref, field_name);
+        }
+
+        pub inline fn node_from_optional_ref(ref: anytype) CopyPtrAttrs(@TypeOf(ref), .One, TreeNode) {
+            return &@field(ref orelse return null, field_name);
         }
 
         pub inline fn ref_from_node(node: anytype) CopyPtrAttrs(@TypeOf(node), .One, T) {
@@ -218,7 +223,7 @@ pub fn AvlTree(
             return true;
         }
 
-        inline fn child_ptr(node: *TreeNode, comptime sign: comptime_int) *?*TreeNode {
+        inline fn child_ptr(node: anytype, comptime sign: comptime_int) CopyPtrAttrs(@TypeOf(node), .One, ?*TreeNode) {
             if (sign < 0) {
                 return &node.left;
             } else {
@@ -319,6 +324,19 @@ pub fn AvlTree(
             return null;
         }
 
+        /// insert a node at a parent node
+        pub fn insert_at(root: *?*TreeNode, parent: ?*T, sign: comptime_int, item: *T) void {
+            const n = node_from_ref(item);
+            const parent_node = node_from_optional_ref(parent);
+            if (parent_node) |p| {
+                child_ptr(p, sign).* = n;
+            } else {
+                root.* = n;
+            }
+            set_parent_and_balance(n, parent_node, 0);
+            rebalance_after_insert(root, n);
+        }
+
         fn swap_with_successor(root: *?*TreeNode, x: *TreeNode) struct { *TreeNode, bool } {
             var y = x.right.?;
 
@@ -383,23 +401,23 @@ pub fn AvlTree(
         pub fn remove(root: *?*TreeNode, item: *T) void {
             const n: *TreeNode = node_from_ref(item);
             var parent: ?*TreeNode, var left_deleted = if (n.left != null and n.right != null) swap_with_successor(root, n) else b: {
-                const child = n.left orelse n.right;
+                const c = n.left orelse n.right;
                 if (n.get_parent()) |p| {
-                    defer if (child) |c| {
-                        c.set_parent(p);
+                    defer if (c) |c1| {
+                        c1.set_parent(p);
                     };
                     if (n == p.left) {
-                        p.left = child;
+                        p.left = c;
                         break :b .{ p, true };
                     } else {
-                        p.right = child;
+                        p.right = c;
                         break :b .{ p, false };
                     }
                 } else {
-                    if (child) |c| {
-                        c.set_parent(null);
+                    if (c) |c1| {
+                        c1.set_parent(null);
                     }
-                    root.* = child;
+                    root.* = c;
                     return;
                 }
             };
@@ -412,12 +430,12 @@ pub fn AvlTree(
             if (child_ptr(n, sign).*) |c| {
                 var n2: *TreeNode = c;
                 while (true) {
-                    n2 = child_ptr(n2, -sign) orelse return n2;
+                    n2 = child_ptr(n2, -sign).* orelse return n2;
                 }
             } else {
-                var n1: *TreeNode = n;
+                var n1: *const TreeNode = n;
                 var n2: ?*TreeNode = n.get_parent();
-                while (n2 != null and n1 == child_ptr(n2.?, sign)) {
+                while (n2 != null and n1 == child_ptr(n2.?, sign).*) {
                     n1 = n2.?;
                     n2 = n1.get_parent();
                 }
@@ -425,30 +443,38 @@ pub fn AvlTree(
             }
         }
 
-        pub fn next(n: *const T) ?*const T {
+        pub fn move(n: *const T, sign: comptime_int) ?*const T {
+            return ref_from_optional_node(move_in_order(node_from_ref(n), sign));
+        }
+
+        pub fn next(n: *const T) ?*T {
             return ref_from_optional_node(move_in_order(node_from_ref(n), 1));
         }
 
-        pub fn prev(n: *const T) ?*const T {
+        pub fn prev(n: *const T) ?*T {
             return ref_from_optional_node(move_in_order(node_from_ref(n), -1));
         }
 
-        fn extreme_in_order(root: *?*TreeNode, sign: comptime_int) ?*const T {
+        pub fn extreme_in_order(root: *const ?*TreeNode, sign: comptime_int) ?*T {
             var n: ?*TreeNode = root.*;
             var n2: ?*TreeNode = n;
             while (n) |node| {
                 n2 = node;
-                n = child_ptr(node, sign);
+                n = child_ptr(node, sign).*;
             }
             return ref_from_optional_node(n2);
         }
 
-        pub fn first(root: *?*TreeNode) ?*const T {
+        pub fn first(root: *const ?*TreeNode) ?*T {
             return extreme_in_order(root, -1);
         }
 
-        pub fn last(root: *?*TreeNode) ?*const T {
+        pub fn last(root: *const ?*TreeNode) ?*T {
             return extreme_in_order(root, 1);
+        }
+
+        pub fn child(item: *const T, sign: comptime_int) ?*T {
+            return ref_from_optional_node(child_ptr(node_from_ref(item), sign).*);
         }
 
         pub fn left(item: *const T) ?*T {
@@ -509,4 +535,36 @@ test "basic insert/remove" {
     try testing.expectEqual(&c.hook, root);
     try testing.expectEqual(&a, TestAvlTree.left(&c));
     try testing.expectEqual(null, TestAvlTree.right(&c));
+}
+
+test "iteration" {
+    var root: ?*TreeNode = null;
+    var a: TestAvlTreeNode = .{ .value = 0 };
+    var b: TestAvlTreeNode = .{ .value = 1 };
+    var c: TestAvlTreeNode = .{ .value = 2 };
+    var d: TestAvlTreeNode = .{ .value = 3 };
+    var e: TestAvlTreeNode = .{ .value = 4 };
+
+    {
+        var slc: [5]*TestAvlTreeNode = .{ &a, &b, &c, &d, &e };
+        var rand = std.Random.DefaultPrng.init(std.testing.random_seed);
+        const r = rand.random();
+        std.Random.shuffle(r, *TestAvlTreeNode, &slc);
+        for (&slc) |item| {
+            _ = TestAvlTree.fetch_insert(&root, item);
+        }
+    }
+
+    var iter = TestAvlTree.first(&root);
+    try testing.expectEqual(&a, iter);
+    iter = TestAvlTree.next(iter.?);
+    try testing.expectEqual(&b, iter);
+    iter = TestAvlTree.next(iter.?);
+    try testing.expectEqual(&c, iter);
+    iter = TestAvlTree.next(iter.?);
+    try testing.expectEqual(&d, iter);
+    iter = TestAvlTree.next(iter.?);
+    try testing.expectEqual(&e, iter);
+    iter = TestAvlTree.next(iter.?);
+    try testing.expectEqual(null, iter);
 }

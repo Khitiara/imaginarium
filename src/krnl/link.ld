@@ -16,7 +16,7 @@ SECTIONS
 {
     . = -2048M; /* ok, why isnt G an allowed suffix in linkerscript lmao */
     __base__          = .;
-    . += 0x200000;
+    . += 0x100000;
 
     __kernel_begin__ = .;
     __kernel_init_begin__ = .;
@@ -43,7 +43,7 @@ SECTIONS
     .bss.stack (NOLOAD) : {
         . = ALIGN(16K);
         __bootstrap_stack_bottom__ = .;
-        . += 8M;
+        . += 64K;
         . = ALIGN(8);
         __bootstrap_stack_top__ = .;
     } :stk
@@ -57,6 +57,14 @@ SECTIONS
     . = ALIGN(4K);
     .data . : {
         *(.data*)
+        gdt = .;
+        QUAD(0x0000000000000000); /* null */
+        QUAD(0x00af9b000000ffff); /* 64-bit code */
+        QUAD(0x00af93000000ffff); /* 64-bit data */
+        QUAD(0x00affb000000ffff); /* usermode 64-bit code */
+        QUAD(0x00aff3000000ffff); /* usermode 64-bit data */
+        tss_ldt = .;
+        . += 16;
     } :data
 
     . = ALIGN(8);

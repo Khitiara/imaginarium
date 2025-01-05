@@ -28,7 +28,7 @@ pub const cc: @import("std").builtin.CallingConvention = types.cc;
 pub const ptr_from_physaddr = pmm.ptr_from_physaddr;
 pub const physaddr_from_ptr = pmm.physaddr_from_ptr;
 
-pub fn puts(bytes: []const u8) void {
+pub inline fn puts(bytes: []const u8) void {
     for (bytes) |b| {
         serial.out(0xE9, b);
     }

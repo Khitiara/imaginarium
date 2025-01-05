@@ -71,6 +71,9 @@ pub const std_options: std.Options = .{
     .log_level = .debug,
     .crypto_always_getrandom = true,
     .cryptoRandomSeed = arch.rand.fill_secure,
+    .log_scope_levels = &.{
+        .{ .scope = .@"mm.init", .level = .debug },
+    },
 };
 
 /// the true entry point is __kstart and is exported by global asm in `hal/arch/{arch}/init.zig`

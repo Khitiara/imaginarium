@@ -10,6 +10,29 @@
 //! - a physical memory map with free locations properly marked
 //! - a higher-half direct map which must map at least all general
 //!     purpose usable physical memory
+//!
+//! the bootstrapping process works in stages:
+//! 1. new page tables are allocated from the bootloader-provided HHDM, consisting of
+//!     mappings of the kernel and a recursive page table mapping with index 0x1F7/0o767.
+//!     physical pages are allocated from the largest memory map region of usable free
+//!     memory in the map provided by the bootloader.
+//! 2. new page tables are loaded and the page frame metadata database and its presence
+//!     bitmap are mapped using the recursive page tables, allocating page table storage
+//!     from the large free descriptor as in stage 1. all descriptors except the large
+//!     free descriptor are added to the pfm database in a bare state.
+//! 3. the remaining free pages of the large free descriptor are added to the pfm database,
+//!     and allocation is temporarily not possible. the pfm database entries for mapped
+//!     pages are filled out with back-pointers to their page table entries and any mapped
+//!     pages incorrectly in the free list are removed from the free list as safety for
+//!     bootloader memory maps that neglect to mark the mapping of the loaded kernel itself.
+//! 4. the pfm database is fully usable, and allocation of physical pages is now possible
+//!     from the pfm database free list. during this stage, framebuffers etc are mapped and
+//!     data structures relevant to the implementation of nonpaged allocator pools are
+//!     created and initialized as needed
+//! after stage 4 completes, processor control blocks etc can be allocated and a general-
+//! purpose allocator initialized on top of the nonpaged pool. all functions of the memory
+//! manager are then accessible except for paged pool, which relies on filesystem init to
+//! manage swapfiles.
 
 const std = @import("std");
 const pte = @import("pte.zig");
@@ -34,6 +57,8 @@ const EarlyMemoryProbe = struct {
     free_page_count: usize,
 };
 
+var bootstrap_stage: u4 = 0;
+
 /// does an initial probe of the memory map from the bootloader.
 /// in doing so, we identify the descriptor describing the largest block of free memory
 /// from which the PFMDB and first PTEs will be allocated. in addition the maximum
@@ -47,7 +72,7 @@ fn early_probe_memory_map(mm: []MemoryDescriptor) linksection(".init") EarlyMemo
     var highest_phys_page: Pfi = 0;
     var e: *MemoryDescriptor = undefined;
     for (mm, 0..) |*entry, i| {
-        log.debug("Memory Descriptor {d}: Type {s} Base {x} Pages {x}", .{ i, @tagName(entry.memory_kind), entry.base_page, entry.page_count });
+        log.debug("[STAGE {d}]: Memory Descriptor {d}: Type {s} Base {x} Pages {x}", .{ bootstrap_stage, i, @tagName(entry.memory_kind), entry.base_page, entry.page_count });
         if (entry.memory_kind != .bad_memory) {
             phys_page_count += entry.page_count;
         }
@@ -100,8 +125,9 @@ var valid_pte: Pte linksection(".init") = .{
         .write_through = false,
         .cache_disable = true,
         .pat_size = false,
-        .global = true,
+        .global = false,
         .copy_on_write = false,
+        .sw_dirty = false,
         .addr = .{ .pfi = 0 },
         .pk = 0,
         .xd = false,
@@ -149,25 +175,28 @@ inline fn create_or_access_pxe(entry: *Pte) linksection(".init") pte.PageTable {
 fn bootstrap_direct_map_region(start_virt: Pfi, start_phys: Pfi, end_phys: Pfi, lvl4_tbl: pte.PageTable) linksection(".init") void {
     var virt: PfiBreakdown = .{ .pfi = start_virt };
     var phys: Pfi = start_phys;
-    while (phys < end_phys) : ({
+    while (phys <= end_phys) : ({
         phys += 1;
         virt.pfi += 1;
     }) {
         const pp = create_or_access_pxe(&lvl4_tbl[virt.breakdown.pxe]);
         const pd = create_or_access_pxe(&pp[virt.breakdown.ppe]);
         // if we can large page then large page
-        if (std.mem.isAligned(virt.pfi, 512) and std.mem.isAligned(phys, 512) and end_phys - phys >= 512) {
-            valid_pte.valid.addr.pfi = phys;
-            valid_pte.valid.pat_size = true;
-            pd[virt.breakdown.pde] = valid_pte;
-            valid_pte.valid.pat_size = false;
-            phys += 511;
-            virt.pfi += 511;
-            continue;
-        }
+        // if (std.mem.isAligned(virt.pfi, 512) and std.mem.isAligned(phys, 512) and end_phys - phys >= 512) {
+        //     valid_pte.valid.addr.pfi = phys;
+        //     valid_pte.valid.pat_size = true;
+        //     pd[virt.breakdown.pde] = valid_pte;
+        //     valid_pte.valid.pat_size = false;
+        //     phys += 511;
+        //     virt.pfi += 511;
+        //     continue;
+        // }
+        // log.debug("mapped page {x} to {x}", .{phys, virt.pfi});
         const pt = create_or_access_pxe(&pd[virt.breakdown.pde]);
+        valid_pte.valid.global = true;
         valid_pte.valid.addr.pfi = phys;
         pt[virt.breakdown.pte] = valid_pte;
+        valid_pte.valid.global = false;
     }
 }
 
@@ -189,10 +218,11 @@ fn init_mm_early() linksection(".init") !void {
     probe = early_probe_memory_map(memmap);
 
     log.info(
-        \\early memory map probe complete
+        \\[STAGE {[stage]d}]: early memory map probe complete
         \\    physical pages detected with indices {[min]x:0>[pfiwidth]}..{[max]x:0>[pfiwidth]}
         \\    for a total of {[total]x:0>[pfiwidth]} total and {[free]x:0>[pfiwidth]} free pages
     , .{
+        .stage = bootstrap_stage,
         .min = probe.lowest_phys_page,
         .max = probe.highest_phys_page,
         .total = probe.phys_page_count,
@@ -201,8 +231,8 @@ fn init_mm_early() linksection(".init") !void {
     });
 
     log.info(
-        "bootstrapping will use the block at base PFI {x} with length {x} pages",
-        .{ probe.large_free_descriptor.base_page, probe.large_free_descriptor.page_count },
+        "[STAGE {d}]: bootstrapping will use the block at base PFI {x} with length {x} pages",
+        .{ bootstrap_stage, probe.large_free_descriptor.base_page, probe.large_free_descriptor.page_count },
     );
 
     // make a temporary copy of the large free descriptor.
@@ -216,10 +246,13 @@ fn init_mm_early() linksection(".init") !void {
     // and is guaranteed safe because of the definition of the HHDM.
     hhdm = @alignCast(@ptrCast(boot.hhdm_base()));
 
+    log.info("[STAGE {d}]: bootstrapping will use HHDM with base {x} to access memory during stage 1", .{ bootstrap_stage, @intFromPtr(hhdm) });
+
     // * INITIAL PAGE TABLES *
 
     // setup our lvl4 table
     const lvl4_table_pfi = bootstrap_alloc_page();
+    log.debug("new lvl4 table at pfi {x}", .{lvl4_table_pfi});
     const lvl4_tbl: pte.PageTable = @ptrCast(&hhdm[lvl4_table_pfi]);
 
     // recursive page tables.
@@ -253,7 +286,7 @@ fn init_mm_early() linksection(".init") !void {
         }
     }
 
-    log.info("top level table created and all PXEs allocated", .{});
+    log.info("[STAGE {d}]: top level table created and all PXEs allocated", .{bootstrap_stage});
 
     // * ADD KERNEL MAPPINGS *
 
@@ -267,32 +300,53 @@ fn init_mm_early() linksection(".init") !void {
     const krnl_pde_idx_base = pxe_index_from_addr(krnl_location.kernel_virt_addr_base, 2);
     const krnl_pte_idx_base = pxe_index_from_addr(krnl_location.kernel_virt_addr_base, 1);
 
-    log.debug("kernel mapping is {x} pages ({x} pdes, {x} ppes) at base 177777_{o:0>3}_{o:0>3}_{o:0>3}_{o:0>3}_0000 (that's {x})", .{
-        krnl_ptes,
-        krnl_pdes,
-        krnl_ppes,
-        krnl_pxe_idx,
-        krnl_ppe_idx_base,
-        krnl_pde_idx_base,
-        krnl_pte_idx_base,
-        krnl_location.kernel_virt_addr_base & (~@as(usize, std.mem.page_size - 1)),
+    log.debug(
+        \\[STAGE {d}]: kernel mapping is {x} pages ({x} pdes, {x} ppes) at base 177777_{o:0>3}_{o:0>3}_{o:0>3}_{o:0>3}_0000 (that's {x})
+        \\    physical kernel base is {x}
+    , .{
+        bootstrap_stage,                                                            krnl_ptes,
+        krnl_pdes,                                                                  krnl_ppes,
+        krnl_pxe_idx,                                                               krnl_ppe_idx_base,
+        krnl_pde_idx_base,                                                          krnl_pte_idx_base,
+        krnl_location.kernel_virt_addr_base & (~@as(usize, std.mem.page_size - 1)), krnl_location.kernel_phys_addr_base,
     });
 
     const krnl_base_ppfi: Pfi = @intCast(krnl_location.kernel_phys_addr_base >> 12);
     const krnl_end_ppfi: Pfi = @intCast(krnl_base_ppfi + krnl_location.kernel_len_pages);
     bootstrap_direct_map_region(@truncate(krnl_location.kernel_virt_addr_base >> 12), krnl_base_ppfi, krnl_end_ppfi, lvl4_tbl);
 
-    log.info("kernel mappings created", .{});
+    log.info("[STAGE {d}]: kernel mappings created", .{bootstrap_stage});
+
+
+
+    // try dump_page_tables(lvl4_table_pfi);
+
+    var cr3 = arch.control_registers.read(.cr3);
+    // log.debug("OLD CR3: {x}", .{@as(usize, @bitCast(cr3))});
+
+    // try dump_page_tables(@intCast(cr3.pml45_base_addr));
+    cr3.pml45_base_addr = lvl4_table_pfi;
+    // log.debug("NEW CR3: {x}", .{@as(usize, @bitCast(cr3))});
+
+    arch.control_registers.write(.cr3, .{
+        .pcid = .{
+            .nopcid = .{
+                .pwt = false,
+                .pcd = true,
+            },
+        },
+        .pml45_base_addr = lvl4_table_pfi,
+        .permit_keep_tlb_pcide = false,
+    });
+
+    log.info("[STAGE {d}]: wrote CR3; stage 1 finished", .{bootstrap_stage});
 
     var cr4 = arch.control_registers.read(.cr4);
     cr4.pcide = false;
+    cr4.pge = true;
     arch.control_registers.write(.cr4, cr4);
 
-    var cr3 = arch.control_registers.read(.cr3);
-    cr3.pml45_base_addr = lvl4_table_pfi;
-    arch.control_registers.write(.cr3, cr3);
-
-    log.info("wrote CR3", .{});
+    log.info("[STAGE {d}]: wrote CR4 to disable PCIDE", .{bootstrap_stage});
 }
 
 inline fn startend_to_slice(comptime T: type, start: *T, end: *T) linksection(".init") []T {
@@ -324,13 +378,110 @@ fn late_bootstrap_alloc_block(base_virt: usize, size: usize) linksection(".init"
     const end = base_virt + size;
     late_bootstrap_map_ppes(base_virt, end);
     late_bootstrap_map_pdes(base_virt, end);
+    valid_pte.valid.global = true;
     late_bootstrap_map_ptes(base_virt, end);
+    valid_pte.valid.global = false;
 
     return @as([*]u8, @ptrFromInt(base_virt))[0..size];
 }
 
+var bootstrap_reclaimable_list: pfmdb.PfmList = .{ .associated_status = .invalid };
+
+fn bootstrap_add_descriptor_to_pfmdb(desc: *const MemoryDescriptor) linksection(".init") void {
+    switch (desc.memory_kind) {
+        .usable => {
+            // free memory.
+            var idx = desc.base_page + desc.page_count;
+            log.debug("[STAGE {d}]: marking as free descriptor with type {s} from {x}..{x}", .{ bootstrap_stage, @tagName(desc.memory_kind), desc.base_page, idx });
+            while (idx > desc.base_page) {
+                idx -= 1;
+                pfmdb.free_list.push(idx);
+            }
+        },
+        .bootloader_reclaimable => {
+            // bootloader-reclaimable memory.
+            // memory here is normal usable ram but is currently in-use and NOT mapped by our new page tables.
+            // therefore it can only be freed once we are done with the bootloader protocol features.
+            //
+            // e.g. somewhere in here is limine's ap bootstrapping stack and page tables so
+            // we cant free this now unless we want to do ap bootstrapping ourself
+            var idx = desc.base_page + desc.page_count;
+            log.debug("[STAGE {d}]: marking as temporarily invalid descriptor with type {s} from {x}..{x}", .{ bootstrap_stage, @tagName(desc.memory_kind), desc.base_page, idx });
+            while (idx > desc.base_page) {
+                idx -= 1;
+                bootstrap_reclaimable_list.push(idx);
+            }
+        },
+        .bootstrap_in_use, .loaded_image => {
+            var idx = desc.base_page + desc.page_count;
+            log.debug("[STAGE {d}]: marking as mapped descriptor with type {s} from {x}..{x}", .{ bootstrap_stage, @tagName(desc.memory_kind), desc.base_page, idx });
+            while (idx > desc.base_page) {
+                idx -= 1;
+                pfmdb.pfm_db[idx]._1.status = .mapped;
+            }
+        },
+        else => return, // neither active nor free so we leave it blank as if IO.
+    }
+    pfmdb.pfm_bitmap.setRangeValue(.{ .start = desc.base_page, .end = desc.base_page + desc.page_count }, true);
+}
+
+fn bootstrap_add_ptes_to_pfmdb() linksection(".init") void {}
+
+/// does the initial fill of the PFMdb. from the memory map
+fn bootstrap_fill_pfmdb() linksection(".init") void {
+    // loop through the memory map
+    for (boot.memmap) |*d| {
+        switch (d.memory_kind) {
+            .usable, .bootloader_reclaimable, .bootstrap_in_use, .loaded_image => {},
+            else => {
+                // skip anything that isnt memory we can use (either MMIO or acpi/firmware storage etc)
+                log.debug("[STAGE {d}]: skipping for pfmdb descriptor with type {s} from {x}..{x}", .{
+                    bootstrap_stage,
+                    @tagName(d.memory_kind),
+                    d.base_page,
+                    d.base_page + d.page_count,
+                });
+                continue;
+            },
+        }
+        // allocate and map the section of the PFMdb that we need for this block
+        // if its the free descriptor we've been allocating from then we still need to map it,
+        // including the PFMs for pages we've already allocated. therefore we use the backup descriptor
+        // for page mapping
+        const desc = if (d == tmp_desc) &backup_desc else d;
+        valid_pte.valid.global = true;
+        late_bootstrap_map_ptes(@intFromPtr(pfmdb.pfm_db + desc.base_page), @intFromPtr(pfmdb.pfm_db + desc.base_page + desc.page_count));
+        valid_pte.valid.global = false;
+
+        // if it isnt the backup descriptor then d wasnt the free descriptor and we can add the pages to the PFMdb.
+        // anything marked as loaded image by the bootloader gets included here and marked as active.
+        // if the kernel image isnt marked in the memory map then the secondary fill from the page tables ought
+        // to detect that and remove relevant pages from the free list but if its in the memory map we might as
+        // well skip that extra work later
+        if (desc != &backup_desc) {
+            bootstrap_add_descriptor_to_pfmdb(desc);
+        }
+    }
+
+    bootstrap_stage = 3;
+
+    // we are done using the tmp descriptor to allocate pages, so we can add remaining free pages to the pfmdb.
+    // this also adds them to the free list so we can use the pfmdb to allocate pages going forward anyway.
+    // this effectively marks the end of stage 2 of the mm bootstrapping
+    bootstrap_add_descriptor_to_pfmdb(tmp_desc);
+
+    // we need to add to the pfmdb the pages we allocated from the bootstrap descriptor too
+    var inuse_desc = backup_desc;
+    inuse_desc.memory_kind = .bootstrap_in_use;
+    inuse_desc.page_count = tmp_desc.base_page - backup_desc.base_page;
+    bootstrap_add_descriptor_to_pfmdb(&inuse_desc);
+    tmp_desc.* = backup_desc;
+
+    log.info("[STAGE {d}]: PFM db initialized without PTE info", .{bootstrap_stage});
+}
+
 // puts free pages into the PFMDB but only allocating for free blocks and for the bitmap
-fn bootstrap_init_pfmbd() linksection(".init") !void {
+fn bootstrap_init_pfmdb() linksection(".init") void {
 
     // the number of pages we need for the PFM db
     const pfm_allocation = b: {
@@ -340,29 +491,42 @@ fn bootstrap_init_pfmbd() linksection(".init") !void {
         break :b std.math.divCeil(usize, a, std.mem.page_size) catch unreachable;
     };
 
-    log.info("PFM db will need {x} pages ({x} page tables, {x} page directories, {x} page directory lists)", .{ pfm_allocation, pfm_allocation / 512, pfm_allocation / 512 / 512, pfm_allocation / 512 / 512 / 512 });
+    log.info("[STAGE {d}]: PFM db will need {x} pages ({x} page tables, {x} page directories, {x} page directory lists)", .{
+        bootstrap_stage,
+        pfm_allocation,
+        std.math.divCeil(usize, pfm_allocation, 512) catch unreachable,
+        std.math.divCeil(usize, pfm_allocation, 512 * 512) catch unreachable,
+        std.math.divCeil(usize, pfm_allocation, 512 * 512 * 512) catch unreachable,
+    });
 
-    const bitmap_bytes = probe.highest_phys_page / 8;
+    const bitmap_bytes = std.math.divCeil(usize, probe.highest_phys_page, 8) catch unreachable;
+    const bitmap_masks = std.mem.alignForward(usize, bitmap_bytes, 8);
 
     late_bootstrap_map_ppes(map.pfm_db_addr, map.pfm_db_addr + (pfm_allocation << 12));
-    log.debug("PFM ppes mapped", .{});
+    log.debug("[STAGE {d}]: PFM ppes mapped", .{bootstrap_stage});
     late_bootstrap_map_pdes(map.pfm_db_addr, map.pfm_db_addr + (pfm_allocation << 12));
-    log.debug("PFM pdes mapped", .{});
+    log.debug("[STAGE {d}]: PFM pdes mapped", .{bootstrap_stage});
 
-    _ = late_bootstrap_alloc_block(map.pfm_map_tracking_addr, bitmap_bytes);
-    log.debug("PFM bitmap ptes mapped", .{});
+    _ = late_bootstrap_alloc_block(map.pfm_map_tracking_addr, bitmap_masks);
+    pfmdb.pfm_bitmap.bit_length = probe.highest_phys_page + 1;
+    log.debug("[STAGE {d}]: PFM bitmap ptes mapped", .{bootstrap_stage});
+
+    bootstrap_fill_pfmdb();
 }
 
 noinline fn init_mm_impl() linksection(".init") !void {
+    bootstrap_stage = 1;
     // do early page table things
     try init_mm_early();
+
+    bootstrap_stage = 2;
     // ok now the new page tables are loaded.
     // therefore, we MUST NOT use hhdm after this point.
     // bootloader reclaimable memory is also unmapped now,
     // but everything we care about from there is copied into
     // variables in kernel space.
 
-    try bootstrap_init_pfmbd();
+    bootstrap_init_pfmdb();
 }
 
 /// initialize the memory manager.
@@ -373,4 +537,43 @@ noinline fn init_mm_impl() linksection(".init") !void {
 /// reclaimed. in addition, the entire `.init` section will be reclaimed.
 pub fn init_mm() !void {
     try init_mm_impl();
+}
+
+pub fn dump_page_tables(lvl4: Pfi) !void {
+    const lvl4_tbl: pte.PageTable = @ptrCast(&hhdm[lvl4]);
+    log.debug("DUMPING PAGE TABLES", .{});
+    const writer = arch.SerialWriter.writer();
+    try writer.print("CR3: {x}\n", .{lvl4});
+    for (lvl4_tbl, 0..) |pxe, x| {
+        if (pxe.unknown.present) {
+            try writer.print("    [{o:0>3}]: ", .{x});
+            try writer.print("{x}\n", .{pxe.valid.addr.pfi});
+            if (x == 0x1F7) {
+                try writer.print("        RECURSIVE\n", .{});
+            } else {
+                for (@as(pte.PageTable, @ptrCast(bootstrap_access_pte(pxe))), 0..) |ppe, p| {
+                    if (ppe.unknown.present) {
+                        try writer.print("        [{o:0>3}]: ", .{p});
+                        try writer.print("{x}\n", .{ppe.valid.addr.pfi});
+                        for (@as(pte.PageTable, @ptrCast(bootstrap_access_pte(ppe))), 0..) |pde, d| {
+                            if (pde.unknown.present) {
+                                try writer.print("            [{o:0>3}]: ", .{d});
+                                try writer.print("{x}\n", .{pde.valid.addr.pfi});
+                                for (@as(pte.PageTable, @ptrCast(bootstrap_access_pte(pde))), 0..) |pg, t| {
+                                    if (pg.unknown.present) {
+                                        try writer.print("                [{o:0>3}]: ", .{t});
+                                        try writer.print("{x}\n", .{pg.valid.addr.pfi});
+                                    } else {
+                                        // try writer.writeAll("not present\n");
+                                    }
+                                }
+                            } else {
+                                // try writer.writeAll("not present\n");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

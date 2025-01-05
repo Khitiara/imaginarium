@@ -30,27 +30,33 @@ pub fn platform_init() !void {
     log.info("bootloader-provided system info duplicated to managed memory", .{});
     gdt.setup_gdt();
     log.info("gdt setup and loaded", .{});
+    interrupts.init();
+    log.info("interrupt table initialized", .{});
+    idt.load();
+    log.info("interrupt table loaded", .{});
     hypervisor.init();
     log.info("checked svm information, hypervisor presence: {}", .{hypervisor.present});
+
+    try hal.mm.mminit.init_mm();
+    log.info("memory manager initialized through stage 4", .{});
+    time.init_timing();
+    log.info("timekeeping initialized", .{});
+}
+
+pub fn platform_init1() !void {
     const paging_feats = paging.enumerate_paging_features();
     log.info("physical addr width: {d} (0x{x} pages)", .{ paging_feats.maxphyaddr, @as(u64, 1) << @truncate(paging_feats.maxphyaddr - 12) });
     log.info("linear addr width: {d}", .{paging_feats.linear_address_width});
     log.info("1g pages: {}; global pages: {}; lvl5 paging: {}", .{ paging_feats.gigabyte_pages, paging_feats.global_page_support, paging_feats.five_level_paging });
 
-    try hal.mm.mminit.init_mm();
-
     const memmap = @import("../../boot/boot_info.zig").memmap;
 
     pmm.init(paging_feats.maxphyaddr, memmap);
     log.info("initialized lower phys memory", .{});
-    interrupts.init();
-    log.info("interrupt table initialized", .{});
+    log.info("disabling 8259 PIC", .{});
+    interrupts.disable_8259pic();
     try vmm.init(memmap);
     log.info("vmm initialized", .{});
-    time.init_timing();
-    log.info("timekeeping initialized", .{});
-    idt.load();
-    log.info("interrupt table loaded", .{});
     var cr4 = control_registers.read(.cr4);
     cr4.osfxsr = true;
     control_registers.write(.cr4, cr4);
