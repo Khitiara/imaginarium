@@ -93,7 +93,10 @@ pub var rsdp_addr: PhysAddr = undefined;
 var system_info_buffer: [2 * 4096]u8 = undefined;
 var system_info_alloc: std.heap.FixedBufferAllocator = .init(&system_info_buffer);
 
-pub fn dupe_bootloader_data() !void {
+pub noinline fn dupe_bootloader_data() !void {
+    if(config.boot_protocol == .limine) {
+        limine_reqs.fix_optimizations();
+    }
     const alloc = system_info_alloc.allocator();
     {
         const raw_mm = get_raw_memory_map();

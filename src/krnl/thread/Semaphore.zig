@@ -7,7 +7,7 @@ const hal = @import("../hal/hal.zig");
 const Semaphore = @This();
 
 permits: usize,
-spinlock: @import("../hal/SpinLock.zig") = .{},
+spinlock: hal.SpinLock = .{},
 wait_handle: dispatcher.WaitHandle = .{ .check_wait = &check_wait },
 decrement_dpc: ?*dispatcher.Dpc = null,
 

@@ -8,7 +8,7 @@ const QueuedSpinlock = @import("../hal/QueuedSpinLock.zig");
 
 const Mutex = @This();
 
-spinlock: @import("../hal/SpinLock.zig") = .{},
+spinlock: @import("../hal/hal.zig").SpinLock = .{},
 wait_handle: dispatcher.WaitHandle = .{ .check_wait = &check_wait },
 state: std.atomic.Value(u32) = std.atomic.Value(u32).init(unlocked),
 

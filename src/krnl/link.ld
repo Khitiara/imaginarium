@@ -23,6 +23,24 @@ SECTIONS
     .init . : {
         *(.init*)
     } :init
+
+    . = ALIGN(8);
+    .limine . : {
+        QUAD(0xf6b8f4b39de7d1ae);
+        QUAD(0xfab91a6940fcb9cf);
+        QUAD(0x785c6ed015d3e316);
+        QUAD(0x181e920a7852b9d9);
+
+        QUAD(0xf9562b2d5c95a6c8);
+        QUAD(0x6a7b384944536bdc);
+        QUAD(3);
+
+        KEEP(*(.limine*));
+        . = ALIGN(8);
+        QUAD(0xadc0e0531bb10d03);
+        QUAD(0x9572709f31764c62);
+    } :init
+
     . = ALIGN(4K);
     __kernel_init_end__ = .;
 
@@ -65,23 +83,6 @@ SECTIONS
         QUAD(0x00aff3000000ffff); /* usermode 64-bit data */
         tss_ldt = .;
         . += 16;
-    } :data
-
-    . = ALIGN(8);
-    .limine . : {
-        QUAD(0xf6b8f4b39de7d1ae);
-        QUAD(0xfab91a6940fcb9cf);
-        QUAD(0x785c6ed015d3e316);
-        QUAD(0x181e920a7852b9d9);
-
-        QUAD(0xf9562b2d5c95a6c8);
-        QUAD(0x6a7b384944536bdc);
-        QUAD(3);
-
-        KEEP(*(.limine*));
-        . = ALIGN(8);
-        QUAD(0xadc0e0531bb10d03);
-        QUAD(0x9572709f31764c62);
     } :data
 
 /*

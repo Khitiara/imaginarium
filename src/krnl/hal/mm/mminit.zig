@@ -317,8 +317,6 @@ fn init_mm_early() linksection(".init") !void {
 
     log.info("[STAGE {d}]: kernel mappings created", .{bootstrap_stage});
 
-
-
     // try dump_page_tables(lvl4_table_pfi);
 
     var cr3 = arch.control_registers.read(.cr3);
@@ -425,7 +423,67 @@ fn bootstrap_add_descriptor_to_pfmdb(desc: *const MemoryDescriptor) linksection(
     pfmdb.pfm_bitmap.setRangeValue(.{ .start = desc.base_page, .end = desc.base_page + desc.page_count }, true);
 }
 
-fn bootstrap_add_ptes_to_pfmdb() linksection(".init") void {}
+var mapped_unexpected_pfis: usize = 0;
+
+inline fn add_pte_to_pfm(p: *pte.Pte) void {
+    // log.debug("adding pte addr {o} backlink to pfmdb", .{@intFromPtr(p)});
+    const pfm = pfmdb.pfm_for_pfi(p.valid.addr.pfi) orelse {
+        mapped_unexpected_pfis += 1;
+        return;
+    };
+    if (pfm._1.status == .mapped) {
+        pfm._0.pte = p;
+        pfm._1.refcnt = 1;
+        pfm._2.index = 0;
+        pfm._3.share_count += 1;
+        pfm._1.pte_table_pfi = map.pfi_from_pte(map.pte_from_addr(@intFromPtr(p))) orelse unreachable;
+    } else {
+        mapped_unexpected_pfis += 1;
+    }
+
+    const pde = map.pfi_from_pte(map.pde_from_addr(@intFromPtr(map.addr_from_pte(p)))) orelse unreachable;
+    (pfmdb.pfm_for_pfi(pde) orelse {
+        mapped_unexpected_pfis += 1;
+        return;
+    })._3.share_count += 1;
+}
+
+fn bootstrap_add_ptes_to_pfmdb() linksection(".init") void {
+    var count: usize = 0;
+    for (0..512) |i| {
+        const pxe = &map.pxe_base[i];
+        if (pxe.unknown.present) {
+            add_pte_to_pfm(pxe);
+            count += 1;
+            const pp: [*]pte.Pte = @ptrCast(map.ppe_from_addr(@intFromPtr(map.addr_from_pxe(pxe))));
+            for (0..512) |j| {
+                const ppe = &pp[j];
+                if (ppe.unknown.present) {
+                    add_pte_to_pfm(ppe);
+                    count += 1;
+                    const pd: [*]pte.Pte = @ptrCast(map.pde_from_addr(@intFromPtr(map.addr_from_ppe(ppe))));
+                    for (0..512) |k| {
+                        const pde = &pd[k];
+                        if (pde.unknown.present) {
+                            add_pte_to_pfm(pde);
+                            count += 1;
+                            const pt: [*]pte.Pte = @ptrCast(map.pte_from_addr(@intFromPtr(map.addr_from_pde(pde))));
+                            for (0..512) |l| {
+                                const pte_ = &pt[l];
+                                if (pte_.unknown.present) {
+                                    add_pte_to_pfm(pte_);
+                                    count += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    log.info("[STAGE {d}]: {d} PTE backlinks added to PFMdb ({d} in unexpected state)", .{ bootstrap_stage, count, mapped_unexpected_pfis });
+}
 
 /// does the initial fill of the PFMdb. from the memory map
 fn bootstrap_fill_pfmdb() linksection(".init") void {
@@ -512,6 +570,7 @@ fn bootstrap_init_pfmdb() linksection(".init") void {
     log.debug("[STAGE {d}]: PFM bitmap ptes mapped", .{bootstrap_stage});
 
     bootstrap_fill_pfmdb();
+    bootstrap_add_ptes_to_pfmdb();
 }
 
 noinline fn init_mm_impl() linksection(".init") !void {

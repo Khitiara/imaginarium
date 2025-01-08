@@ -61,11 +61,4 @@ fn locate_rsdp_efi() !PhysAddr {
     return error.NotFound;
 }
 
-fn locate_rsdp_limine() !PhysAddr {
-    if (@import("../../boot/limine_requests.zig").rsdp_request.response) |response| {
-        return response.address;
-    }
-    return try locate_rsdp_bios();
-}
-
-pub const locate_rsdp: fn () RsdpError!PhysAddr = if (@import("builtin").os.tag == .uefi or !@import("config").rsdp_search_bios) locate_rsdp_efi else if (@import("config").boot_protocol == .limine) locate_rsdp_limine else locate_rsdp_bios;
+pub const locate_rsdp: fn () RsdpError!PhysAddr = if (@import("builtin").os.tag == .uefi or !@import("config").rsdp_search_bios) locate_rsdp_efi else locate_rsdp_bios;

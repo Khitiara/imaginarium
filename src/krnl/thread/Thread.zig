@@ -142,8 +142,6 @@ pub fn setup_stack(self: *Thread, allocator: std.mem.Allocator, thread_start: *c
     frame.eflags.interrupt_enable = true;
     frame.cs = arch.gdt.selectors.kernel_code;
     frame.ss = arch.gdt.selectors.kernel_data;
-    frame.fs = arch.gdt.selectors.kernel_data;
-    frame.gs = arch.gdt.selectors.kernel_data;
 }
 
 pub fn deinit(self: *Thread, allocator: std.mem.Allocator) void {

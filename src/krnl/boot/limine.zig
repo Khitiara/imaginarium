@@ -252,8 +252,13 @@ const X86SmpInfo = extern struct {
     extra_argument: u64,
 };
 
-const X86SmpFlags = packed struct(u64) {
+const X86SmpFlags = packed struct(u32) {
     x2apic: bool,
+    _: u31 = 0,
+};
+
+const X86SmpRequestFlags = packed struct(u64) {
+    x2apic: bool = false,
     _: u63 = 0,
 };
 
@@ -326,6 +331,12 @@ pub const SmpFlags = switch (arch) {
     .riscv64 => RiscVSmpFlags,
 };
 
+pub const SmpRequestFlags = switch (arch) {
+    .x86_64 => X86SmpRequestFlags,
+    .aarch64 => u64,
+    .riscv64 => u64,
+};
+
 pub const SmpResponse = switch (arch) {
     .x86_64 => X86SmpResponse,
     .aarch64 => AArch64SmpResponse,
@@ -336,7 +347,7 @@ pub const SmpRequest = extern struct {
     id: [4]u64 = magic(0x95a67b819a1b857e, 0xa0b61b723b6a73e0),
     revision: u64 = 0,
     response: ?*SmpResponse = null,
-    flags: u64 = 0,
+    flags: SmpRequestFlags = .{},
 };
 
 // Memory map

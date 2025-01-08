@@ -39,9 +39,22 @@ pub const VirtualAddressBlockDetails = union(enum) {
 
 pub const VirtualAddressBlockTree = tree.AvlTree(VirtualAddressBlock, "hook", struct {
     pub fn cmp(_: @This(), lhs: *const VirtualAddressBlock, rhs: *const VirtualAddressBlock) Order {
-        return std.math.order(lhs.start_addr, rhs.start_addr);
+        if (lhs.start_addr > rhs.end_addr) return .gt;
+        if (rhs.start_addr > lhs.end_addr) return .lt;
+        return .eq;
     }
 });
+const Range = struct {
+    s: usize,
+    e: usize,
+};
+const RangeAdapter = struct {
+    pub fn cmp(_: @This(), lhs: Range, rhs: *VirtualAddressBlock) Order {
+        if (lhs.s > rhs.end_addr) return .gt;
+        if (rhs.base_addr > lhs.e) return .lt;
+        return .eq;
+    }
+};
 
 comptime base_address: usize = 0,
 comptime top_address: usize = 0,
@@ -198,28 +211,43 @@ pub fn check_block_conflict(self: *VirtualAddressPool, start_addr: usize, end_ad
     }
     const start_page = start_addr / std.mem.page_size;
     const end_page = std.math.divCeil(usize, end_addr, std.mem.page_size) catch unreachable;
-    var node: ?*VirtualAddressBlock = VirtualAddressBlockTree.ref_from_optional_node(self.root);
-    var parent: *VirtualAddressBlock = undefined;
-    assert(node != null);
-    while (node) |n| {
-        parent = n;
-        if (n.end_addr < start_page) {
-            node = VirtualAddressBlockTree.right(n);
-        } else if (n.start_addr > end_page) {
-            node = VirtualAddressBlockTree.left(n);
-        } else {
-            return .{
-                .conflict = n,
-            };
-        }
-    }
-    return .{
-        .no_conflict = .{
-            .base_address = start_addr,
-            .parent = parent,
-            .insert_right = start_page > parent.end_addr,
+
+    const range: Range = .{ .s = start_page, .e = end_page };
+    switch (VirtualAddressBlockTree.lookup_or_insert_position_adapted(&self.root, range, @as(RangeAdapter, undefined))) {
+        .found => |n| return .{
+            .conflict = n,
         },
-    };
+        .iunsert_pos => |p| return .{
+            .no_conflict = .{
+                .base_address = start_addr,
+                .parent = p.parent,
+                .insert_right = p.right,
+            },
+        },
+    }
+
+    // var node: ?*VirtualAddressBlock = VirtualAddressBlockTree.ref_from_optional_node(self.root);
+    // var parent: *VirtualAddressBlock = undefined;
+    // assert(node != null);
+    // while (node) |n| {
+    //     parent = n;
+    //     if (n.end_addr < start_page) {
+    //         node = VirtualAddressBlockTree.right(n);
+    //     } else if (n.start_addr > end_page) {
+    //         node = VirtualAddressBlockTree.left(n);
+    //     } else {
+    //         return .{
+    //             .conflict = n,
+    //         };
+    //     }
+    // }
+    // return .{
+    //     .no_conflict = .{
+    //         .base_address = start_addr,
+    //         .parent = parent,
+    //         .insert_right = start_page > parent.end_addr,
+    //     },
+    // };
 }
 
 /// INTERNAL

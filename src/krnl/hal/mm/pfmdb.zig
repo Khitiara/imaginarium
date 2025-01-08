@@ -2,6 +2,8 @@ const std = @import("std");
 const cmn = @import("cmn");
 const pte = @import("pte.zig");
 const hal = @import("../hal.zig");
+const SpinLock = hal.SpinLock;
+const QueuedSpinLock = hal.QueuedSpinLock;
 const map = @import("map.zig");
 
 const MaxSupportedPhysAddrWidth = 48;
@@ -88,14 +90,23 @@ pub const PfmList = struct {
     last: Pfi = terminator,
     count: usize = 0,
     associated_status: PfmStatus,
-    lock: hal.QueuedSpinLock = .{},
+    lock: QueuedSpinLock = .{},
 
     pub const terminator: Pfi = std.math.maxInt(Pfi);
 
     pub fn push(self: *PfmList, pfi: Pfi) void {
-        // TODO: locking
+        var tok: QueuedSpinLock.Token = undefined;
+        self.lock.lock(&tok);
+        defer tok.unlock();
+
         self.count += 1;
         const pfm = &pfm_db[pfi];
+
+        pfm._0.lock.lock_unsafe();
+        defer pfm._0.lock.unlock_unsafe();
+
+        pfm._1.alloc_start = false;
+        pfm._1.alloc_end = false;
         pfm._1.status = self.associated_status;
         pfm._3.flink.next = terminator;
         if (self.last != terminator) {
@@ -108,17 +119,31 @@ pub const PfmList = struct {
         self.last = pfi;
     }
 
-    pub fn pop_internal(self: *PfmList) Pfi {
-        // TODO: locking
+    pub fn pop(self: *PfmList) Pfi {
+        var tok: QueuedSpinLock.Token = undefined;
+        self.lock.lock(&tok);
+        defer tok.unlock();
+
         const pfi = self.first;
         remove_internal(self, pfi);
         return pfi;
     }
 
-    pub fn remove_internal(self: *PfmList, pfi: Pfi) void {
-        // TODO: locking
+    pub fn remove(self: *PfmList, pfi: Pfi) void {
+        var tok: QueuedSpinLock.Token = undefined;
+        self.lock.lock(&tok);
+        defer tok.unlock();
+
+        remove_internal(self, pfi);
+    }
+
+    fn remove_internal(self: *PfmList, pfi: Pfi) void {
         self.count -= 1;
         const pfm = &pfm_db[pfi];
+
+        pfm._0.lock.lock_unsafe();
+        defer pfm._0.lock.unlock_unsafe();
+
         const prev = pfm._2.blink.prev;
         const next = pfm._3.flink.next;
         if (prev != terminator) {
@@ -149,7 +174,7 @@ pub const PfmPageSize = enum(u2) {
 
 /// Physical Page Metadata
 pub const Pfm = extern struct {
-    _0: packed union {
+    _0: extern union {
         /// a pointer to the page table entry pointing to this physical page.
         /// if this physical page is currently mapped as part of a large page,
         /// this PTE will point back to an early physical page (rounding the
@@ -158,16 +183,15 @@ pub const Pfm = extern struct {
         pte: ?*pte.Pte,
         /// as the pte pointer must be aligned to a usize boundary, we are
         /// guaranteed 2 or 3 free bits on 32- and 64-bit targets respectively.
-        /// the lowest of those free bits is used as a lock bit for an atomic
-        /// bts operation equivalent to an embedded spinlock.
-        lock: packed struct(usize) {
-            lock_bit: u1,
-            _: std.meta.Int(.unsigned, @bitSizeOf(usize) - 1),
-        },
+        /// the lowest of those free bits is used as a lock bit for a spinlock.
+        /// the SpinLock implementation uses bit operations that should not
+        /// modify the
+        lock: SpinLock,
+        long: usize,
     },
     _1: packed struct(usize) {
-        /// the size of the virtual page
-        page_size: PfmPageSize,
+        alloc_start: bool,
+        alloc_end: bool,
         /// the general page status, indicating also which list the page is in if any
         status: PfmStatus,
         /// the page frame index of the table containing the page table entry
@@ -181,7 +205,7 @@ pub const Pfm = extern struct {
         /// share_count is greater than 0.
         refcnt: u16,
     },
-    _2: packed union {
+    _2: extern union {
         blink: packed struct(usize) {
             /// the index of the previous page in whichever list this page is part of.
             prev: Pfi,
@@ -195,7 +219,7 @@ pub const Pfm = extern struct {
         /// an event to be signaled when IO to resolve a fault on this page is completed
         io_evt: *@import("../../thread/Event.zig"),
     },
-    _3: packed union {
+    _3: extern union {
         flink: packed struct(usize) {
             /// the index of the next page in whichever list this page is part of
             next: Pfi,
@@ -210,7 +234,8 @@ pub const Pfm = extern struct {
         return Pfm{
             ._0 = .{ .pte = null },
             ._1 = .{
-                .page_size = .small,
+                .alloc_start = false,
+                .alloc_end = false,
                 .status = .unsuitable_for_general_purpose,
                 .pte_table_pfi = 0,
                 .pat_index = 0,

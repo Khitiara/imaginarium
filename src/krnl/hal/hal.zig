@@ -5,7 +5,7 @@ pub const arch = @import("arch/arch.zig");
 pub const pci = @import("pci/pci.zig");
 pub const mm = @import("mm/mm.zig");
 pub const apic = @import("apic/apic.zig");
-pub const SpinLock = @import("SpinLock.zig");
+pub const SpinLock = @import("spin_lock.zig").SpinLock;
 pub const QueuedSpinLock = @import("QueuedSpinLock.zig");
 
 pub const InterruptRequestPriority = enum(u4) {

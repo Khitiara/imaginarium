@@ -62,7 +62,7 @@ pub fn pte_from_addr(addr: usize) *pte.Pte {
 }
 
 /// get the address of the page pointed to by this PTE
-pub fn addr_from_pte(e: *pte.Pte) *align(4096) [4096]u8 {
+pub fn addr_from_pte(e: *const pte.Pte) *align(4096) [4096]u8 {
     return @ptrFromInt(@as(usize, @bitCast((@as(isize, @bitCast(@intFromPtr(e))) << 25) >> 16)));
 }
 
@@ -72,7 +72,7 @@ pub fn pde_from_addr(addr: usize) *pte.Pte {
 
 /// get the address of the page pointed to by this PDE
 /// BE AWARE this is NOT the page table the pde points to directly, this is the ACTUAL PAGE
-pub fn addr_from_pde(e: *pte.Pte) *align(4096) [4096]u8 {
+pub fn addr_from_pde(e: *const pte.Pte) *align(4096) [4096]u8 {
     return @ptrFromInt(@as(usize, @bitCast((@as(isize, @bitCast(@intFromPtr(e))) << 34) >> 16)));
 }
 
@@ -82,7 +82,7 @@ pub fn ppe_from_addr(addr: usize) *pte.Pte {
 
 /// get the address of the page pointed to by this PPE
 /// BE AWARE this is NOT the page directory the ppe points to directly, this is the ACTUAL PAGE
-pub fn addr_from_ppe(e: *pte.Pte) *align(4096) [4096]u8 {
+pub fn addr_from_ppe(e: *const pte.Pte) *align(4096) [4096]u8 {
     return @ptrFromInt(@as(usize, @bitCast((@as(isize, @bitCast(@intFromPtr(e))) << 43) >> 16)));
 }
 
@@ -92,6 +92,10 @@ pub fn pxe_from_addr(addr: usize) *pte.Pte {
 
 /// get the address of the page pointed to by this PXE
 /// BE AWARE this is NOT the page directory table the pxe points to directly, this is the ACTUAL PAGE
-pub fn addr_from_pxe(e: *pte.Pte) *align(4096) [4096]u8 {
+pub fn addr_from_pxe(e: *const pte.Pte) *align(4096) [4096]u8 {
     return @ptrFromInt(@as(usize, @bitCast((@as(isize, @bitCast(@intFromPtr(e))) << 52) >> 16)));
+}
+
+pub fn pfi_from_pte(p: *const pte.Pte) ?pfmdb.Pfi {
+    return if(p.unknown.present) p.valid.addr.pfi else null;
 }

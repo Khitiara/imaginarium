@@ -12,4 +12,19 @@ pub export var paging_mode_req: limine.PagingModeRequest linksection(".limine.pa
     .min_mode = .four_level,
 };
 
+pub export var mp_request: limine.SmpRequest linksection(".limine.mp") = .{
+    .flags = .{ .x2apic = true },
+};
+
+pub fn fix_optimizations() void {
+    const doNotOptimizeAway = @import("std").mem.doNotOptimizeAway;
+    doNotOptimizeAway(&framebuffer_request);
+    doNotOptimizeAway(&memmap_request);
+    doNotOptimizeAway(&rsdp_request);
+    doNotOptimizeAway(&krnl_addr_request);
+    doNotOptimizeAway(&hhdm_request);
+    doNotOptimizeAway(&paging_mode_req);
+    doNotOptimizeAway(&mp_request);
+}
+
 // pub export var krnl_file_request: limine.KernelFileRequest linksection(".limine.krnl_file") = .{};

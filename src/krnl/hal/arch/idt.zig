@@ -171,8 +171,6 @@ pub fn InterruptFrame(ErrorCode: type) type {
         cr3: crs(.cr3),
         cr2: crs(.cr2),
         cr0: crs(.cr0),
-        fs: descriptors.Selector align(8),
-        gs: descriptors.Selector align(8),
         registers: SavedRegisters align(8),
         vector: Interrupt align(8),
         error_code: ErrorCode,
@@ -189,7 +187,7 @@ pub fn InterruptFrame(ErrorCode: type) type {
                 \\     rsi={x:16} rdi={x:16} rbp={x:16} rsp={x:16}
                 \\     r08={x:16} r09={x:16} r10={x:16} r11={x:16}
                 \\     r12={x:16} r13={x:16} r14={x:16} r15={x:16}
-                \\     rip={x:16}  fs={x:16}  gs={x:16} flg={x:16}
+                \\     rip={x:16}                                           flg={x:16}
                 \\     cr0={x:0>8}         cr2={x:0>16} cr3={x:0>16} cr4={x:0>8}
                 \\  fsbase={x:16}                   gsbase={x:16}
             , .{
@@ -213,8 +211,6 @@ pub fn InterruptFrame(ErrorCode: type) type {
                 self.registers.r14,
                 self.registers.r15,
                 self.rip,
-                @as(u16, @bitCast(self.fs)),
-                @as(u16, @bitCast(self.gs)),
                 @as(u64, @bitCast(self.eflags)),
                 @as(u64, @bitCast(self.cr0)),
                 @as(u64, @bitCast(self.cr2)),
@@ -248,10 +244,6 @@ comptime {
     }
 
     const isr_setup: []const u8 = push ++ // push all the saved registers
-        \\      mov      %gs, %rax # push the fs and gs segment selectors
-        \\      pushq    %rax
-        \\      mov      %fs, %rax
-        \\      pushq    %rax
         \\      mov      %cr0, %rax # and the control registers
         \\      pushq    %rax
         \\      mov      %cr2, %rax
@@ -310,10 +302,6 @@ comptime {
         \\  __iret__:
         \\      swapgs   # and swap back out the kernel gs so we dont override it
         \\      add      $48, %rsp # skip the control registers
-        \\      popq     %rax # pop fs and gs segment selectors
-        \\      mov      %rax, %fs
-        \\      popq     %rax
-        // \\      mov      %rax, %gs
     ++ pop ++ // pop all the saved normal registers
         \\      add      $8, %rsp
         \\      movl     4(%rsp), %edx # pop FS_BASE

@@ -90,15 +90,37 @@ pub fn AvlTree(
 
         /// ctx must have a `fn cmp(self, @TypeOf(key), *const T) Order`
         pub fn lookup_adapted(root: *const ?*TreeNode, key: anytype, ctx: anytype) ?*T {
+            return switch (lookup_or_insert_position_adapted(root, key, ctx)) {
+                .found => |i| i,
+                .insert_pos => null,
+            };
+        }
+
+        /// ctx must have a `fn cmp(self, @TypeOf(key), *const T) Order`
+        /// returns the parent and which child to insert at for using `insert_at` in case no node is found
+        pub fn lookup_or_insert_position_adapted(root: *const ?*TreeNode, key: anytype, ctx: anytype) union(enum) {
+            found: *T,
+            insert_pos: struct {
+                parent: ?*T,
+                right: bool,
+            },
+        } {
             var cur = root.*;
+            var p: ?*TreeNode = null;
             while (cur) |c| {
+                p = c;
                 switch (ctx.cmp(key, ref_from_node(c))) {
                     .lt => cur = c.left,
                     .gt => cur = c.right,
-                    .eq => break,
+                    .eq => return .{ .found = ref_from_node(cur) },
                 }
             }
-            return ref_from_optional_node(cur);
+            return .{
+                .insert_pos = .{
+                    .parent = ref_from_optional_node(p),
+                    .right = if (p) |p1| ctx.cmp(key, ref_from_node(p1)) == .gt else false,
+                },
+            };
         }
 
         fn rebalance_after_insert(root: *?*TreeNode, item: *TreeNode) void {
