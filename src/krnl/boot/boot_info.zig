@@ -79,6 +79,7 @@ pub const VideoMode = struct {
 
 pub const Framebuffer = struct {
     phys_addr: PhysAddr,
+    base: ?[*]volatile u8,
     mode: VideoMode,
     edid: ?struct {
         size: u64,
@@ -94,7 +95,7 @@ var system_info_buffer: [2 * 4096]u8 = undefined;
 var system_info_alloc: std.heap.FixedBufferAllocator = .init(&system_info_buffer);
 
 pub noinline fn dupe_bootloader_data() !void {
-    if(config.boot_protocol == .limine) {
+    if (config.boot_protocol == .limine) {
         limine_reqs.fix_optimizations();
     }
     const alloc = system_info_alloc.allocator();
