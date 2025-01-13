@@ -244,41 +244,44 @@ comptime {
     }
 
     const isr_setup: []const u8 = push ++ // push all the saved registers
-        \\      mov      %cr0, %rax # and the control registers
-        \\      pushq    %rax
-        \\      mov      %cr2, %rax
-        \\      pushq    %rax
-        \\      mov      %cr3, %rax
-        \\      pushq    %rax
-        \\      mov      %cr4, %rax
-        \\      pushq    %rax
-        \\      movq     $0xC0000100, %rcx
+        \\      mov     %cr0, %rax # and the control registers
+        \\      pushq   %rax
+        \\      mov     %cr2, %rax
+        \\      pushq   %rax
+        \\      mov     %cr3, %rax
+        \\      pushq   %rax
+        \\      mov     %cr4, %rax
+        \\      pushq   %rax
+        \\      movq    $0xC0000100, %rcx # push FS_BASE
         \\      rdmsr
-        \\      pushq    %rax
-        \\      movl     %edx, 4(%rsp)
-        \\      movq     $0xC0000101, %rcx
+        \\      pushq   %rax
+        \\      movl    %edx, 4(%rsp)
+        \\      movq    $0xC0000101, %rcx # push GS_BASE
         \\      rdmsr
-        \\      pushq    %rax
-        \\      movl     %edx, 4(%rsp)
-        \\      swapgs   # we saved the gs register selector so its safe to swap in the kernel gs base
+        \\      pushq   %rax
+        \\      movl    %edx, 4(%rsp)
+    ++ "\n      testb   $1, " ++ std.fmt.comptimePrint("{d}", .{@offsetOf(RawInterruptFrame, "cs")}) ++ "(%rsp)\n" ++
+        \\      jz      1f
+        \\      swapgs
+        \\ 1:   cld
     ;
 
     const fake_isr: []const u8 =
         \\  .global __isr_spoof__;
         \\  .type __isr_spoof__, @function;
         \\  __isr__spoof__:
-        \\      pushq    %rdi # push the handler address. this will be right above the frame
-        \\      movq     %ss, %rdi
-        \\      pushq    %rdi # normal interrupt frame things
-        \\      movq     %rsp, %rdi
-        \\      addq     $8, %rdi
-        \\      pushq    %rdi
+        \\      pushq   %rdi # push the handler address. this will be right above the frame
+        \\      movq    %ss, %rdi
+        \\      pushq   %rdi # normal interrupt frame things
+        \\      movq    %rsp, %rdi
+        \\      addq    $8, %rdi
+        \\      pushq   %rdi
         \\      pushfq
-        \\      movq     %cs, %rdi
-        \\      pushq    %rdi
-        \\      pushq    %rsi
-        \\      pushq    $0 # no error code
-        \\      pushq    $0x20 # use vector 0x20 to set the IRQL if the handler uses the normal bits
+        \\      movq    %cs, %rdi
+        \\      pushq   %rdi
+        \\      pushq   %rsi
+        \\      pushq   $0 # no error code
+        \\      pushq   $0x20 # use vector 0x20 to set the IRQL if the handler uses the normal bits
     ++ isr_setup
     // movq sizeOf(interrupt_frame)(%rsp), %rdx ; all the pushes we made will place the target handler to just above the frame
     ++ "\n      movq   " ++ std.fmt.comptimePrint("{d}", .{@sizeOf(RawInterruptFrame)}) ++ "(%rsp), %rdx\n" ++
@@ -300,7 +303,10 @@ comptime {
         \\  .global __iret__;
         \\  .type __iret__, @function;
         \\  __iret__:
-        \\      swapgs   # and swap back out the kernel gs so we dont override it
+    ++ "\n      testb   $1, " ++ std.fmt.comptimePrint("{d}", .{@offsetOf(RawInterruptFrame, "cs")}) ++ "(%rsp)\n" ++
+        \\      jz      2f
+        \\      swapgs
+        \\ 2:   cld
         \\      add      $48, %rsp # skip the control registers
     ++ pop ++ // pop all the saved normal registers
         \\      add      $8, %rsp
