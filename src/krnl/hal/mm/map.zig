@@ -57,6 +57,8 @@ pub const pxe_selfmap: *pte.Pte = @ptrFromInt(pxe_selfmap_addr);
 
 pub const syspte_space: [*]pte.Pte = @ptrCast(pte_from_addr(0xFFFF_FC00_0000_0000));
 
+pub const prcbs: [*]@import("../../smp.zig").LcbWrapper = @ptrFromInt(0xFFFF_FCFF_C000_0000);
+
 pub fn pte_from_addr(addr: usize) *pte.Pte {
     return &pte_base[entry_index(addr, 1)];
 }

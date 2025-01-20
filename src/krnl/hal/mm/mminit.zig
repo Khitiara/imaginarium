@@ -118,7 +118,7 @@ fn bootstrap_alloc_page() linksection(".init") Pfi {
     return pfi;
 }
 
-var valid_pte: Pte linksection(".init") = .{
+pub var valid_pte: Pte = .{
     .valid = .{
         .writable = true,
         .user_mode = false,
@@ -312,7 +312,7 @@ fn init_mm_early() linksection(".init") !void {
     });
 
     const krnl_base_ppfi: Pfi = @intCast(krnl_location.kernel_phys_addr_base >> 12);
-    const krnl_end_ppfi: Pfi = @intCast(krnl_base_ppfi + krnl_location.kernel_len_pages);
+    const krnl_end_ppfi: Pfi = @intCast(krnl_base_ppfi + krnl_location.kernel_len_pages - 1);
     bootstrap_direct_map_region(@truncate(krnl_location.kernel_virt_addr_base >> 12), krnl_base_ppfi, krnl_end_ppfi, lvl4_tbl);
 
     log.info("[STAGE {d}]: kernel mappings created", .{bootstrap_stage});
@@ -372,7 +372,7 @@ const late_bootstrap_map_ppes = make_tbl_mapper(map.ppe_from_addr);
 const late_bootstrap_map_pdes = make_tbl_mapper(map.pde_from_addr);
 const late_bootstrap_map_ptes = make_tbl_mapper(map.pte_from_addr);
 
-fn late_bootstrap_alloc_block(base_virt: usize, size: usize) linksection(".init") []u8 {
+fn late_bootstrap_alloc_block(base_virt: usize, size: usize) linksection(".init") []align(4096) u8 {
     const end = base_virt + size;
     late_bootstrap_map_ppes(base_virt, end);
     late_bootstrap_map_pdes(base_virt, end);
@@ -380,7 +380,7 @@ fn late_bootstrap_alloc_block(base_virt: usize, size: usize) linksection(".init"
     late_bootstrap_map_ptes(base_virt, end);
     valid_pte.valid.global = false;
 
-    return @as([*]u8, @ptrFromInt(base_virt))[0..size];
+    return @as([*]align(4096) u8, @ptrFromInt(base_virt))[0..size];
 }
 
 var bootstrap_reclaimable_list: pfmdb.PfmList = .{ .associated_status = .invalid };
@@ -428,6 +428,7 @@ var mapped_unexpected_pfis: usize = 0;
 inline fn add_pte_to_pfm(p: *pte.Pte) void {
     // log.debug("adding pte addr {o} backlink to pfmdb", .{@intFromPtr(p)});
     const pfm = pfmdb.pfm_for_pfi(p.valid.addr.pfi) orelse {
+        log.debug("[STAGE {d}]: PFI not in bitmap for {x} (pte {x})", .{ bootstrap_stage, p.valid.addr.pfi, @intFromPtr(p) });
         mapped_unexpected_pfis += 1;
         return;
     };
@@ -438,6 +439,7 @@ inline fn add_pte_to_pfm(p: *pte.Pte) void {
         pfm._3.share_count += 1;
         pfm._1.pte_table_pfi = map.pfi_from_pte(map.pte_from_addr(@intFromPtr(p))) orelse unreachable;
     } else {
+        log.debug("[STAGE {d}]: PFM in unexpected state {s} for {x} (pte {x})", .{ bootstrap_stage, @tagName(pfm._1.status), p.valid.addr.pfi, @intFromPtr(p) });
         mapped_unexpected_pfis += 1;
     }
 
@@ -584,6 +586,25 @@ noinline fn init_mm_impl() linksection(".init") !void {
     // bootloader reclaimable memory is also unmapped now,
     // but everything we care about from there is copied into
     // variables in kernel space.
+
+    // allocate 0x20000 PTEs for general allocations and temporary mappings
+    const slc = std.mem.bytesAsSlice(pte.Pte, late_bootstrap_alloc_block(@intFromPtr(map.syspte_space), 0x20000 * @sizeOf(pte.Pte)));
+    @import("syspte.zig").init(slc);
+    log.info("[STAGE {d}]: SYSPTEs initialized", .{bootstrap_stage});
+
+    // allocate processor control blocks
+    for (boot.cpus) |proc| {
+        const lcb: *@import("../../smp.zig").LcbWrapper = @ptrCast(late_bootstrap_alloc_block(@intFromPtr(map.prcbs + proc.processor_id), 4096).ptr);
+        lcb.* = .{
+            .lcb = .{
+                .self = &lcb.lcb,
+                .apic_id = proc.lapic_id,
+                .uid = proc.processor_id,
+            },
+        };
+        lcb.lcb.arch_data.init();
+    }
+    log.info("[STAGE {d}]: PRCBs allocated", .{bootstrap_stage});
 
     bootstrap_init_pfmdb();
 }

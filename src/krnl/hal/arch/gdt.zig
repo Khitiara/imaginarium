@@ -13,7 +13,7 @@ pub const Gdt = extern struct {
 
 pub const Segment = std.meta.FieldEnum(Gdt);
 
-extern const gdt: Gdt;
+pub extern const gdt: Gdt;
 extern var tss_ldt: desc.TssLdt;
 
 pub const Tss = extern struct {
@@ -36,7 +36,7 @@ pub const TssBlock = extern struct {
     iomap: IoMapType = IoMapType.initEmpty(),
 };
 
-export var tss: TssBlock = undefined;
+pub export var tss: TssBlock = undefined;
 
 pub const selectors = struct {
     pub const null_desc: desc.Selector = @bitCast(@as(u16, 0));

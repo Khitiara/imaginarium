@@ -5,6 +5,8 @@ const hal = @import("../hal.zig");
 const SpinLock = hal.SpinLock;
 const QueuedSpinLock = hal.QueuedSpinLock;
 const map = @import("map.zig");
+const syspte = @import("syspte.zig");
+const mm = @import("mm.zig");
 
 const MaxSupportedPhysAddrWidth = 48;
 pub const PageOffsetBits = std.math.log2_int(usize, std.mem.page_size);
@@ -43,6 +45,40 @@ pub inline fn pfm_for_pfi(pfi: Pfi) ?*Pfm {
     if (pfi >= pfm_bitmap.bit_length) return null;
     if (!pfm_bitmap.isSet(pfi)) return null;
     return &pfm_db[pfi];
+}
+
+pub fn alloc_page_undefined() !Pfi {
+    if (free_list.pop()) |p| return p;
+    if (zero_list.pop()) |p| return p;
+    return error.OutOfMemory;
+}
+
+pub fn alloc_page_zero() !Pfi {
+    if (zero_list.pop()) |p| return p;
+    if (free_list.pop()) |p| {
+        const spte = &(syspte.reserve(1) orelse return error.OutOfMemory)[0];
+        const addr = map.addr_from_pte(spte);
+
+        mm.mminit.valid_pte.valid.addr.pfi = p;
+        spte.* = mm.mminit.valid_pte;
+
+        asm volatile ("invlpg (%[a])"
+            :
+            : [a] "b" (addr),
+            : "memory"
+        );
+        @memset(addr, 0);
+
+        spte.* = .zero;
+        asm volatile ("invlpg (%[a])"
+            :
+            : [a] "b" (addr),
+            : "memory"
+        );
+
+        return p;
+    }
+    return error.OutOfMemory;
 }
 
 pub const PfmStatus = enum(u3) {
@@ -119,12 +155,15 @@ pub const PfmList = struct {
         self.last = pfi;
     }
 
-    pub fn pop(self: *PfmList) Pfi {
+    pub fn pop(self: *PfmList) ?Pfi {
         var tok: QueuedSpinLock.Token = undefined;
         self.lock.lock(&tok);
         defer tok.unlock();
 
         const pfi = self.first;
+
+        if (pfi == terminator) return null;
+
         remove_internal(self, pfi);
         return pfi;
     }

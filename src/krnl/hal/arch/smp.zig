@@ -30,6 +30,17 @@ var bspid: u8 = undefined;
 
 const log = std.log.scoped(.@"hal.smp");
 
+pub const ArchPrcb = extern struct {
+    gdt: arch.gdt.Gdt,
+    tss: arch.gdt.TssBlock,
+
+    pub fn init(prcb: *ArchPrcb) void {
+        prcb.gdt = arch.gdt.gdt;
+        prcb.tss = arch.gdt.tss;
+        prcb.gdt.tss.set_base(@intFromPtr(&prcb.tss));
+    }
+};
+
 pub fn init() !struct { std.mem.Allocator, std.mem.Allocator } {
     bspid = apic.get_lapic_id();
     const alloc = vmm.raw_page_allocator.allocator();

@@ -91,6 +91,9 @@ pub var memmap: []memory_map.MemoryDescriptor = undefined;
 pub var framebuffers: []Framebuffer = undefined;
 pub var rsdp_addr: PhysAddr = undefined;
 
+pub var smp: limine.SmpResponse = undefined;
+pub var cpus: []limine.SmpInfo = undefined;
+
 var system_info_buffer: [2 * 4096]u8 = undefined;
 var system_info_alloc: std.heap.FixedBufferAllocator = .init(&system_info_buffer);
 
@@ -124,6 +127,7 @@ pub noinline fn dupe_bootloader_data() !void {
                 framebuffers = try alloc.alloc(Framebuffer, fbs_raw.len);
                 for (fbs_raw, framebuffers) |raw, *fb| {
                     fb.* = .{
+                        .base = null,
                         .phys_addr = @enumFromInt(@intFromPtr(raw.address) - hhdm_addr),
                         .mode = .{
                             .model = util.convert_enum_by_name(FramebufferMemoryModel, raw.memory_model) orelse @panic(""),
@@ -134,6 +138,13 @@ pub noinline fn dupe_bootloader_data() !void {
                         },
                         .edid = if (raw.edid) |p| .{ .size = raw.edid_size, .addr = @enumFromInt(@intFromPtr(p) - hhdm_addr) } else null,
                     };
+                }
+            }
+            if(limine_reqs.mp_request.response) |mp_resp| {
+                smp = mp_resp.*;
+                cpus = try alloc.alloc(limine.SmpInfo, smp.cpu_count);
+                for(mp_resp.cpus(), 0..) |cpu, i| {
+                    cpus[i] = cpu.*;
                 }
             }
         },

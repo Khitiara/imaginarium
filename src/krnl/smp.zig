@@ -16,7 +16,8 @@ const log = std.log.scoped(.smp);
 
 pub const LocalControlBlock = struct {
     self: *LocalControlBlock,
-    apic_id: u8,
+    apic_id: u32,
+    uid: u32,
     current_thread: ?*Thread = null,
     standby_thread: ?*Thread = null,
     idle_thread: *Thread = undefined,
@@ -27,13 +28,15 @@ pub const LocalControlBlock = struct {
     dpc_queue: DpcQueueType = .{},
     dpc_lock: hal.SpinLock = .{},
     frame: ?*arch.SavedRegisterState = null,
+    arch_data: arch.smp.ArchPrcb = undefined,
 
     pub const LocalDispatcherQueueType = queue.PriorityQueue(Thread, "scheduler_hook", "priority", Thread.Priority);
     pub const DpcQueueType = queue.PriorityQueue(dispatcher.Dpc, "hook", "priority", dispatcher.Dpc.Priority);
 };
 
-const LcbWrapper = struct {
+pub const LcbWrapper = struct {
     lcb: LocalControlBlock align(4096),
+    _pad: [std.mem.page_size - @sizeOf(LocalControlBlock)]u8 = undefined,
 };
 
 pub var lcbs: []LcbWrapper = undefined;
@@ -63,11 +66,13 @@ fn init(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator, wait_for_aps: boo
 pub fn allocate_lcbs(page_alloc: std.mem.Allocator) !void {
     lcbs = try page_alloc.alignedAlloc(LcbWrapper, 1 << 12, apic.lapics.len);
     const apic_ids = apic.lapics.items(.id);
+    const uids = apic.lapics.items(.uid);
     for (lcbs, 0..) |*l, i| {
         l.* = .{
             .lcb = .{
                 .self = &l.lcb,
                 .apic_id = apic_ids[i],
+                .uid = uids[i],
             },
         };
     }

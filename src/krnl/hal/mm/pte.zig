@@ -44,7 +44,8 @@ pub const Pte = packed union {
         /// pending allocation, and a page fault to this page should either allocate a zero
         /// page or initiate readback io.
         committed: bool,
-        _1: u51 = 0,
+        guard: bool,
+        _1: u50 = 0,
     },
     valid: PresentPte,
     page_file: SwapFilePte,

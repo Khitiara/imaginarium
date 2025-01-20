@@ -65,7 +65,7 @@ pub fn init(ptes: []Pte) void {
     syspte_lock.lock(&tok);
     defer tok.unlock();
 
-    @memset(ptes, .{ .int = 0 });
+    @memset(ptes, .zero);
     free_count = @intCast(ptes.len);
     if (ptes.len == 0) {
         @branchHint(.cold);
@@ -80,7 +80,7 @@ pub fn init(ptes: []Pte) void {
     first = .{
         .list = .{
             .singleton = false,
-            .next = ptes.ptr - map.syspte_space,
+            .next = @intCast(ptes.ptr - map.syspte_space),
         },
     };
     ptes[0] = .{

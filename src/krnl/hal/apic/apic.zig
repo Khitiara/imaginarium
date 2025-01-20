@@ -204,11 +204,11 @@ pub var lapic_ptr: [*]volatile u32 = undefined;
 pub var supports_eoi_broadcast_suppression: bool = false;
 
 pub const Lapic = struct {
-    id: u8,
+    id: u32,
     enabled: bool,
     online_capable: bool,
-    uid: u8,
     nmi_pins: LapicNmiPin,
+    uid: u32,
 };
 
 pub const Lapics = @import("util").MultiBoundedArray(Lapic, 255);
