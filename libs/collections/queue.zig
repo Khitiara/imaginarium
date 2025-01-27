@@ -6,16 +6,16 @@
 const std = @import("std");
 const CopyPtrAttrs = @import("util").CopyPtrAttrs;
 
-pub const Node = extern struct {
-    next: ?*Node = null,
+pub const SinglyLinkedNode = extern struct {
+    next: ?*SinglyLinkedNode = null,
 };
 
 pub const UntypedQueue = struct {
-    head: ?*Node = null,
-    tail: ?*Node = null,
+    head: ?*SinglyLinkedNode = null,
+    tail: ?*SinglyLinkedNode = null,
     len: usize = 0,
 
-    pub fn append(self: *UntypedQueue, hook: *Node) void {
+    pub fn append(self: *UntypedQueue, hook: *SinglyLinkedNode) void {
         hook.next = null;
 
         if (self.tail) |tail| {
@@ -30,18 +30,18 @@ pub const UntypedQueue = struct {
         self.len += 1;
     }
 
-    pub fn prepend(self: *UntypedQueue, hook: *Node) void {
+    pub fn prepend(self: *UntypedQueue, hook: *SinglyLinkedNode) void {
         hook.next = self.head;
         self.head = hook;
 
         self.len += 1;
     }
 
-    pub fn peek(self: *const UntypedQueue) ?*Node {
+    pub fn peek(self: *const UntypedQueue) ?*SinglyLinkedNode {
         return self.head;
     }
 
-    pub fn dequeue(self: *UntypedQueue) ?*Node {
+    pub fn dequeue(self: *UntypedQueue) ?*SinglyLinkedNode {
         if (self.head) |head| {
             if (head.next) |next| {
                 self.head = next;
@@ -59,7 +59,7 @@ pub const UntypedQueue = struct {
 
     /// WARNING: THIS FUNCTION DOES NOT ENSURE REMOVED ITEMS ARE FREED. BE CAREFUL
     /// returns the old head for iteration and freeing
-    pub fn clear(self: *UntypedQueue) ?*Node {
+    pub fn clear(self: *UntypedQueue) ?*SinglyLinkedNode {
         defer {
             self.head = null;
             self.tail = null;
@@ -76,12 +76,12 @@ pub fn Queue(comptime T: type, comptime field_name: []const u8) type {
             return self.impl.len;
         }
 
-        pub inline fn node_from_ref(ref: anytype) CopyPtrAttrs(@TypeOf(ref), .One, Node) {
+        pub inline fn node_from_ref(ref: anytype) CopyPtrAttrs(@TypeOf(ref), .One, SinglyLinkedNode) {
             return &@field(ref, field_name);
         }
 
         pub inline fn ref_from_node(node: anytype) CopyPtrAttrs(@TypeOf(node), .One, T) {
-            if(@typeInfo(@TypeOf(node)) == .optional) return ref_from_optional_node(node);
+            if (@typeInfo(@TypeOf(node)) == .optional) return ref_from_optional_node(node);
             return @fieldParentPtr(field_name, node);
         }
 
@@ -121,7 +121,7 @@ pub fn Queue(comptime T: type, comptime field_name: []const u8) type {
 
 test "append" {
     const TestNode = struct {
-        hook: Node = undefined,
+        hook: SinglyLinkedNode = undefined,
         val: u64,
     };
     var queue: Queue(TestNode, "hook") = .{};
@@ -141,7 +141,7 @@ test "append" {
 
 test "prepend" {
     const TestNode = struct {
-        hook: Node = undefined,
+        hook: SinglyLinkedNode = undefined,
         val: u64,
     };
     var queue: Queue(TestNode, "hook") = .{};
@@ -160,19 +160,19 @@ test "prepend" {
 }
 
 pub fn PriorityQueue(comptime T: type, comptime node_field_name: []const u8, comptime prio_field_name: []const u8, comptime P: type) type {
-    const Tails = std.EnumArray(P, ?*Node);
+    const Tails = std.EnumArray(P, ?*SinglyLinkedNode);
     const Indexer = Tails.Indexer;
     return struct {
-        head: ?*Node = null,
+        head: ?*SinglyLinkedNode = null,
         tails: Tails = Tails.initFill(null),
         len: usize = 0,
 
-        pub inline fn node_from_ref(ref: anytype) CopyPtrAttrs(@TypeOf(ref), .One, Node) {
+        pub inline fn node_from_ref(ref: anytype) CopyPtrAttrs(@TypeOf(ref), .One, SinglyLinkedNode) {
             return &@field(ref, node_field_name);
         }
 
         pub inline fn ref_from_node(node: anytype) CopyPtrAttrs(@TypeOf(node), .One, T) {
-            if(@typeInfo(@TypeOf(node)) == .optional) return ref_from_optional_node(node);
+            if (@typeInfo(@TypeOf(node)) == .optional) return ref_from_optional_node(node);
             return @fieldParentPtr(node_field_name, node);
         }
 
@@ -180,7 +180,7 @@ pub fn PriorityQueue(comptime T: type, comptime node_field_name: []const u8, com
             return @fieldParentPtr(node_field_name, node orelse return null);
         }
 
-        inline fn node_prio(node: *Node) P {
+        inline fn node_prio(node: *SinglyLinkedNode) P {
             return @field(ref_from_node(node).*, prio_field_name);
         }
 

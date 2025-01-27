@@ -27,7 +27,7 @@ pub const Parameters = union(Function) {
 alloc: std.mem.Allocator,
 device: *Device,
 stack_position: ?*Device.DriverStackEntry = null,
-queue_hook: queue.Node = .{},
+queue_hook: queue.SinglyLinkedNode = .{},
 parameters: Parameters,
 completion: ?struct {
     routine: *const fn (*Irp, ?*anyopaque) anyerror!void,

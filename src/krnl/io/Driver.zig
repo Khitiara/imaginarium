@@ -59,7 +59,7 @@ supported_devices: struct {
     hardware_ids: []const []const u8,
     compatible_ids: []const []const u8,
 },
-queue_hook: queue.Node = .{},
+queue_hook: queue.SinglyLinkedNode = .{},
 
 pub const ObjectKind = ob.ObjectKind.driver;
 

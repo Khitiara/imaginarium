@@ -65,7 +65,7 @@ join: dispatcher.WaitHandle,
 state: State = .init,
 priority: Priority,
 affinity: Affinity = .{},
-scheduler_hook: queue.Node = .{},
+scheduler_hook: queue.SinglyLinkedNode = .{},
 saved_state: SavedThreadState = undefined,
 stack: ?[]const u8 = null,
 client_ids: struct {

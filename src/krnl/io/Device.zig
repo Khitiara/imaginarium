@@ -26,7 +26,7 @@ pub const DriverStackEntry = struct {
     next: ?*DriverStackEntry = null,
     prev: ?*DriverStackEntry = null,
     /// a list entry for hooking this stack entry into queues as needed internally
-    queue_hook: queue.Node = .{},
+    queue_hook: queue.SinglyLinkedNode = .{},
     /// the driver which processes this entry in the driver stack
     driver: *Driver,
     device: *Device = undefined,

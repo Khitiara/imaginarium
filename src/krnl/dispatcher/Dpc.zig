@@ -12,7 +12,7 @@ pub const Pool = std.heap.MemoryPool(Dpc);
 pub var pool: Pool = undefined;
 
 priority: Priority,
-hook: collections.queue.Node = .{},
+hook: collections.queue.SinglyLinkedNode = .{},
 routine: DpcFn,
 args: [3]?*anyopaque,
 
