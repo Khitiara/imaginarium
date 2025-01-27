@@ -382,7 +382,7 @@ pub fn DoublyLinkedList(comptime T: type, comptime field_name: []const u8) type 
         }
 
         pub inline fn ref_from_node(node: anytype) CopyPtrAttrs(@TypeOf(node), .One, T) {
-            if(@typeInfo(@TypeOf(node)) == .optional) return ref_from_optional_node(node);
+            if (@typeInfo(@TypeOf(node)) == .optional) return ref_from_optional_node(node);
             return @fieldParentPtr(field_name, node);
         }
 
@@ -439,3 +439,39 @@ pub fn DoublyLinkedList(comptime T: type, comptime field_name: []const u8) type 
         }
     };
 }
+
+pub const SequencedList = extern union {
+    int: u128,
+    head: extern struct {
+        next: ?*SinglyLinkedNode = null,
+        depth: u64 = 0,
+    },
+
+    pub const empty: SequencedList = .{ .int = 0 };
+
+    pub fn push(head: *SequencedList, entry: *SinglyLinkedNode) void {
+        var cur_head = head.*;
+        var new_head: SequencedList = .{ .head = .{ .next = entry, .depth = cur_head.head.depth + 1 } };
+        entry.next = cur_head.head.next;
+
+        while (@cmpxchgWeak(u128, &head.int, cur_head.int, new_head.int, .release, .acquire)) |c| {
+            cur_head.int = c;
+            entry.next = cur_head.head.next;
+            new_head.head.depth = cur_head.head.depth + 1;
+        }
+    }
+
+    pub fn pop(head: *SequencedList) ?*SinglyLinkedNode {
+        var cur_head = head.*;
+        var new_head: SequencedList = undefined;
+        while (cur_head.head.next) |n| {
+            new_head.head = .{ .next = n.next, .depth = cur_head.head.depth - 1 };
+            if (@cmpxchgWeak(u128, &head.int, cur_head.int, new_head.int, .release, .acquire)) |c| {
+                cur_head.int = c;
+            } else {
+                break;
+            }
+        }
+        return cur_head.head.next;
+    }
+};
