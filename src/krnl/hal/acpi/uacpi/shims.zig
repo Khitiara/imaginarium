@@ -82,42 +82,6 @@ export fn uacpi_kernel_pci_device_close(addr: *pci.PciBridgeAddress) void {
     uacpi_allocator.destroy(addr);
 }
 
-export fn uacpi_kernel_pci_read(address: *pci.PciBridgeAddress, offset: usize, byte_width: u8, ret: *u64) callconv(arch.cc) uacpi.uacpi_status {
-    switch (byte_width) {
-        inline 1, 2, 4 => |bw| {
-            const T = switch (bw) {
-                1 => u8,
-                2 => u16,
-                4 => u32,
-                else => unreachable,
-            };
-            ret.* = pci.config_read_with_bridge(address.*, offset, T) catch |err| switch (err) {
-                inline else => |e| return comptime uacpi.uacpi_status.status(e),
-            };
-            return .ok;
-        },
-        else => return .invalid_argument,
-    }
-}
-
-export fn uacpi_kernel_pci_write(address: *pci.PciBridgeAddress, offset: usize, byte_width: u8, value: u64) callconv(arch.cc) uacpi.uacpi_status {
-    switch (byte_width) {
-        inline 1, 2, 4 => |bw| {
-            const T = switch (bw) {
-                1 => u8,
-                2 => u16,
-                4 => u32,
-                else => unreachable,
-            };
-            pci.config_write_with_bridge(address.*, offset, @as(T, @intCast(value))) catch |err| switch (err) {
-                inline else => |e| return comptime uacpi.uacpi_status.status(e),
-            };
-            return .ok;
-        },
-        else => return .invalid_argument,
-    }
-}
-
 export fn uacpi_kernel_io_map(port: uacpi.IoAddress, _: usize, ret: *u16) callconv(arch.cc) uacpi.uacpi_status {
     ret.* = @intCast(@intFromEnum(port));
     return .ok;
@@ -127,25 +91,43 @@ export fn uacpi_kernel_io_unmap(_: *u16) callconv(arch.cc) uacpi.uacpi_status {
     return .ok;
 }
 
-export fn uacpi_kernel_io_read(handle: u16, offset: usize, byte_width: u8, ret: *u64) callconv(arch.cc) uacpi.uacpi_status {
-    switch (byte_width) {
-        inline 1, 2, 4 => |w| {
-            const T = std.meta.Int(.unsigned, 8 * w);
-            ret.* = arch.serial.in(@intCast(handle + offset), T);
-            return .ok;
-        },
-        else => return .invalid_argument,
-    }
-}
+comptime {
+    for (&.{ u8, u16, u32 }) |T| {
+        const S = struct {
+            pub fn ir(handle: u16, offset: usize, ret: *T) callconv(arch.cc) uacpi.uacpi_status {
+                @setRuntimeSafety(false);
 
-export fn uacpi_kernel_io_write(handle: u16, offset: usize, byte_width: u8, value: u64) callconv(arch.cc) uacpi.uacpi_status {
-    switch (byte_width) {
-        inline 1, 2, 4 => |w| {
-            const T = std.meta.Int(.unsigned, 8 * w);
-            arch.serial.out(@intCast(handle + offset), @as(T, @intCast(value)));
-            return .ok;
-        },
-        else => return .invalid_argument,
+                ret.* = arch.serial.in(@intCast(handle + offset), T);
+                return .ok;
+            }
+            pub fn iw(handle: u16, offset: usize, value: T) callconv(arch.cc) uacpi.uacpi_status {
+                @setRuntimeSafety(false);
+
+                arch.serial.out(@intCast(handle + offset), value);
+                return .ok;
+            }
+            pub fn pr(address: *pci.PciBridgeAddress, offset: usize, ret: *T) callconv(arch.cc) uacpi.uacpi_status {
+                @setRuntimeSafety(false);
+
+                ret.* = pci.config_read_with_bridge(address.*, offset, T) catch |err| switch (err) {
+                    inline else => |e| return comptime uacpi.uacpi_status.status(e),
+                };
+                return .ok;
+            }
+            pub fn pw(address: *pci.PciBridgeAddress, offset: usize, value: T) callconv(arch.cc) uacpi.uacpi_status {
+                @setRuntimeSafety(false);
+
+                pci.config_write_with_bridge(address.*, offset, value) catch |err| switch (err) {
+                    inline else => |e| return comptime uacpi.uacpi_status.status(e),
+                };
+                return .ok;
+            }
+        };
+
+        @export(&S.ir, .{ .name = std.fmt.comptimePrint("uacpi_kernel_io_read{d}", .{@bitSizeOf(T)}) });
+        @export(&S.iw, .{ .name = std.fmt.comptimePrint("uacpi_kernel_io_write{d}", .{@bitSizeOf(T)}) });
+        @export(&S.pr, .{ .name = std.fmt.comptimePrint("uacpi_kernel_pci_read{d}", .{@bitSizeOf(T)}) });
+        @export(&S.pw, .{ .name = std.fmt.comptimePrint("uacpi_kernel_pci_write{d}", .{@bitSizeOf(T)}) });
     }
 }
 
@@ -194,7 +176,7 @@ export fn uacpi_kernel_acquire_mutex(mutex: *Mutex, timeout: u16) callconv(arch.
         dispatcher.wait_for_single_object(&mutex.wait_handle) catch return .internal_error;
         return .ok;
     } else {
-        return if (mutex.try_lock()) .ok else .timeout;
+        return if (mutex.tryLock()) .ok else .timeout;
     }
 }
 
@@ -302,11 +284,11 @@ export fn uacpi_kernel_free_spinlock(ptr: *SpinLock) callconv(arch.cc) void {
     uacpi_allocator.destroy(ptr);
 }
 
-export fn uacpi_kernel_lock_spinlock(lock: *SpinLock) callconv(arch.cc) u64 {
+export fn uacpi_kernel_lock_spinlock(lock: *SpinLock) callconv(arch.cc) u8 {
     return @intFromEnum(lock.lock());
 }
 
-export fn uacpi_kernel_unlock_spinlock(lock: *SpinLock, state: u64) callconv(arch.cc) void {
+export fn uacpi_kernel_unlock_spinlock(lock: *SpinLock, state: u8) callconv(arch.cc) void {
     lock.unlock(@enumFromInt(@as(u4, @truncate(state))));
 }
 
