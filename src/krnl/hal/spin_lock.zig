@@ -21,6 +21,12 @@ pub const SpinLock = extern struct {
         return irql;
     }
 
+    pub fn lock_cli(self: *SpinLock) bool {
+        const int = hal.arch.idt.get_and_disable().interrupt_enable;
+        self.lock_unsafe();
+        return int;
+    }
+
     /// acquire the spinlock. this version of the method leaves the interrupt flag as it is, and may be broken
     /// if an interrupt fires while in the acquire loop
     pub fn lock_unsafe(self: *SpinLock) void {
@@ -49,4 +55,10 @@ pub const SpinLock = extern struct {
     pub fn unlock_unsafe(self: *SpinLock) void {
         _ = self.key.bitReset(0, .release);
     }
+
+    pub fn unlock_sti(self: *SpinLock, saved_interrupt_flag: bool) void {
+        self.unlock_unsafe();
+        if(saved_interrupt_flag) hal.arch.idt.enable();
+    }
 };
+
