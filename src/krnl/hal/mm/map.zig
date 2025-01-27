@@ -7,8 +7,9 @@
 //!
 //! 0x0000_8000_0000_0000..0xFFFF_8000_0000_0000: not canonical
 //!
-//! 0xFFFF_8000_0000_0000..0xFFFF_B000_0000_0000: non-paged pool
-//! 0xFFFF_B000_0000_0000..0xFFFF_F000_0000_0000: paged pool
+//! 0xFFFF_8000_0000_0000..0xFFFF_B000_0000_0000: non-paged space
+//! 0xFFFF_B000_0000_0000..0xFFFF_F000_0000_0000: paged space
+//! 0xFFFF_F000_0000_0000..0xFFFF_8000_0000_0000: pool
 //! 0xFFFF_FA80_0000_0000..0xFFFF_FB7F_C000_0000: PFMDB
 //! 0xFFFF_FB7F_C000_0000..0xFFFF_FB80_0000_0000: PFM bitmap so we dont need to alloc for literally everything
 //! 0xFFFF_FB80_0000_0000..0xFFFF_FC00_0000_0000: page tables (recursive map with index 0o767/0x1F7)
