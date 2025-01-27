@@ -41,6 +41,9 @@ pub fn platform_init() !void {
     log.info("memory manager initialized through stage 4", .{});
     time.init_timing();
     log.info("timekeeping initialized", .{});
+
+    try zuacpi.early_tables(vmm.raw_page_allocator.allocator());
+    log.info("acpi early table access setup", .{});
 }
 
 pub fn platform_init1() !void {

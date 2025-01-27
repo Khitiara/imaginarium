@@ -41,6 +41,7 @@ const cmn = @import("cmn");
 const boot = @import("../../boot/boot_info.zig");
 const map = @import("map.zig");
 const arch = @import("../arch/arch.zig");
+const mm = @import("mm.zig");
 
 const PhysAddr = cmn.types.PhysAddr;
 const Pfi = pfmdb.Pfi;
@@ -64,14 +65,14 @@ var bootstrap_stage: u4 = 0;
 /// from which the PFMDB and first PTEs will be allocated. in addition the maximum
 /// and minimum page indices are determined - the maximum will be used for determining the
 /// page count of the PFMDB and the rest are currently for informational purposes only
-fn early_probe_memory_map(mm: []MemoryDescriptor) linksection(".init") EarlyMemoryProbe {
+fn early_probe_memory_map(memmap: []MemoryDescriptor) linksection(".init") EarlyMemoryProbe {
     var biggest_free_pages: usize = 0;
     var phys_page_count: usize = 0;
     var free_page_count: usize = 0;
     var lowest_phys_page: Pfi = std.math.maxInt(Pfi);
     var highest_phys_page: Pfi = 0;
     var e: *MemoryDescriptor = undefined;
-    for (mm, 0..) |*entry, i| {
+    for (memmap, 0..) |*entry, i| {
         log.debug("[STAGE {d}]: Memory Descriptor {d}: Type {s} Base {x} Pages {x}", .{ bootstrap_stage, i, @tagName(entry.memory_kind), entry.base_page, entry.page_count });
         if (entry.memory_kind != .bad_memory) {
             phys_page_count += entry.page_count;
@@ -118,32 +119,6 @@ fn bootstrap_alloc_page() linksection(".init") Pfi {
     return pfi;
 }
 
-pub var valid_pte: Pte = .{
-    .valid = .{
-        .writable = true,
-        .user_mode = false,
-        .write_through = false,
-        .cache_disable = true,
-        .pat_size = false,
-        .global = false,
-        .copy_on_write = false,
-        .sw_dirty = false,
-        .addr = .{ .pfi = 0 },
-        .pk = 0,
-        .xd = false,
-    },
-};
-
-const PfiBreakdown = packed union {
-    pfi: Pfi,
-    breakdown: packed struct(Pfi) {
-        pte: u9,
-        pde: u9,
-        ppe: u9,
-        pxe: u9,
-    },
-};
-
 inline fn pxe_index_from_addr(addr: usize, level: usize) linksection(".init") u9 {
     return @truncate((addr >> (9 * (level - 1) + 12)));
 }
@@ -153,16 +128,16 @@ const HhdmType = [*]align(4096) [4096]u8;
 
 fn map_block(block: pte.PageTable) linksection(".init") void {
     for (block) |*e| {
-        valid_pte.valid.addr.pfi = bootstrap_alloc_page();
-        e.* = valid_pte;
+        mm.valid_pte.valid.addr.pfi = bootstrap_alloc_page();
+        e.* = mm.valid_pte;
         @memset(bootstrap_access_pte(e.*, hhdm), 0);
     }
 }
 
 inline fn create_or_access_pxe(entry: *Pte) linksection(".init") pte.PageTable {
     if (!entry.unknown.present) {
-        valid_pte.valid.addr.pfi = bootstrap_alloc_page();
-        entry.* = valid_pte;
+        mm.valid_pte.valid.addr.pfi = bootstrap_alloc_page();
+        entry.* = mm.valid_pte;
         @memset(bootstrap_access_pte(entry.*), 0);
     }
     return @ptrCast(bootstrap_access_pte(entry.*));
@@ -173,7 +148,7 @@ inline fn create_or_access_pxe(entry: *Pte) linksection(".init") pte.PageTable {
 /// to access page tables. it is thus somewhat inefficient compared to what can be done after the
 /// mm bootstrapping is complete and should be used as little as possible.
 fn bootstrap_direct_map_region(start_virt: Pfi, start_phys: Pfi, end_phys: Pfi, lvl4_tbl: pte.PageTable) linksection(".init") void {
-    var virt: PfiBreakdown = .{ .pfi = start_virt };
+    var virt: mm.PfiBreakdown = .{ .pfi = start_virt };
     var phys: Pfi = start_phys;
     while (phys <= end_phys) : ({
         phys += 1;
@@ -193,10 +168,10 @@ fn bootstrap_direct_map_region(start_virt: Pfi, start_phys: Pfi, end_phys: Pfi, 
         // }
         // log.debug("mapped page {x} to {x}", .{phys, virt.pfi});
         const pt = create_or_access_pxe(&pd[virt.breakdown.pde]);
-        valid_pte.valid.global = true;
-        valid_pte.valid.addr.pfi = phys;
-        pt[virt.breakdown.pte] = valid_pte;
-        valid_pte.valid.global = false;
+        // mm.valid_pte.valid.global = true;
+        mm.valid_pte.valid.addr.pfi = phys;
+        pt[virt.breakdown.pte] = mm.valid_pte;
+        // mm.valid_pte.valid.global = false;
     }
 }
 
@@ -272,14 +247,14 @@ fn init_mm_early() linksection(".init") !void {
     // and the root page table has octal address 767_767_767_767_7670.
     //
     // octal 767/hex 1F7 was chosen to place the page table root at 0xFFFF_FB80_0000_0000.
-    valid_pte.valid.addr.pfi = lvl4_table_pfi;
-    lvl4_tbl[map.pte_recurse_index] = valid_pte;
+    mm.valid_pte.valid.addr.pfi = lvl4_table_pfi;
+    lvl4_tbl[map.pte_recurse_index] = mm.valid_pte;
 
     // give each of the other 127 kernel mode PXE entries a blank page, leaving usermode PXE entries blank.
     for (lvl4_tbl[0x100..], 0x100..) |*e, i| {
         if (i != map.pte_recurse_index) {
-            valid_pte.valid.addr.pfi = bootstrap_alloc_page();
-            e.* = valid_pte;
+            mm.valid_pte.valid.addr.pfi = bootstrap_alloc_page();
+            e.* = mm.valid_pte;
             @memset(bootstrap_access_pte(e.*), 0);
 
             // log.debug("created table to be at {x} for pxe at {x} index {x}", .{map.ppe_base_addr + 4096 * i, map.pxe_base_addr + 8 * i, i});
@@ -359,8 +334,8 @@ inline fn make_tbl_mapper(comptime from_addr: fn (usize) *Pte) fn (usize, usize)
             for (startend_to_slice(Pte, from_addr(base), from_addr(end))) |*e| {
                 if (!e.unknown.present) {
                     const new_tbl = bootstrap_alloc_page();
-                    valid_pte.valid.addr.pfi = new_tbl;
-                    e.* = valid_pte;
+                    mm.valid_pte.valid.addr.pfi = new_tbl;
+                    e.* = mm.valid_pte;
                     @memset(map.addr_from_pte(e), 0);
                 }
             }
@@ -376,9 +351,9 @@ fn late_bootstrap_alloc_block(base_virt: usize, size: usize) linksection(".init"
     const end = base_virt + size;
     late_bootstrap_map_ppes(base_virt, end);
     late_bootstrap_map_pdes(base_virt, end);
-    valid_pte.valid.global = true;
+    // mm.valid_pte.valid.global = true;
     late_bootstrap_map_ptes(base_virt, end);
-    valid_pte.valid.global = false;
+    // mm.valid_pte.valid.global = false;
 
     return @as([*]align(4096) u8, @ptrFromInt(base_virt))[0..size];
 }
@@ -509,9 +484,9 @@ fn bootstrap_fill_pfmdb() linksection(".init") void {
         // including the PFMs for pages we've already allocated. therefore we use the backup descriptor
         // for page mapping
         const desc = if (d == tmp_desc) &backup_desc else d;
-        valid_pte.valid.global = true;
+        // mm.valid_pte.valid.global = true;
         late_bootstrap_map_ptes(@intFromPtr(pfmdb.pfm_db + desc.base_page), @intFromPtr(pfmdb.pfm_db + desc.base_page + desc.page_count));
-        valid_pte.valid.global = false;
+        // mm.valid_pte.valid.global = false;
 
         // if it isnt the backup descriptor then d wasnt the free descriptor and we can add the pages to the PFMdb.
         // anything marked as loaded image by the bootloader gets included here and marked as active.

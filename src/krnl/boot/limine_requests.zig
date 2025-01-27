@@ -18,13 +18,9 @@ pub export var mp_request: limine.SmpRequest linksection(".limine.mp") = .{
 
 pub fn fix_optimizations() void {
     const doNotOptimizeAway = @import("std").mem.doNotOptimizeAway;
-    doNotOptimizeAway(&framebuffer_request);
-    doNotOptimizeAway(&memmap_request);
-    doNotOptimizeAway(&rsdp_request);
-    doNotOptimizeAway(&krnl_addr_request);
-    doNotOptimizeAway(&hhdm_request);
-    doNotOptimizeAway(&paging_mode_req);
-    doNotOptimizeAway(&mp_request);
+    inline for(comptime @import("std").meta.declarations(@This())) |decl| {
+        doNotOptimizeAway(&@field(@This(), decl.name));
+    }
 }
 
 // pub export var krnl_file_request: limine.KernelFileRequest linksection(".limine.krnl_file") = .{};
