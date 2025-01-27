@@ -33,8 +33,8 @@ pub fn init_and_schedule(prio: Priority, routine: anytype, args: [3]?*anyopaque)
 }
 
 pub fn schedule(self: *Dpc) void {
-    const irql = smp.lcb.*.dpc_lock.lock();
-    defer smp.lcb.*.dpc_lock.unlock(irql);
+    const irql = smp.lcb.*.dpc_lock.lock_cli();
+    defer smp.lcb.*.dpc_lock.unlock_sti(irql);
     smp.lcb.*.dpc_queue.add(self);
 
     apic.send_ipi(.{

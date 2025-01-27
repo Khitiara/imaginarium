@@ -61,8 +61,8 @@ pub noinline fn enter_thread_ctx() void {
 
 fn dispatch_dpcs(_: *arch.SavedRegisterState) void {
     var node = blk: {
-        const irql = lcb.*.dpc_lock.lock();
-        defer lcb.*.dpc_lock.unlock(irql);
+        const irql = lcb.*.dpc_lock.lock_cli();
+        defer lcb.*.dpc_lock.unlock_sti(irql);
         break :blk lcb.*.dpc_queue.clear();
     };
     while (node) |dpc| {
