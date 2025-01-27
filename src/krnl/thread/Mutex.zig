@@ -15,7 +15,7 @@ state: std.atomic.Value(u32) = std.atomic.Value(u32).init(unlocked),
 const unlocked: u32 = 0b00;
 const locked: u32 = 0b01;
 
-pub fn try_lock(self: *Mutex) bool {
+pub fn tryLock(self: *Mutex) bool {
     if (comptime builtin.target.cpu.arch.isX86()) {
         const locked_bit = comptime @ctz(locked);
         return self.state.bitSet(locked_bit, .acquire) == 0;
@@ -25,7 +25,7 @@ pub fn try_lock(self: *Mutex) bool {
 
 fn check_wait(handle: *dispatcher.WaitHandle, thread: *Thread) !bool {
     const self: *Mutex = @fieldParentPtr("wait_handle", handle);
-    if (!self.try_lock()) {
+    if (!self.tryLock()) {
         try handle.enqueue_wait(thread);
         return true;
     }
