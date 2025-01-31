@@ -12,12 +12,8 @@ const hal = @import("../../hal.zig");
 const apic = hal.apic;
 const ioapic = apic.ioapic;
 const arch = hal.arch;
-const vmm = arch.vmm;
-const pmm = arch.pmm;
 const serial = arch.serial;
-const uacpi_allocator = vmm.gpa.allocator();
-const ptr_from_physaddr = pmm.ptr_from_physaddr;
-const physaddr_from_ptr = pmm.physaddr_from_ptr;
+const uacpi_allocator = hal.mm.pool.pool_allocator;
 const PhysAddr = types.PhysAddr;
 
 const dispatcher = @import("../../../dispatcher/dispatcher.zig");
@@ -48,17 +44,16 @@ export fn uacpi_kernel_free(address: [*]align(16) u8, size: usize) callconv(arch
     uacpi_allocator.free(address[0..size]);
 }
 
-export fn uacpi_kernel_map(address: PhysAddr, length: usize) callconv(arch.cc) *anyopaque {
-    _ = length;
-    return ptr_from_physaddr(*anyopaque, address);
+export fn uacpi_kernel_map(address: PhysAddr, length: usize) callconv(arch.cc) ?*anyopaque {
+    return (hal.mm.map_io(address, length) catch return null).ptr;
 }
 
-export fn uacpi_kernel_unmap(address: *anyopaque) callconv(arch.cc) void {
-    _ = address;
+export fn uacpi_kernel_unmap(address: [*]u8) callconv(arch.cc) void {
+    hal.mm.unmap_io(address[0..4096]);
 }
 
 export fn uacpi_kernel_get_rsdp(addr: *PhysAddr) callconv(arch.cc) uacpi.uacpi_status {
-    addr.* = @import("../acpi.zig").find_rsdp() catch |e| return .status(e);
+    addr.* = @import("../../../boot/boot_info.zig").rsdp_addr;
     return .ok;
 }
 

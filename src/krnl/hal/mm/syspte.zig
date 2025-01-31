@@ -25,7 +25,7 @@ var total_ptes: u32 = undefined;
 var syspte_lock: QueuedSpinLock = .{};
 
 inline fn get_cluster_size(p: [*]Pte) u32 {
-    if (p.list.singleton) {
+    if (p[0].list.singleton) {
         return 1;
     } else {
         return p[1].list.next;
@@ -33,21 +33,21 @@ inline fn get_cluster_size(p: [*]Pte) u32 {
 }
 
 inline fn get_next(p: [*]Pte) ?[*]Pte {
-    switch (p.list.next) {
+    switch (p[0].list.next) {
         std.math.maxInt(u32) => return null,
-        else => |i| return i,
+        else => |i| return map.syspte_space + i,
     }
 }
 
 inline fn set_cluster_size(p: [*]Pte, s: u32) void {
     if (s == 1) {
         if (get_cluster_size(p) != 1) {
-            p[1] = .{ .int = 0 };
+            p[1] = .{ .uint = 0 };
         }
-        p.list.singleton = true;
+        p[0].list.singleton = true;
     } else {
-        p.list.singleton = false;
-        p[1].int = 0;
+        p[0].list.singleton = false;
+        p[1].uint = 0;
         p[1].list.next = s;
     }
 }
@@ -106,12 +106,12 @@ pub fn init(ptes: []Pte) void {
 /// or null if there is no sufficiently large block of PTEs.
 ///
 /// this function handles splitting large blocks of PTEs as needed to reserve space.
-pub fn reserve(count: usize) ?[]Pte {
+pub fn reserve(count: u32) ?[]Pte {
     var tok: QueuedSpinLock.Token = undefined;
     syspte_lock.lock(&tok);
     defer tok.unlock();
 
-    var prev: [*]Pte = &first;
+    var prev: [*]Pte = @ptrCast(&first);
     const cluster, var cluster_size: u32 = while (get_next(prev)) |cluster| {
         const sz = get_cluster_size(cluster);
         // if the block is big enough then break. there wont be a better candidate because
@@ -123,7 +123,7 @@ pub fn reserve(count: usize) ?[]Pte {
     };
 
     // unlink
-    prev.list.next = cluster.list.next;
+    prev[0].list.next = cluster[0].list.next;
 
     defer {
         free_count -= count;
@@ -134,7 +134,7 @@ pub fn reserve(count: usize) ?[]Pte {
     if (cluster_size == count) {
         // if the block is an exact match then just return it.
         const ret: [*]Pte = @ptrCast(cluster);
-        @memset(ret[0..@max(2, count)], .{ .int = 0 });
+        @memset(ret[0..@max(2, count)], .{ .uint = 0 });
         return ret[0..count];
     } else {
         // otherwise we need to split the block in two.
@@ -145,7 +145,7 @@ pub fn reserve(count: usize) ?[]Pte {
         cluster_size -= count;
 
         const ret: [*]Pte = map.syspte_space + cluster_size;
-        @memset(ret[0..@max(2, count)], .{ .int = 0 });
+        @memset(ret[0..@max(2, count)], .{ .uint = 0 });
 
         // shrink the current cluster
         set_cluster_size(cluster, cluster_size);
@@ -156,15 +156,15 @@ pub fn reserve(count: usize) ?[]Pte {
         // so we dont need to do that check so we just break at the first block
         // at least as big as this one, which means prev will then be the last
         // block smaller than this one, so thats where we insert
-        prev = &first;
+        prev = @ptrCast(&first);
         while (get_next(prev)) |ib| {
             if (cluster_size <= get_cluster_size(ib)) break;
             prev = ib;
         }
 
         // and link it in
-        cluster.list.next = prev.list.next;
-        prev.list.next = idx;
+        cluster[0].list.next = prev[0].list.next;
+        prev[0].list.next = idx;
 
         return ret[0..count];
     }
@@ -179,14 +179,14 @@ pub fn release(ptes: []Pte) void {
     syspte_lock.lock(&tok);
     defer tok.unlock();
 
-    @memset(ptes, .{ .int = 0 });
+    @memset(ptes, .{ .uint = 0 });
 
     var count: u32 = @intCast(ptes.len);
     var start: [*]Pte = ptes.ptr;
 
     free_count += count;
 
-    var prev: [*]Pte = &first;
+    var prev: [*]Pte = @ptrCast(&first);
     var insert: ?[*]Pte = null;
     while (get_next(prev)) |block| {
         const sz = get_cluster_size(block);
@@ -199,12 +199,12 @@ pub fn release(ptes: []Pte) void {
             }
 
             // unlink
-            prev[0].list.next = block.list.next;
+            prev[0].list.next = block[0].list.next;
             // clear metadata
-            @memset(block[0..@max(2, sz)], .{ .int = 0 });
+            @memset(block[0..@max(2, sz)], .{ .uint = 0 });
             // and we gotta re-iterate now
             insert = null;
-            prev = &first;
+            prev = @ptrCast(&first);
         } else {
             // if block is a candidate for first-block-after-new-freed-block then save the previous
             // as a candidate for last-block-before-new-freed-block.
@@ -218,11 +218,10 @@ pub fn release(ptes: []Pte) void {
             prev = block;
         }
     }
-    if (insert == null) {
-        insert = prev;
-    }
+
+    const do_insert = insert orelse prev;
 
     set_cluster_size(start, count);
-    start.list.next = insert.list.next;
-    insert.list.next = get_index(start);
+    start[0].list.next = do_insert[0].list.next;
+    do_insert[0].list.next = get_index(start);
 }

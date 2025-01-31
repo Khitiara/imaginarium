@@ -7,6 +7,8 @@ const Order = std.math.Order;
 const mm = @import("mm.zig");
 const assert = std.debug.assert;
 
+const pool = @import("pool.zig");
+
 const VirtualAddressPool = @This();
 
 pub const VirtualAddressBlock = struct {
@@ -23,6 +25,33 @@ pub const VirtualAddressBlock = struct {
     /// a file will include the file offset and a pointer back to
     /// the view object.
     long_details: bool = false,
+};
+
+const short_block_pool: std.heap.MemoryPool(VirtualAddressBlock) = .init(pool.pool_allocator);
+const long_block_pool: std.heap.MemoryPool(VirtualAddressBlockLong) = .init(pool.pool_allocator);
+
+pub const block_pool = struct {
+    pub const ResetMode = std.heap.ArenaAllocator.ResetMode;
+
+    pub fn reset(mode: ResetMode) bool {
+        return short_block_pool.reset(mode) and long_block_pool.reset(mode);
+    }
+
+    pub fn create_short() !*VirtualAddressBlock {
+        return try short_block_pool.create();
+    }
+
+    pub fn create_long() !*VirtualAddressBlockLong {
+        return try long_block_pool.create();
+    }
+
+    pub fn destroy(ptr: *VirtualAddressBlock) void {
+        if(ptr.long_details) {
+            long_block_pool.destroy(@fieldParentPtr("basic", ptr));
+        } else {
+            short_block_pool.destroy(ptr);
+        }
+    }
 };
 
 pub const VirtualAddressBlockLong = struct {

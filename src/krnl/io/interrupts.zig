@@ -46,7 +46,7 @@ var queues: []ServiceRegistrationQueue = undefined;
 var raw_handlers: [256]bool = .{false} ** 256;
 
 pub fn init() !void {
-    const alloc = arch.vmm.gpa.allocator();
+    const alloc = hal.mm.pool.pool_allocator;
     queues = try alloc.alloc(ServiceRegistrationQueue, 256);
     @memset(queues, .{});
     pool = .init(alloc);

@@ -250,7 +250,7 @@ fn init_mm_early() linksection(".init") !void {
     mm.valid_pte.valid.addr.pfi = lvl4_table_pfi;
     lvl4_tbl[map.pte_recurse_index] = mm.valid_pte;
 
-    // give each of the other 127 kernel mode PXE entries a blank page, leaving usermode PXE entries blank.
+    // give each of the other 127 kernel mode PXE entries a blank page, leaving usermode PXE entries nonpresent.
     for (lvl4_tbl[0x100..], 0x100..) |*e, i| {
         if (i != map.pte_recurse_index) {
             mm.valid_pte.valid.addr.pfi = bootstrap_alloc_page();
@@ -582,6 +582,10 @@ noinline fn init_mm_impl() linksection(".init") !void {
     log.info("[STAGE {d}]: PRCBs allocated", .{bootstrap_stage});
 
     bootstrap_init_pfmdb();
+
+    bootstrap_stage = 4;
+    @import("pool.zig").expand_ppe();
+    log.info("[STAGE {d}]: first nonpaged pool PPE created", .{bootstrap_stage});
 }
 
 /// initialize the memory manager.

@@ -6,6 +6,7 @@ const WindowStructIndexer = util.WindowStructIndexer;
 const apic = @import("../apic/apic.zig");
 const log = @import("acpi.zig").log;
 const std = @import("std");
+const mm = @import("../mm/mm.zig");
 
 const PhysAddr = @import("cmn").types.PhysAddr;
 
@@ -129,7 +130,7 @@ pub fn read_madt(ptr: *align(1) const Madt) !void {
                 log.debug("IOApic: gsi base {x}", .{payload.gsi_base});
                 apic.ioapic.ioapics_buf[@atomicRmw(u8, &apic.ioapic.ioapics_count, .Add, 1, .monotonic)] = .{
                     .id = payload.ioapic_id,
-                    .base_addr = @import("../arch/arch.zig").ptr_from_physaddr([*]volatile u32, @enumFromInt(payload.ioapic_addr)),
+                    .base_addr = @alignCast(@ptrCast((try mm.map_io(@enumFromInt(payload.ioapic_addr), 0x20)).ptr)),
                     .gsi_base = payload.gsi_base,
                 };
             },
@@ -184,7 +185,7 @@ pub fn read_madt(ptr: *align(1) const Madt) !void {
         pins.* = uid_nmi_pins[uid];
     }
     log.info("LAPIC base at phys {x}", .{@intFromEnum(lapic_ptr)});
-    apic.lapic_ptr = @import("../arch/arch.zig").ptr_from_physaddr([*]volatile u32, lapic_ptr);
+    apic.lapic_ptr = @alignCast(@ptrCast(try mm.map_io(lapic_ptr, 4096)));
 }
 
 test {

@@ -58,13 +58,13 @@ fn init(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator, wait_for_aps: boo
     p.idle_thread = try Thread.init(gpa, idle_thread_id, idle_client_thread_id);
     try p.idle_thread.setup_stack(page_alloc, @import("dispatcher/idle.zig").idle, null);
     if (wait_for_aps) {
-        arch.smp.wait_for_all_aps();
+        // arch.smp.wait_for_all_aps();
         dispatcher.interrupts.enter_scheduling();
     }
 }
 
-pub fn allocate_lcbs(page_alloc: std.mem.Allocator) !void {
-    lcbs = try page_alloc.alignedAlloc(LcbWrapper, 1 << 12, apic.lapics.len);
+pub fn allocate_lcbs() !void {
+    lcbs = try std.heap.page_allocator.alignedAlloc(LcbWrapper, 1 << 12, apic.lapics.len);
     const apic_ids = apic.lapics.items(.id);
     const uids = apic.lapics.items(.uid);
     for (lcbs, 0..) |*l, i| {

@@ -1,13 +1,10 @@
 pub const cpuid = @import("cpuid.zig");
 pub const msr = @import("msr.zig");
 pub const segmentation = @import("segmentation.zig");
-pub const paging = @import("paging.zig");
 pub const control_registers = @import("ctrl_registers.zig");
 pub const serial = @import("serial.zig");
 pub const descriptors = @import("descriptors.zig");
 pub const gdt = @import("gdt.zig");
-pub const pmm = @import("pmm.zig");
-pub const vmm = @import("vmm.zig");
 pub const idt = @import("idt.zig");
 pub const interrupts = @import("interrupts.zig");
 pub const rand = @import("rand.zig");
@@ -24,9 +21,6 @@ const acpi = @import("../acpi/acpi.zig");
 const apic = @import("../apic/apic.zig");
 
 pub const cc: @import("std").builtin.CallingConvention = types.cc;
-
-pub const ptr_from_physaddr = pmm.ptr_from_physaddr;
-pub const physaddr_from_ptr = pmm.physaddr_from_ptr;
 
 pub inline fn puts(bytes: []const u8) void {
     for (bytes) |b| {

@@ -52,7 +52,7 @@ fn logFn(
 
 pub const os = struct {
     pub const heap = struct {
-        pub const page_allocator = arch.vmm.raw_page_allocator.allocator();
+        pub const page_allocator = hal.mm.pool.pool_page_allocator;
     };
 };
 
@@ -87,6 +87,7 @@ fn kstart2_bootelf(ldr_info: *bootelf.BootelfData) callconv(arch.cc) noreturn {
 
     kstart3();
 }
+
 fn kstart3() callconv(arch.cc) noreturn {
     main() catch |e| {
         std.builtin.panicUnwrapError(@errorReturnTrace(), e);
@@ -110,9 +111,9 @@ const zuacpi = @import("hal/acpi/zuacpi.zig");
 noinline fn main() anyerror!noreturn {
     try arch.init.platform_init();
     // ldr_info.entries = arch.ptr_from_physaddr([*]hal.memory.MemoryMapEntry, @intFromPtr(ldr_info.entries));
-    const page, const gpa = try arch.smp.init();
-    try smp.allocate_lcbs(page);
-    try smp.enter_threading(page, gpa);
+    try arch.smp.init();
+    try smp.allocate_lcbs();
+    try smp.enter_threading(hal.mm.pool.pool_page_allocator, hal.mm.pool.pool_allocator);
 
     log.debug("current gs base: {x}", .{arch.msr.read(.gs_base)});
 
@@ -121,8 +122,8 @@ noinline fn main() anyerror!noreturn {
     try uacpi.event.install_fixed_event_handler(.power_button, &power_button_handler, null);
     try uacpi.event.finalize_gpe_initialization();
 
-    try @import("objects/ob.zig").init(gpa);
-    try @import("io/io.zig").init(gpa);
+    try @import("objects/ob.zig").init(hal.mm.pool.pool_allocator);
+    try @import("io/io.zig").init(hal.mm.pool.pool_allocator);
 
     const current_apic_id = hal.apic.get_lapic_id();
 

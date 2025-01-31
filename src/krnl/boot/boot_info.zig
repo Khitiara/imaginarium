@@ -149,7 +149,7 @@ pub noinline fn dupe_bootloader_data() !void {
             }
         },
         .bootelf => {
-            rsdp_addr = try @import("../hal/acpi/rsdp.zig").locate_rsdp();
+            // rsdp_addr = try @import("../hal/acpi/rsdp.zig").locate_rsdp();
             const fb_raw = bootelf_data.framebuffer;
             if (fb_raw.base == .nul) {
                 framebuffers = &.{};

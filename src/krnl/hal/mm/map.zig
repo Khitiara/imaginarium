@@ -24,7 +24,7 @@ const pte = @import("pte.zig");
 const std = @import("std");
 const util = @import("util");
 
-inline fn entry_index(addr: usize, level: usize) usize {
+pub inline fn entry_index(addr: usize, level: usize) usize {
     const ptes_per_table_bits = comptime std.math.log2(std.mem.page_size / @sizeOf(pte.PresentPte));
     const shift = std.math.log2(std.mem.page_size) + (ptes_per_table_bits * (level - 1));
     const mask = (@as(usize, 1) << (48 - shift)) - 1;
@@ -66,6 +66,7 @@ pub fn pte_from_addr(addr: usize) *pte.Pte {
 
 /// get the address of the page pointed to by this PTE
 pub fn addr_from_pte(e: *const pte.Pte) *align(4096) [4096]u8 {
+    @setRuntimeSafety(false);
     return @ptrFromInt(@as(usize, @bitCast((@as(isize, @bitCast(@intFromPtr(e))) << 25) >> 16)));
 }
 
@@ -75,7 +76,8 @@ pub fn pde_from_addr(addr: usize) *pte.Pte {
 
 /// get the address of the page pointed to by this PDE
 /// BE AWARE this is NOT the page table the pde points to directly, this is the ACTUAL PAGE
-pub fn addr_from_pde(e: *const pte.Pte) *align(4096) [4096]u8 {
+pub fn addr_from_pde(e: *const pte.Pte) *align(4096 * 512) [4096 * 512]u8 {
+    @setRuntimeSafety(false);
     return @ptrFromInt(@as(usize, @bitCast((@as(isize, @bitCast(@intFromPtr(e))) << 34) >> 16)));
 }
 
@@ -85,7 +87,8 @@ pub fn ppe_from_addr(addr: usize) *pte.Pte {
 
 /// get the address of the page pointed to by this PPE
 /// BE AWARE this is NOT the page directory the ppe points to directly, this is the ACTUAL PAGE
-pub fn addr_from_ppe(e: *const pte.Pte) *align(4096) [4096]u8 {
+pub fn addr_from_ppe(e: *const pte.Pte) *align(4096 * 512 * 512) [4096 * 512 * 512]u8 {
+    @setRuntimeSafety(false);
     return @ptrFromInt(@as(usize, @bitCast((@as(isize, @bitCast(@intFromPtr(e))) << 43) >> 16)));
 }
 
@@ -95,7 +98,8 @@ pub fn pxe_from_addr(addr: usize) *pte.Pte {
 
 /// get the address of the page pointed to by this PXE
 /// BE AWARE this is NOT the page directory table the pxe points to directly, this is the ACTUAL PAGE
-pub fn addr_from_pxe(e: *const pte.Pte) *align(4096) [4096]u8 {
+pub fn addr_from_pxe(e: *const pte.Pte) *align(4096 * 512 * 512) [4096 * 512 * 512 * 512]u8 {
+    @setRuntimeSafety(false);
     return @ptrFromInt(@as(usize, @bitCast((@as(isize, @bitCast(@intFromPtr(e))) << 52) >> 16)));
 }
 

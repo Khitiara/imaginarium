@@ -86,8 +86,9 @@ pub fn config_write_with_bridge(address: PciBridgeAddress, offset: u64, value: a
     if (address.bridge) |host_bridge_map| {
         const w = offset & 0x3;
         const old_mask: u32 = @as(u32, std.math.maxInt(@TypeOf(value))) << @intCast(8 * w);
-        const old = host_bridge_map.block(address.bus, address.device, address.function)[offset / 4] & old_mask;
-        host_bridge_map.block(address.bus, address.device, address.function)[offset / 4] = @intCast(old | (value << @intCast(8 * w)));
+        const block = host_bridge_map.block(address.bus, address.device, address.function);
+        const old = block[offset / 4] & old_mask;
+        block[offset / 4] = @intCast(old | (value << @intCast(8 * w)));
     } else {
         if (address.segment != 0) return error.InvalidArgument;
         config_write_legacy(.{

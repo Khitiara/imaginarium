@@ -145,8 +145,8 @@ pub const PfmList = struct {
         pfm._1.alloc_end = false;
         pfm._1.status = self.associated_status;
         pfm._3.flink.next = terminator;
+        pfm._2.blink.prev = self.last;
         if (self.last != terminator) {
-            pfm._2.blink.prev = self.last;
             pfm_db[self.last]._3.flink.next = pfi;
         } else {
             std.debug.assert(self.first == terminator);
@@ -287,6 +287,19 @@ pub const Pfm = extern struct {
                 .share_count = 0,
             },
         };
+    }
+
+    pub fn set_mapped_primary(self: *Pfm, p: *pte.Pte) void {
+        const iflg = self._0.lock.lock_cli();
+        defer self._0.lock.unlock_sti(iflg);
+
+        self._0.long |= @intFromPtr(p) & ~@as(usize, @sizeOf(usize) - 1);
+        self._1.status = .mapped;
+        self._1.alloc_end = true;
+        self._1.alloc_start = true;
+        self._1.refcnt += 1;
+        self._2.index = 0;
+        self._3.share_count += 1;
     }
 };
 

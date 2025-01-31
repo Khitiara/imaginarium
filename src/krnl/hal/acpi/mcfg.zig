@@ -1,7 +1,9 @@
 const std = @import("std");
 const sdt = @import("sdt.zig");
 const util = @import("util");
-const arch = @import("../arch/arch.zig");
+const hal = @import("../hal.zig");
+const arch = hal.arch;
+const mm = hal.mm;
 const assert = std.debug.assert;
 const checksum = util.checksum;
 
@@ -11,35 +13,57 @@ pub const Mcfg = extern struct {
 
     pub usingnamespace checksum.add_acpi_checksum(Mcfg);
 
-    pub fn bridges(self: *align(1) const Mcfg) []align(1) const PciHostBridge {
-        return std.mem.bytesAsSlice(PciHostBridge, @as([*]const u8, @ptrCast(self))[@sizeOf(Mcfg)..self.header.length]);
+    pub fn bridges(self: *align(1) const Mcfg) []align(1) const RawPciHostBridge {
+        return std.mem.bytesAsSlice(RawPciHostBridge, @as([*]const u8, @ptrCast(self))[@sizeOf(Mcfg)..self.header.length]);
     }
 };
 
 pub var host_bridges: []const PciHostBridge = undefined;
 
-pub const PciHostBridge = extern struct {
+const RawPciHostBridge = extern struct {
     base: u64,
     segment_group: u16,
     bus_start: u8,
     bus_end: u8,
     _: u32 = 0,
+};
+
+var bridge_map_lock: hal.SpinLock = .{};
+
+pub const PciHostBridge = struct {
+    base: u64,
+    ptr: ?[]align(4096 * 32 * 8) volatile [32][8][4096 / 32]u32 = null,
+    segment_group: u16,
+    bus_start: u8,
+    bus_end: u8,
+
 
     const AddrBreakdown = packed struct(u64) {
-        _1: u12 = 0,
-        function: u3,
-        device: u5,
+        _1: u20 = 0,
         bus: u8,
         _2: u36 = 0,
     };
+
+    pub fn map(self: *PciHostBridge) !void {
+        if(self.ptr != null) return;
+
+        const iflg = bridge_map_lock.lock_cli();
+        defer bridge_map_lock.unlock_sti(iflg);
+
+        if(self.ptr != null) return;
+
+        var bdown: AddrBreakdown = @bitCast(self.base);
+        bdown.bus = self.bus_start;
+
+        const len: usize = std.mem.page_size * 32 * 8 * @as(usize, self.bus_end - self.bus_start + 1);
+        self.ptr = @alignCast(std.mem.bytesAsSlice([32][8][4096 / 32]u32, try mm.map_io(@enumFromInt(@as(u64, @bitCast(bdown))), len)));
+    }
+
     pub fn block(self: *const PciHostBridge, bus: u8, device: u5, function: u3) *align(4096) volatile [4096 / 32]u32 {
         assert(bus >= self.bus_start);
         assert(bus <= self.bus_end);
-        var breakdown: AddrBreakdown = @bitCast(self.base);
-        breakdown.bus = bus;
-        breakdown.device = device;
-        breakdown.function = function;
-        return arch.ptr_from_physaddr(*align(4096) volatile [4096 / 32]u32, @enumFromInt(@as(u64,@bitCast(breakdown))));
+
+        return @alignCast(&(self.ptr orelse unreachable)[bus - self.bus_start][device][function]);
     }
 };
 
@@ -48,8 +72,16 @@ const log = @import("acpi.zig").log;
 pub fn set_table(table: *align(1) const Mcfg) !void {
     log.info("PCI(E) MCFG table loaded at {*}", .{table});
     const b = table.bridges();
-    const b2 = try arch.vmm.gpa.allocator().alloc(PciHostBridge, b.len);
-    @memcpy(b2, b);
+    const b2 = try mm.pool.pool_allocator.alloc(PciHostBridge, b.len);
+    for(b, b2) |*br, *bm| {
+        bm.* = .{
+            .base = br.base,
+            .bus_start = br.bus_start,
+            .bus_end = br.bus_end,
+            .segment_group = br.segment_group,
+        };
+        try bm.map();
+    }
     host_bridges = b2;
     for (host_bridges, 0..) |host_bridge, i| {
         log.debug("Host Bridge {d}: SegGrp 0x{X:0>4} buses {X:0>2}-{X:0>2} mapped with base 0x{X:0>16}", .{ i, host_bridge.segment_group, host_bridge.bus_start, host_bridge.bus_end, host_bridge.base });

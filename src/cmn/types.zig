@@ -11,7 +11,7 @@ pub const PhysAddr = enum(usize) {
     nul = 0,
     _,
     pub fn page(self: PhysAddr) u52 {
-        return @intFromEnum(self) >> comptime std.math.log2(std.mem.page_size);
+        return @truncate(@intFromEnum(self) >> comptime std.math.log2(std.mem.page_size));
     }
 };
 pub const LinearAddr = usize;

@@ -5,6 +5,7 @@ const Gas = @import("gas.zig").Gas;
 const checksum = util.checksum;
 const acpi = @import("acpi.zig");
 const arch = @import("../arch/arch.zig");
+const mm = @import("../mm/mm.zig");
 
 const hpet = @import("../hpet/hpet.zig");
 
@@ -19,12 +20,12 @@ pub const HpetCapabilities = packed struct(u32) {
     first_block_pci_vendor_id: u16,
 };
 
-pub fn read_hpet(ptr: *align(1) const Hpet) void {
+pub fn read_hpet(ptr: *align(1) const Hpet) !void {
     log.info("APIC HPET table loaded at {*}", .{ptr});
     const idx = @atomicRmw(u8, &hpet.hpet_count, .Add, 1, .monotonic);
     hpet.hpet_indices[ptr.hpet_number] = idx;
     hpet.hpet_ids[idx] = ptr.hpet_number;
-    hpet.hpets[idx] = arch.ptr_from_physaddr(?*volatile hpet.HpetRegisters, @enumFromInt(ptr.address()));
+    hpet.hpets[idx] = @alignCast(@ptrCast((try mm.map_io(@enumFromInt(ptr.address()), 4096)).ptr));
     hpet.caps[idx] = ptr.block_id;
     hpet.min_periodic_ticks[idx] = ptr.minimum_clock_ticks_periodic_mode;
 }

@@ -1,5 +1,5 @@
 pub const sdt = @import("sdt.zig");
-pub const rsdp = @import("rsdp.zig");
+// pub const rsdp = @import("rsdp.zig");
 pub const madt = @import("madt.zig");
 pub const mcfg = @import("mcfg.zig");
 pub const hpet = @import("hpet.zig");
@@ -14,9 +14,7 @@ pub const GlobalSdtLoadError = error{
     Overflow,
 };
 
-pub const GlobalSdtError = GlobalSdtLoadError || rsdp.RsdpError;
-
-const ptr_from_physaddr = @import("../arch/arch.zig").ptr_from_physaddr;
+pub const GlobalSdtError = GlobalSdtLoadError ;
 
 pub const log = std.log.scoped(.acpi);
 
@@ -24,7 +22,7 @@ pub fn load_table(t: *align(1) const sdt.SystemDescriptorTableHeader) !void {
     switch (t.signature) {
         .APIC => try madt.read_madt(@ptrCast(t)),
         .MCFG => try mcfg.set_table(@ptrCast(t)),
-        .HPET => hpet.read_hpet(@ptrCast(t)),
+        .HPET => try hpet.read_hpet(@ptrCast(t)),
         else => |s| {
             log.debug("Got ACPI table with signature {s}", .{std.mem.toBytes(s)});
         },
@@ -35,16 +33,16 @@ const PhysAddr = @import("cmn").types.PhysAddr;
 
 var rsdp_ptr:  ?PhysAddr = null;
 
-pub fn find_rsdp() !PhysAddr {
-    if(rsdp_ptr) |p| return p;
-    const p = try rsdp.locate_rsdp();
-    rsdp_ptr = p;
-    return p;
-}
+// pub fn find_rsdp() !PhysAddr {
+//     if(rsdp_ptr) |p| return p;
+//     const p = try rsdp.locate_rsdp();
+//     rsdp_ptr = p;
+//     return p;
+// }
 
 test {
     _ = sdt;
-    _ = rsdp;
+    // _ = rsdp;
     _ = madt;
     _ = load_table;
 }

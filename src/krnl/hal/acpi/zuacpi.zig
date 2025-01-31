@@ -19,6 +19,7 @@ var early_tables_alloc: std.mem.Allocator = undefined;
 
 pub fn early_tables(alloc: std.mem.Allocator) !void {
     buf = try alloc.alloc(u8, 8192);
+    log.info("allocated early table buffer", .{});
     early_tables_alloc = alloc;
     try uacpi.setup_early_table_access(buf);
     log.info("uacpi early table access setup", .{});

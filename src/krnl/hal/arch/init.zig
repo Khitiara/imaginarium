@@ -1,12 +1,9 @@
 const gdt = @import("gdt.zig");
-const pmm = @import("pmm.zig");
-const vmm = @import("vmm.zig");
 const idt = @import("idt.zig");
 const interrupts = @import("interrupts.zig");
 const rand = @import("rand.zig");
 const smp = @import("smp.zig");
 const time = @import("time.zig");
-const paging = @import("paging.zig");
 const control_registers = @import("ctrl_registers.zig");
 
 const std = @import("std");
@@ -42,32 +39,11 @@ pub fn platform_init() !void {
     time.init_timing();
     log.info("timekeeping initialized", .{});
 
-    try zuacpi.early_tables(vmm.raw_page_allocator.allocator());
-    log.info("acpi early table access setup", .{});
-}
-
-pub fn platform_init1() !void {
-    const paging_feats = paging.enumerate_paging_features();
-    log.info("physical addr width: {d} (0x{x} pages)", .{ paging_feats.maxphyaddr, @as(u64, 1) << @truncate(paging_feats.maxphyaddr - 12) });
-    log.info("linear addr width: {d}", .{paging_feats.linear_address_width});
-    log.info("1g pages: {}; global pages: {}; lvl5 paging: {}", .{ paging_feats.gigabyte_pages, paging_feats.global_page_support, paging_feats.five_level_paging });
-
-    const memmap = @import("../../boot/boot_info.zig").memmap;
-
-    pmm.init(paging_feats.maxphyaddr, memmap);
-    log.info("initialized lower phys memory", .{});
-    log.info("disabling 8259 PIC", .{});
-    interrupts.disable_8259pic();
-    try vmm.init(memmap);
-    log.info("vmm initialized", .{});
-    var cr4 = control_registers.read(.cr4);
-    cr4.osfxsr = true;
-    control_registers.write(.cr4, cr4);
     idt.enable();
     log.info("interrupts enabled", .{});
     try @import("../../dispatcher/interrupts.zig").init_dispatch_interrupts();
     log.info("dispatcher interrupt handlers added", .{});
-    try zuacpi.early_tables(vmm.raw_page_allocator.allocator());
+    try zuacpi.early_tables(hal.mm.pool.pool_page_allocator);
     log.info("acpi early table access setup", .{});
     apic.init();
     log.info("checked for x2apic compat and enabled apic in {s} mode", .{if (apic.x2apic.x2apic_enabled) "x2apic" else "xapic"});

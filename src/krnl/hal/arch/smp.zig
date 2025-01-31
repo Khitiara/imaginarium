@@ -8,10 +8,9 @@ const ext = util.extern_address;
 
 const pause = std.atomic.spinLoopHint;
 
-const ptr_from_physaddr = @import("pmm.zig").ptr_from_physaddr;
-
 export var __bsp_start_spinlock_flag: u8 = 0;
 
+const hal = @import("../hal.zig");
 const arch = @import("arch.zig");
 const delay_unsafe = arch.delay_unsafe;
 
@@ -25,7 +24,6 @@ pub fn get_local_krnl_stack_top() *anyopaque {
 }
 
 var _cb: *const fn (std.mem.Allocator) void = undefined;
-const vmm = @import("vmm.zig");
 var bspid: u8 = undefined;
 
 const log = std.log.scoped(.@"hal.smp");
@@ -41,10 +39,10 @@ pub const ArchPrcb = extern struct {
     }
 };
 
-pub fn init() !struct { std.mem.Allocator, std.mem.Allocator } {
+pub fn init() !void {
     bspid = apic.get_lapic_id();
-    const alloc = vmm.raw_page_allocator.allocator();
-    const gpa = vmm.gpa.allocator();
+    const alloc = hal.mm.pool.pool_page_allocator;
+    const gpa = hal.mm.pool.pool_allocator;
     var raw_ap_stacks = try alloc.alloc([8 << 20]u8, apic.lapics.len - 1);
     ap_stacks = try gpa.alloc(*[8 << 20]u8, apic.lapics.len);
     var stk: usize = 0;
@@ -58,75 +56,4 @@ pub fn init() !struct { std.mem.Allocator, std.mem.Allocator } {
             log.debug("processor {d} (lapic id {d}) is not usable", .{ i, id });
         }
     }
-    return .{ alloc, gpa };
-}
-
-pub fn start_aps(cb: *const fn (std.mem.Allocator) void) !void {
-    _cb = cb;
-
-    const ap_start = ext("__ap_trampoline_begin__");
-    const ap_end = ext("__ap_trampoline_end__");
-
-    const lnd_ofs = @intFromPtr(ext("_ap_land_")) - @intFromPtr(ap_start);
-    const stk_ofs = @intFromPtr(ext("_ap_stk_")) - @intFromPtr(ap_start);
-    const cr3_ofs = @intFromPtr(ext("_ap_cr3_")) - @intFromPtr(ap_start);
-
-    const ap_trampoline = ptr_from_physaddr([*]u8, 0x8000);
-    @memcpy(ap_trampoline, ap_start[0..(@intFromPtr(ap_end) - @intFromPtr(ap_start))]);
-    @as(**const fn () callconv(.Win64) void, @ptrCast(ap_trampoline[lnd_ofs..])).* = &__ap_landing;
-    @as(*usize, @ptrCast(ap_trampoline[cr3_ofs..])).* = crs.read(.cr3);
-    const ap_stk_ptr: *usize = @ptrCast(ap_trampoline[stk_ofs..]);
-    var init_icr: apic.Icr = .{
-        .vector = 0,
-        .delivery = .init,
-        .dest_mode = .physical,
-        .assert = false,
-        .trigger_mode = .level,
-        .shorthand = .none,
-        .dest = 0,
-    };
-    // var sipi_icr: apic.Icr = .{
-    //     .vector = 8,
-    //     .delivery = .startup,
-    //     .dest_mode = .physical,
-    //     .assert = false,
-    //     .trigger_mode = .edge,
-    //     .shorthand = .none,
-    //     .dest = 0,
-    // };
-    for (0..apic.processor_count) |i| {
-        const id = apic.lapic_ids[i];
-        if (id == bspid) {
-            continue;
-        }
-        ap_stk_ptr.* = @intFromPtr(ap_stacks[i]) + (8 << 20);
-        apic.write_register(.esr, @bitCast(@as(u32, 0)));
-        init_icr.assert = true;
-        init_icr.dest = id;
-        apic.write_register(.icr, init_icr);
-        pause();
-        while (apic.read_register(.icr).pending) {
-            pause();
-        }
-        init_icr.assert = false;
-        apic.write_register(.icr, init_icr);
-        while (apic.read_register(.icr).pending) {
-            pause();
-        }
-        delay_unsafe(10000000);
-    }
-}
-
-pub fn wait_for_all_aps() void {
-    while (@atomicLoad(u8, &__bsp_start_spinlock_flag, .acquire) == 0) {
-        pause();
-    }
-}
-
-export fn __ap_landing() callconv(.Win64) noreturn {
-    @import("gdt.zig").apply();
-    @import("idt.zig").load();
-    _cb(vmm.gpa.allocator());
-
-    while (true) {}
 }
