@@ -32,11 +32,10 @@ var bridge_map_lock: hal.SpinLock = .{};
 
 pub const PciHostBridge = struct {
     base: u64,
-    ptr: ?[]align(4096 * 32 * 8) volatile [32][8][4096 / 32]u32 = null,
+    ptr: ?[]align(4096) volatile [32][8][4096 / 32]u32 = null,
     segment_group: u16,
     bus_start: u8,
     bus_end: u8,
-
 
     const AddrBreakdown = packed struct(u64) {
         _1: u20 = 0,
@@ -44,19 +43,23 @@ pub const PciHostBridge = struct {
         _2: u36 = 0,
     };
 
-    pub fn map(self: *PciHostBridge) !void {
-        if(self.ptr != null) return;
+    pub noinline fn map(self: *PciHostBridge) !void {
+        if (self.ptr != null) return;
 
         const iflg = bridge_map_lock.lock_cli();
         defer bridge_map_lock.unlock_sti(iflg);
 
-        if(self.ptr != null) return;
+        if (self.ptr != null) return;
 
         var bdown: AddrBreakdown = @bitCast(self.base);
         bdown.bus = self.bus_start;
 
-        const len: usize = std.mem.page_size * 32 * 8 * @as(usize, self.bus_end - self.bus_start + 1);
-        self.ptr = @alignCast(std.mem.bytesAsSlice([32][8][4096 / 32]u32, try mm.map_io(@enumFromInt(@as(u64, @bitCast(bdown))), len)));
+        // log.debug("bridge {d}-{d}", .{ self.bus_start, self.bus_end });
+
+        const len: usize = (@as(usize, self.bus_end - self.bus_start) + 1) * comptime (std.heap.pageSize() * 32 * 8);
+        const b = try mm.map_io(@enumFromInt(@as(u64, @bitCast(bdown))), len);
+
+        self.ptr = @alignCast(std.mem.bytesAsSlice([32][8][4096 / 32]u32, b));
     }
 
     pub fn block(self: *const PciHostBridge, bus: u8, device: u5, function: u3) *align(4096) volatile [4096 / 32]u32 {
@@ -69,11 +72,11 @@ pub const PciHostBridge = struct {
 
 const log = @import("acpi.zig").log;
 
-pub fn set_table(table: *align(1) const Mcfg) !void {
+pub noinline fn set_table(table: *align(1) const Mcfg) !void {
     log.info("PCI(E) MCFG table loaded at {*}", .{table});
     const b = table.bridges();
     const b2 = try mm.pool.pool_allocator.alloc(PciHostBridge, b.len);
-    for(b, b2) |*br, *bm| {
+    for (b, b2) |*br, *bm| {
         bm.* = .{
             .base = br.base,
             .bus_start = br.bus_start,

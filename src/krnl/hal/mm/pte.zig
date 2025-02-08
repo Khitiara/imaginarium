@@ -118,4 +118,4 @@ pub const PresentPte = packed struct(u64) {
     xd: bool,
 };
 
-pub const PageTable = *[std.mem.page_size / @sizeOf(Pte)]Pte;
+pub const PageTable = *[std.heap.pageSize() / @sizeOf(Pte)]Pte;

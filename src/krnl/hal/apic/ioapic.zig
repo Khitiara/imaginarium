@@ -25,7 +25,7 @@ const IoApicVersion = packed struct(u32) {
 
 pub const IOApic = struct {
     id: u8,
-    base_addr: [*]volatile u32,
+    base_addr: [*]u32,
     gsi_base: u32,
 };
 

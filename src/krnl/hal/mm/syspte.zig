@@ -16,6 +16,8 @@ const map = @import("map.zig");
 const mm = @import("mm.zig");
 const std = @import("std");
 
+const log = std.log.scoped(.syspte);
+
 const QueuedSpinLock = @import("../QueuedSpinLock.zig");
 
 var first: Pte = undefined;
@@ -42,6 +44,7 @@ inline fn get_next(p: [*]Pte) ?[*]Pte {
 inline fn set_cluster_size(p: [*]Pte, s: u32) void {
     if (s == 1) {
         if (get_cluster_size(p) != 1) {
+            // log.debug("clearing p[1] for newly-singleton block at {*}", .{p});
             p[1] = .{ .uint = 0 };
         }
         p[0].list.singleton = true;
@@ -132,20 +135,23 @@ pub fn reserve(count: u32) ?[]Pte {
     }
 
     if (cluster_size == count) {
+        // log.debug("found exact match syspte cluster {*}", .{cluster});
         // if the block is an exact match then just return it.
         const ret: [*]Pte = @ptrCast(cluster);
-        @memset(ret[0..@max(2, count)], .{ .uint = 0 });
+        @memset(ret[0..@min(2, count)], .{ .uint = 0 });
         return ret[0..count];
     } else {
         // otherwise we need to split the block in two.
         // we take new allocation from the end of the block to try and minimize
         // the chances of multiple re-mergings in release. IDK how well this will
         // actually work or what difference thatll make though.
-        const idx: u32 = get_index(cluster) + count;
+        const idx: u32 = get_index(cluster);
         cluster_size -= count;
 
-        const ret: [*]Pte = map.syspte_space + cluster_size;
-        @memset(ret[0..@max(2, count)], .{ .uint = 0 });
+        const ret: [*]Pte = cluster + cluster_size;
+        @memset(ret[0..@min(2, count)], .{ .uint = 0 });
+
+        // log.debug("shrinking syspte cluster {*} by {d} to new length {x} (will return {*})", .{ cluster, count, cluster_size, ret });
 
         // shrink the current cluster
         set_cluster_size(cluster, cluster_size);
@@ -179,6 +185,12 @@ pub fn release(ptes: []Pte) void {
     syspte_lock.lock(&tok);
     defer tok.unlock();
 
+    // log.debug("releasing sysptes {*} (count {x})", .{ ptes, ptes.len });
+
+    // for (ptes) |*p| {
+    //     log.debug("nuking {*}", .{p});
+    //     p.* = .{ .uint = 0 };
+    // }
     @memset(ptes, .{ .uint = 0 });
 
     var count: u32 = @intCast(ptes.len);
@@ -194,14 +206,20 @@ pub fn release(ptes: []Pte) void {
         if (block + sz == start or start + sz == block) {
             count += sz;
             // move start back if needed
+            // const backward = @intFromPtr(block) < @intFromPtr(start);
             if (@intFromPtr(block) < @intFromPtr(start)) {
                 start = block;
             }
 
             // unlink
             prev[0].list.next = block[0].list.next;
+            // log.debug("clearing old metadata for {*} (len {x}) for merge {s}", .{block, sz, if(backward) "forwards" else "backwards"});
             // clear metadata
-            @memset(block[0..@max(2, sz)], .{ .uint = 0 });
+            // for (block[0..@min(2, sz)]) |*p| {
+            //     log.debug("nuking {*}", .{p});
+            //     p.* = .{ .uint = 0 };
+            // }
+            @memset(block[0..@min(2, sz)], .{ .uint = 0 });
             // and we gotta re-iterate now
             insert = null;
             prev = @ptrCast(&first);
@@ -221,6 +239,7 @@ pub fn release(ptes: []Pte) void {
 
     const do_insert = insert orelse prev;
 
+    // log.debug("setting size {x} for {*}. inserting at {*}", .{ count, start, do_insert });
     set_cluster_size(start, count);
     start[0].list.next = do_insert[0].list.next;
     do_insert[0].list.next = get_index(start);

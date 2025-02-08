@@ -76,16 +76,16 @@ pub fn Queue(comptime T: type, comptime field_name: []const u8) type {
             return self.impl.len;
         }
 
-        pub inline fn node_from_ref(ref: anytype) CopyPtrAttrs(@TypeOf(ref), .One, SinglyLinkedNode) {
+        pub inline fn node_from_ref(ref: anytype) CopyPtrAttrs(@TypeOf(ref), .one, SinglyLinkedNode) {
             return &@field(ref, field_name);
         }
 
-        pub inline fn ref_from_node(node: anytype) CopyPtrAttrs(@TypeOf(node), .One, T) {
+        pub inline fn ref_from_node(node: anytype) CopyPtrAttrs(@TypeOf(node), .one, T) {
             if (@typeInfo(@TypeOf(node)) == .optional) return ref_from_optional_node(node);
             return @fieldParentPtr(field_name, node);
         }
 
-        pub inline fn ref_from_optional_node(node: anytype) ?CopyPtrAttrs(@typeInfo(@TypeOf(node)).optional.child, .One, T) {
+        pub inline fn ref_from_optional_node(node: anytype) ?CopyPtrAttrs(@typeInfo(@TypeOf(node)).optional.child, .one, T) {
             return @fieldParentPtr(field_name, node orelse return null);
         }
 
@@ -167,16 +167,16 @@ pub fn PriorityQueue(comptime T: type, comptime node_field_name: []const u8, com
         tails: Tails = Tails.initFill(null),
         len: usize = 0,
 
-        pub inline fn node_from_ref(ref: anytype) CopyPtrAttrs(@TypeOf(ref), .One, SinglyLinkedNode) {
+        pub inline fn node_from_ref(ref: anytype) CopyPtrAttrs(@TypeOf(ref), .one, SinglyLinkedNode) {
             return &@field(ref, node_field_name);
         }
 
-        pub inline fn ref_from_node(node: anytype) CopyPtrAttrs(@TypeOf(node), .One, T) {
+        pub inline fn ref_from_node(node: anytype) CopyPtrAttrs(@TypeOf(node), .one, T) {
             if (@typeInfo(@TypeOf(node)) == .optional) return ref_from_optional_node(node);
             return @fieldParentPtr(node_field_name, node);
         }
 
-        pub inline fn ref_from_optional_node(node: anytype) ?CopyPtrAttrs(@typeInfo(@TypeOf(node)).optional.child, .One, T) {
+        pub inline fn ref_from_optional_node(node: anytype) ?CopyPtrAttrs(@typeInfo(@TypeOf(node)).optional.child, .one, T) {
             return @fieldParentPtr(node_field_name, node orelse return null);
         }
 
@@ -377,16 +377,16 @@ pub fn DoublyLinkedList(comptime T: type, comptime field_name: []const u8) type 
             return self.impl.len;
         }
 
-        pub inline fn node_from_ref(ref: anytype) CopyPtrAttrs(@TypeOf(ref), .One, DoublyLinkedNode) {
+        pub inline fn node_from_ref(ref: anytype) CopyPtrAttrs(@TypeOf(ref), .one, DoublyLinkedNode) {
             return &@field(ref, field_name);
         }
 
-        pub inline fn ref_from_node(node: anytype) CopyPtrAttrs(@TypeOf(node), .One, T) {
+        pub inline fn ref_from_node(node: anytype) CopyPtrAttrs(@TypeOf(node), .one, T) {
             if (@typeInfo(@TypeOf(node)) == .optional) return ref_from_optional_node(node);
             return @fieldParentPtr(field_name, node);
         }
 
-        pub inline fn ref_from_optional_node(node: anytype) ?CopyPtrAttrs(@typeInfo(@TypeOf(node)).optional.child, .One, T) {
+        pub inline fn ref_from_optional_node(node: anytype) ?CopyPtrAttrs(@typeInfo(@TypeOf(node)).optional.child, .one, T) {
             return @fieldParentPtr(field_name, node orelse return null);
         }
 

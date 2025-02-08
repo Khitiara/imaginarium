@@ -9,7 +9,7 @@ const syspte = @import("syspte.zig");
 const mm = @import("mm.zig");
 
 const MaxSupportedPhysAddrWidth = 48;
-pub const PageOffsetBits = std.math.log2_int(usize, std.mem.page_size);
+pub const PageOffsetBits = std.math.log2_int(usize, std.heap.pageSize());
 pub const PageBitsPerPageLevel = 9;
 pub const LargePageOffsetBits = PageOffsetBits + PageBitsPerPageLevel;
 pub const HugePageOffsetBits = LargePageOffsetBits + PageBitsPerPageLevel;

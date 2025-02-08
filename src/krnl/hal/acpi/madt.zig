@@ -95,20 +95,28 @@ fn MadtEntryPayload(comptime t: MadtEntryType) type {
     };
 }
 
-pub fn read_madt(ptr: *align(1) const Madt) !void {
+pub noinline fn read_madt(ptr: *align(1) const Madt) !void {
     apic.lapics = try apic.Lapics.init(0);
     var uid_nmi_pins: [256]apic.LapicNmiPin = undefined;
+    var uids_found: std.StaticBitSet(256) = .initEmpty();
+    var default_uid: apic.LapicNmiPin = undefined;
     log.info("APIC MADT table loaded at {*}", .{ptr});
     var lapic_ptr: PhysAddr = @enumFromInt(ptr.lapic_addr);
-    const entries_base_ptr = @as([*]const u8, @ptrCast(ptr))[@sizeOf(Madt)..ptr.header.length];
-    var indexer = WindowStructIndexer(MadtEntryHeader){ .buf = entries_base_ptr };
-    while (indexer.offset < entries_base_ptr.len) {
-        const hdr = indexer.current();
-        defer indexer.advance(hdr.length);
+
+    var entry: [*]const u8 = @ptrCast(ptr);
+    entry += @sizeOf(Madt);
+    const entries_len = ptr.header.length - @sizeOf(Madt);
+    var offset: usize = 0;
+    while (offset < entries_len) {
+        const hdr: *align(1) const MadtEntryHeader = @ptrCast(entry);
+        defer {
+            entry += hdr.length;
+            offset += hdr.length;
+        }
 
         switch (hdr.type) {
             .local_apic => {
-                const payload = @as(*align(1) const MadtEntryPayload(.local_apic), @ptrCast(hdr));
+                const payload: *align(1) const MadtEntryPayload(.local_apic) = @ptrCast(entry);
                 assert(hdr.length == 8);
                 const idx = try apic.lapics.append(.{
                     .id = payload.local_apic_id,
@@ -124,18 +132,19 @@ pub fn read_madt(ptr: *align(1) const Madt) !void {
                 apic.lapic_indices[payload.local_apic_id] = idx;
             },
             .io_apic => {
-                const payload = @as(*align(1) const MadtEntryPayload(.io_apic), @ptrCast(hdr));
+                const payload: *align(1) const MadtEntryPayload(.io_apic) = @ptrCast(entry);
                 assert(hdr.length == 12);
 
                 log.debug("IOApic: gsi base {x}", .{payload.gsi_base});
-                apic.ioapic.ioapics_buf[@atomicRmw(u8, &apic.ioapic.ioapics_count, .Add, 1, .monotonic)] = .{
+                apic.ioapic.ioapics_buf[apic.ioapic.ioapics_count] = .{
                     .id = payload.ioapic_id,
                     .base_addr = @alignCast(@ptrCast((try mm.map_io(@enumFromInt(payload.ioapic_addr), 0x20)).ptr)),
                     .gsi_base = payload.gsi_base,
                 };
+                apic.ioapic.ioapics_count += 1;
             },
             .interrupt_source_override => {
-                const payload = @as(*align(1) const MadtEntryPayload(.interrupt_source_override), @ptrCast(hdr));
+                const payload: *align(1) const MadtEntryPayload(.interrupt_source_override) = @ptrCast(entry);
                 assert(payload.bus == 0);
                 log.debug("ISA IRQ Redirect: IRQ#{d} -> GSI#{d}, polarity {} trigger {}", .{ payload.source, payload.gsi, payload.flags.polarity, payload.flags.trigger });
                 apic.ioapic.isa_irqs[payload.source] = .{
@@ -153,13 +162,13 @@ pub fn read_madt(ptr: *align(1) const Madt) !void {
                 };
             },
             .local_apic_addr_override => {
-                const payload = @as(*align(1) const MadtEntryPayload(.local_apic_addr_override), @ptrCast(hdr));
+                const payload: *align(1) const MadtEntryPayload(.local_apic_addr_override) = @ptrCast(entry);
                 assert(hdr.length == 12);
 
                 lapic_ptr = payload.lapic_addr;
             },
             .local_nmi => {
-                const payload = @as(*align(1) const MadtEntryPayload(.local_nmi), @ptrCast(hdr));
+                const payload: *align(1) const MadtEntryPayload(.local_nmi) = @ptrCast(entry);
                 assert(hdr.length == 6);
                 const info: apic.LapicNmiPin = .{
                     .pin = switch (payload.pin) {
@@ -171,9 +180,10 @@ pub fn read_madt(ptr: *align(1) const Madt) !void {
                     .polarity = payload.flags.polarity,
                 };
                 if (payload.processor_uid == 0xFF) {
-                    @memset(&uid_nmi_pins, info);
+                    default_uid = info;
                 } else {
                     uid_nmi_pins[payload.processor_uid] = info;
+                    uids_found.set(payload.processor_uid);
                 }
             },
             else => {
@@ -181,11 +191,17 @@ pub fn read_madt(ptr: *align(1) const Madt) !void {
             },
         }
     }
-    for (apic.lapics.items(.uid), apic.lapics.items(.nmi_pins)) |uid, *pins| {
-        pins.* = uid_nmi_pins[uid];
+    {
+        @memset(apic.lapics.items(.nmi_pins), default_uid);
+        var iter = uids_found.iterator(.{});
+        const uids = apic.lapics.items(.uid);
+        const pins = apic.lapics.items(.nmi_pins);
+        while (iter.next()) |idx| {
+            pins[idx] = uid_nmi_pins[uids[idx]];
+        }
     }
     log.info("LAPIC base at phys {x}", .{@intFromEnum(lapic_ptr)});
-    apic.lapic_ptr = @alignCast(@ptrCast(try mm.map_io(lapic_ptr, 4096)));
+    apic.lapic_ptr = @alignCast(@ptrCast((try mm.map_io(lapic_ptr, 4096)).ptr));
 }
 
 test {

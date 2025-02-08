@@ -35,6 +35,25 @@ fn unhandled_interrupt(frame: *idt.InterruptFrame(u64)) callconv(.SysV) noreturn
         log.err("unhandled interrupt: 0x{X: <2} --- {}", .{ @intFromEnum(frame.vector.exception), frame });
     }
 
+    log.debug("interrupt stack trace:", .{});
+    var addrs: [16]usize = undefined;
+    var trace: std.builtin.StackTrace = .{
+        .instruction_addresses = &addrs,
+        .index = 0,
+    };
+    b: {
+        var it = std.debug.StackIterator.init(null, frame.registers.rbp);
+        defer it.deinit();
+        for (trace.instruction_addresses[0..], 0..) |*addr, i| {
+            addr.* = it.next() orelse {
+                trace.index = i;
+                break :b;
+            };
+        }
+        trace.index = trace.instruction_addresses.len;
+    }
+
+    @import("../../debug.zig").print_stack_trace(log, frame.rip, &trace);
     @panic("UNHANDLED EXCEPTION");
 }
 

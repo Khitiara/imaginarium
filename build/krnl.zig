@@ -25,7 +25,7 @@ pub fn add_krnl(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, 
         .omit_frame_pointer = false,
         .error_tracing = true,
         // .single_threaded = true,
-        // .red_zone = false;
+        .red_zone = false,
         // .dwarf_format = .@"64";
     });
 
@@ -64,7 +64,7 @@ pub fn add_krnl(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, 
         },
     }).step);
     const objcopy = b.addObjCopy(exe.getEmittedBin(), .{
-        .strip = .debug_and_symbols,
+        .strip = .debug,
         .basename = exe_name,
         .extract_to_separate_file = true,
     });

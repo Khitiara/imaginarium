@@ -6,8 +6,16 @@ pub const SerialWriter = arch.SerialWriter;
 
 const log = std.log.default;
 
-pub fn print_stack_trace(logger: anytype, trace: *std.builtin.StackTrace) void {
+inline fn fixup_stack_addr(a: usize) usize {
+    return if (a == 0) 0 else a - 1;
+}
+
+pub fn print_stack_trace(logger: anytype, ip: ?usize, trace: *std.builtin.StackTrace) void {
     var i: usize = 0;
+    if (ip) |rip| {
+        logger.debug("   at   {d: <4}: {x:0>16}", .{ i, fixup_stack_addr(rip) });
+        i += 1;
+    }
     var frame_index: usize = 0;
     var frames_left: usize = @min(trace.index, trace.instruction_addresses.len);
     while (frames_left != 0) : ({
@@ -15,7 +23,7 @@ pub fn print_stack_trace(logger: anytype, trace: *std.builtin.StackTrace) void {
         frame_index = (frame_index + 1) % trace.instruction_addresses.len;
         i += 1;
     }) {
-        const return_address = trace.instruction_addresses[frame_index];
+        const return_address = fixup_stack_addr(trace.instruction_addresses[frame_index]);
         logger.debug("   at   {d: <4}: {x:0>16}", .{ i, return_address });
     }
 }
@@ -27,26 +35,21 @@ pub fn dump_stack_trace(logger: anytype, ret_addr: ?usize) void {
         .instruction_addresses = &addrs,
         .index = 0,
     };
-    std.debug.captureStackTrace(ret_addr orelse @returnAddress(), &trace);
-    print_stack_trace(logger, &trace);
+    std.debug.captureStackTrace(null, &trace);
+    print_stack_trace(logger, ret_addr orelse @returnAddress(), &trace);
 }
 
 pub fn print_err_trace(logger: anytype, msg: []const u8, err: anyerror, error_return_trace: ?*std.builtin.StackTrace) void {
-    logger.err("ERROR {s} {s}, trace:", .{msg, @errorName(err)});
+    logger.err("ERROR {s} {s}, trace:", .{ msg, @errorName(err) });
     if (error_return_trace) |stk| {
-        print_stack_trace(log, stk);
+        print_stack_trace(log, null, stk);
     } else {
         log.err("    ---", .{});
     }
 }
 
-pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_addr: ?usize) noreturn {
-    log.err("PANIC {s}, RETURN={X:0>16}; error return trace:", .{ msg, ret_addr orelse 0 });
-    if (error_return_trace) |stk| {
-        print_stack_trace(log, stk);
-    } else {
-        log.err("    ---", .{});
-    }
+pub fn panic(msg: []const u8, ret_addr: ?usize) noreturn {
+    log.err("PANIC {s}, RETURN={X:0>16}", .{ msg, ret_addr orelse 0 });
     dump_stack_trace(log, ret_addr);
     while (true) {
         // @breakpoint();

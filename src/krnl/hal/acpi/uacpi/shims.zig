@@ -45,11 +45,17 @@ export fn uacpi_kernel_free(address: [*]align(16) u8, size: usize) callconv(arch
 }
 
 export fn uacpi_kernel_map(address: PhysAddr, length: usize) callconv(arch.cc) ?*anyopaque {
-    return (hal.mm.map_io(address, length) catch return null).ptr;
+    return (hal.mm.map_io(address, length) catch |e| {
+        log.err("error in io mapping: {}", .{e});
+        if(@errorReturnTrace()) |trc| {
+            @import("../../../debug.zig").print_stack_trace(log, null, trc);
+        }
+        return null;
+    }).ptr;
 }
 
-export fn uacpi_kernel_unmap(address: [*]u8) callconv(arch.cc) void {
-    hal.mm.unmap_io(address[0..4096]);
+export fn uacpi_kernel_unmap(address: [*]u8, length: usize) callconv(arch.cc) void {
+    hal.mm.unmap_io(address[0..length]);
 }
 
 export fn uacpi_kernel_get_rsdp(addr: *PhysAddr) callconv(arch.cc) uacpi.uacpi_status {

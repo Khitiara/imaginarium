@@ -43,14 +43,13 @@ pub fn init() !void {
     bspid = apic.get_lapic_id();
     const alloc = hal.mm.pool.pool_page_allocator;
     const gpa = hal.mm.pool.pool_allocator;
-    var raw_ap_stacks = try alloc.alloc([8 << 20]u8, apic.lapics.len - 1);
     ap_stacks = try gpa.alloc(*[8 << 20]u8, apic.lapics.len);
     var stk: usize = 0;
     for (apic.lapics.items(.id), 0..) |id, i| {
         if (id == bspid) {
             ap_stacks[i] = @ptrFromInt(ext("__bootstrap_stack_bottom__"));
         } else if (apic.lapics.items(.enabled)[i] or apic.lapics.items(.online_capable)[i]) {
-            ap_stacks[i] = &raw_ap_stacks[stk];
+            ap_stacks[i] = try alloc.create([8 << 20]u8);
             stk += 1;
         } else {
             log.debug("processor {d} (lapic id {d}) is not usable", .{ i, id });

@@ -22,7 +22,7 @@ pub const PageAddrFormatter = packed struct(usize) {
     top: u16,
 
     pub fn format(self: *const @This(), comptime _: []const u8, _: std.fmt.FormatOptions, writer: anytype) !void {
-        try writer.print("{o:0>6}:{o:0>3}:{o:0>3}:{o:0>3}:{o:0>3}:{o:0>4}", .{self.top, self.p4, self.p3, self.p2, self.p1, self.offset});
+        try writer.print("{o:0>6}:{o:0>3}:{o:0>3}:{o:0>3}:{o:0>3}:{o:0>4}", .{ self.top, self.p4, self.p3, self.p2, self.p1, self.offset });
     }
 };
 
@@ -31,31 +31,26 @@ pub inline fn fmt_paging_addr(addr: usize) PageAddrFormatter {
 }
 
 pub inline fn pages_spanned(start: usize, len: usize) usize {
-    return ((start & comptime (std.mem.page_size - 1)) + len) / std.mem.page_size;
+    return std.math.divCeil(usize, (start & comptime (std.heap.pageSize() - 1)) + len, std.heap.pageSize()) catch unreachable;
 }
 
 pub inline fn flush_local_tlb() void {
     arch.control_registers.write(.cr3, arch.control_registers.read(.cr3));
 }
 
-pub const PfiBreakdown = packed union {
-    pfi: Pfi,
-    breakdown: packed struct(Pfi) {
-        pte: u9,
-        pde: u9,
-        ppe: u9,
-        pxe: u9,
-    },
-    pde_breakdown: packed struct(Pfi) {
-        pte: u9,
-        pde: u27,
-    },
-    ppe_breakdown: packed struct(Pfi) {
-        pte: u9,
-        pde: u9,
-        ppe: u18,
-    }
-};
+pub const PfiBreakdown = packed union { pfi: Pfi, breakdown: packed struct(Pfi) {
+    pte: u9,
+    pde: u9,
+    ppe: u9,
+    pxe: u9,
+}, pde_breakdown: packed struct(Pfi) {
+    pte: u9,
+    pde: u27,
+}, ppe_breakdown: packed struct(Pfi) {
+    pte: u9,
+    pde: u9,
+    ppe: u18,
+} };
 
 pub var valid_pte: @import("pte.zig").Pte = .{
     .valid = .{
@@ -73,22 +68,28 @@ pub var valid_pte: @import("pte.zig").Pte = .{
     },
 };
 
-pub fn map_io(physaddr: PhysAddr, len: usize) ![]u8 {
-    std.log.debug("mapping {x}[0..{x}] for io", .{@intFromEnum(physaddr), len});
+pub noinline fn map_io(physaddr: PhysAddr, len: usize) ![]u8 {
     const pages = pages_spanned(@intFromEnum(physaddr), len);
 
     const ptes = syspte.reserve(@intCast(pages)) orelse return error.OutOfMemory;
-    for(ptes, physaddr.page()..) |*p, page| {
+    for (ptes, physaddr.page()..) |*p, page| {
         valid_pte.valid.addr.pfi = @truncate(page);
         p.* = valid_pte;
     }
 
-    return @as([*]u8, @ptrCast(map.addr_from_pte(&ptes[0])))[@intFromEnum(physaddr) & 0xFFF..][0..len];
+    const block = @as([*]u8, @ptrCast(map.addr_from_pte(&ptes[0])))[@intFromEnum(physaddr) & 0xFFF ..][0..len];
+
+    // std.log.debug("mapping {x}[0..{x}] for io ({d} pages) to block {*}", .{ @intFromEnum(physaddr), len, pages, block });
+    flush_local_tlb();
+    return block;
 }
 
 pub fn unmap_io(slc: []u8) void {
     const back = std.mem.alignBackward(usize, @intFromPtr(slc.ptr), 4096);
-    const ptes = @as([*]pte.Pte, @ptrCast(map.pte_from_addr(back)))[0..pages_spanned(@intFromPtr(slc.ptr), slc.len)];
+    const pages = pages_spanned(@intFromPtr(slc.ptr), slc.len);
+    // std.log.debug("unmapping {*} ({d} pages)", .{ slc, pages });
+    const ptes = @as([*]pte.Pte, @ptrCast(map.pte_from_addr(back)))[0..pages];
 
     syspte.release(ptes);
+    flush_local_tlb();
 }

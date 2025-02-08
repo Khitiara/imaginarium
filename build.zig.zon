@@ -1,17 +1,23 @@
 .{
     .name = "imaginarium",
     .version = "0.0.0",
-    .dependencies = .{ .bootelf = .{
-        .path = "libs/bootelf/",
-    }, .zuid = .{
-        .path = "libs/zuid/",
-    }, .uacpi = .{
-        .url = "git+https://github.com/uACPI/uACPI?ref=master#1bd2930030ef819519de32dd1f7a8f999440308f",
-        .hash = "1220e159c64cb142bec522fd71e063fb73acfcf24a33775d68257ce9f8687cb02f58",
-    }, .limine = .{
-        .url = "git+https://github.com/limine-bootloader/limine?ref=v8.x-binary#4ccea35dbb35a6fef17985bf56d655ff366e1f27",
-        .hash = "1220533e700e69d712c0a656739b83a5aa50c1ad1ee7b05781ca1ee97e28457d0807",
-    }, .disk_image_step = .{ .path = "build/complex-disk-image/" } },
+    .dependencies = .{
+        .bootelf = .{
+            .path = "libs/bootelf/",
+        },
+        .zuid = .{
+            .path = "libs/zuid/",
+        },
+        .uacpi = .{
+            .url = "git+https://github.com/uACPI/uACPI?ref=master#757dcece1a9f1c069355b23f7feaf21656728f94",
+            .hash = "12200468fb671c04225f04d87e0fe1131e49ccd153e870be6e858dc80e39cb4e18df",
+        },
+        .limine = .{
+            .url = "git+https://github.com/limine-bootloader/limine?ref=v8.x-binary#4ccea35dbb35a6fef17985bf56d655ff366e1f27",
+            .hash = "1220533e700e69d712c0a656739b83a5aa50c1ad1ee7b05781ca1ee97e28457d0807",
+        },
+        .disk_image_step = .{ .path = "build/complex-disk-image/" },
+    },
     .paths = .{
         "src/",
         "build/",

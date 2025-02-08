@@ -25,9 +25,9 @@ const std = @import("std");
 const util = @import("util");
 
 pub inline fn entry_index(addr: usize, level: usize) usize {
-    const ptes_per_table_bits = comptime std.math.log2(std.mem.page_size / @sizeOf(pte.PresentPte));
-    const shift = std.math.log2(std.mem.page_size) + (ptes_per_table_bits * (level - 1));
-    const mask = (@as(usize, 1) << (48 - shift)) - 1;
+    const ptes_per_table_bits = comptime std.math.log2(std.heap.pageSize() / @sizeOf(pte.PresentPte));
+    const shift: u6 = std.math.log2_int(usize, std.heap.pageSize()) + @as(u6, @intCast(ptes_per_table_bits * (level - 1)));
+    const mask = (@as(usize, 1) << @as(u6, @intCast(48 - shift))) - 1;
     return (addr >> shift) & mask;
 }
 

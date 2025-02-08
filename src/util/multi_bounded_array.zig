@@ -79,7 +79,7 @@ pub fn MultiBoundedArrayAligned(
                 flds[i] = .{
                     .name = f.name,
                     .type = [capacity]f.type,
-                    .default_value = null,
+                    .default_value_ptr = null,
                     .is_comptime = false,
                     .alignment = alignment,
                 };

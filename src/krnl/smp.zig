@@ -36,7 +36,7 @@ pub const LocalControlBlock = struct {
 
 pub const LcbWrapper = struct {
     lcb: LocalControlBlock align(4096),
-    _pad: [std.mem.page_size - @sizeOf(LocalControlBlock)]u8 = undefined,
+    _pad: [std.heap.pageSize() - @sizeOf(LocalControlBlock)]u8 = undefined,
 };
 
 pub var lcbs: []LcbWrapper = undefined;
@@ -62,6 +62,8 @@ fn init(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator, wait_for_aps: boo
         dispatcher.interrupts.enter_scheduling();
     }
 }
+
+const boot = @import("boot/boot_info.zig");
 
 pub fn allocate_lcbs() !void {
     lcbs = try std.heap.page_allocator.alignedAlloc(LcbWrapper, 1 << 12, apic.lapics.len);

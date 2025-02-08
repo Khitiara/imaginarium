@@ -283,7 +283,7 @@ fn init_mm_early() linksection(".init") !void {
         krnl_pdes,                                                                  krnl_ppes,
         krnl_pxe_idx,                                                               krnl_ppe_idx_base,
         krnl_pde_idx_base,                                                          krnl_pte_idx_base,
-        krnl_location.kernel_virt_addr_base & (~@as(usize, std.mem.page_size - 1)), krnl_location.kernel_phys_addr_base,
+        krnl_location.kernel_virt_addr_base & (~@as(usize, std.heap.pageSize() - 1)), krnl_location.kernel_phys_addr_base,
     });
 
     const krnl_base_ppfi: Pfi = @intCast(krnl_location.kernel_phys_addr_base >> 12);
@@ -523,7 +523,7 @@ fn bootstrap_init_pfmdb() linksection(".init") void {
         const a = (probe.highest_phys_page + 1) * @sizeOf(pfmdb.Pfm);
         // if we add more caching etc to the pfmdb region we can add that in here
         // before dividing out to get page count.
-        break :b std.math.divCeil(usize, a, std.mem.page_size) catch unreachable;
+        break :b std.math.divCeil(usize, a, std.heap.pageSize()) catch unreachable;
     };
 
     log.info("[STAGE {d}]: PFM db will need {x} pages ({x} page tables, {x} page directories, {x} page directory lists)", .{

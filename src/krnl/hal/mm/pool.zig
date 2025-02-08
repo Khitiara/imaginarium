@@ -110,6 +110,8 @@ fn free_page_order(pg: *anyopaque, order: u8) void {
 }
 
 fn free_block(block: []u8) void {
+    if (block.len == 0) return;
+
     const iflg = lock.lock_cli();
     defer lock.unlock_sti(iflg);
 
@@ -210,7 +212,7 @@ fn alloc_pages_order(order: u8) ?usize {
     // possible optimization: return the secondary so we need less pfmdb accesses
     const b: *Buddy = @ptrFromInt(buddy_for(primary, order));
     b.order = order;
-    std.log.debug("freeing split buddy of order {d}", .{order});
+    // std.log.debug("freeing split buddy of order {d}", .{order});
 
     // mark free in pfm.share_count
     const pfi2 = map.pfi_from_pte(map.pte_from_addr(@intFromPtr(b))) orelse @panic("no PFI for reserved nonpage pool page");
@@ -225,6 +227,8 @@ fn alloc_pages_order(order: u8) ?usize {
 /// allocate a block of given size (rounded up to a power-of-two number of pages.
 /// use a GPA or slab etc if sub-page allocations are needed
 fn alloc_block(size: usize) ?[*]u8 {
+    if (size == 0) return @ptrFromInt(std.math.maxInt(usize));
+
     const iflg = lock.lock_cli();
     defer lock.unlock_sti(iflg);
 
@@ -235,22 +239,27 @@ fn alloc_block(size: usize) ?[*]u8 {
     return @as([*]u8, @ptrFromInt(addr));
 }
 
-fn alloc_impl(_: *anyopaque, len: usize, _: u8, _: usize) ?[*]u8 {
+fn alloc_impl(_: *anyopaque, len: usize, _: std.mem.Alignment, _: usize) ?[*]u8 {
     return alloc_block(len);
 }
 
-fn resize_impl(_: *anyopaque, _: []u8, _: u8, _: usize, _: usize) bool {
+fn resize_impl(_: *anyopaque, _: []u8, _: std.mem.Alignment, _: usize, _: usize) bool {
     return false;
 }
 
-fn free_impl(_: *anyopaque, buf: []u8, _: u8, _: usize) void {
+fn free_impl(_: *anyopaque, buf: []u8, _: std.mem.Alignment, _: usize) void {
     free_block(buf);
+}
+
+fn remap_impl(_: *anyopaque, _: []u8, _: std.mem.Alignment, _: usize, _: usize) ?[*]u8 {
+    return null;
 }
 
 const pool_page_vtable: std.mem.Allocator.VTable = .{
     .alloc = alloc_impl,
     .resize = resize_impl,
     .free = free_impl,
+    .remap = remap_impl,
 };
 
 pub const pool_page_allocator: std.mem.Allocator = .{
@@ -262,7 +271,6 @@ var pool_gpa: std.heap.GeneralPurposeAllocator(.{
     .MutexType = @import("../../std_shims/spin_lock_mutex_impls.zig").HighSpinLockMutex,
 }) = .{
     .backing_allocator = pool_page_allocator,
-    .bucket_node_pool = .init(pool_page_allocator),
 };
 
 pub const pool_allocator = pool_gpa.allocator();

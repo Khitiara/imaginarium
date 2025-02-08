@@ -56,15 +56,7 @@ pub const os = struct {
     };
 };
 
-pub const Panic = struct {
-    pub const call = debug.panic;
-    pub const sentinelMismatch = std.debug.FormattedPanic.sentinelMismatch;
-    pub const unwrapError = std.debug.FormattedPanic.unwrapError;
-    pub const outOfBounds = std.debug.FormattedPanic.outOfBounds;
-    pub const startGreaterThanEnd = std.debug.FormattedPanic.startGreaterThanEnd;
-    pub const inactiveUnionField = std.debug.FormattedPanic.inactiveUnionField;
-    pub const messages = std.debug.FormattedPanic.messages;
-};
+pub const Panic = std.debug.FullPanic(debug.panic);
 
 pub const std_options: std.Options = .{
     .logFn = logFn,
@@ -72,8 +64,10 @@ pub const std_options: std.Options = .{
     .crypto_always_getrandom = true,
     .cryptoRandomSeed = arch.rand.fill_secure,
     .log_scope_levels = &.{
-        .{ .scope = .@"mm.init", .level = .debug },
+        .{ .scope = .@"mm.init", .level = .info },
     },
+    .page_size_min = 4096,
+    .page_size_max = 4096,
 };
 
 /// the true entry point is __kstart and is exported by global asm in `hal/arch/{arch}/init.zig`
@@ -89,8 +83,9 @@ fn kstart2_bootelf(ldr_info: *bootelf.BootelfData) callconv(arch.cc) noreturn {
 }
 
 fn kstart3() callconv(arch.cc) noreturn {
-    main() catch |e| {
-        std.builtin.panicUnwrapError(@errorReturnTrace(), e);
+    kmain() catch |e| {
+        debug.print_err_trace(log, "uncaught error", e, @errorReturnTrace());
+        Panic.unwrapError(e);
     };
 }
 
@@ -108,7 +103,7 @@ pub fn nanoTimestamp() i128 {
 const uacpi = @import("hal/acpi/uacpi/uacpi.zig");
 const zuacpi = @import("hal/acpi/zuacpi.zig");
 
-noinline fn main() anyerror!noreturn {
+noinline fn kmain() anyerror!noreturn {
     try arch.init.platform_init();
     // ldr_info.entries = arch.ptr_from_physaddr([*]hal.memory.MemoryMapEntry, @intFromPtr(ldr_info.entries));
     try arch.smp.init();
@@ -155,12 +150,12 @@ noinline fn main() anyerror!noreturn {
 
     // log.debug("ap_trampoline: {*}", .{arch.x86_64.smp.ap_trampoline});
 
-    const ext = util.extern_address;
-
-    const ap_trampoline_length = ext("__ap_trampoline_end__") - ext("__ap_trampoline_begin__");
-    const ap_trampoline_start = @as([*]const u8, @ptrFromInt(ext("__ap_trampoline_begin__")));
-
-    log.debug("ap_trampoline: {*} (len {X})", .{ ap_trampoline_start, ap_trampoline_length });
+    // const ext = util.extern_address;
+    //
+    // const ap_trampoline_length = ext("__ap_trampoline_end__") - ext("__ap_trampoline_begin__");
+    // const ap_trampoline_start = @as([*]const u8, @ptrFromInt(ext("__ap_trampoline_begin__")));
+    //
+    // log.debug("ap_trampoline: {*} (len {X})", .{ ap_trampoline_start, ap_trampoline_length });
 
     // try debug.dump_hex(ap_trampoline_start[0..ap_trampoline_length]);
     // debug.dump_stack_trace(log, null);

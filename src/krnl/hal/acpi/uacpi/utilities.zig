@@ -78,6 +78,6 @@ pub const free_namespace_node_info = uacpi_free_namespace_node_info;
 extern fn uacpi_get_namespace_node_info(node: *namespace.NamespaceNode, out_info: **NamespaceNodeInfo) callconv(arch.cc) uacpi.uacpi_status;
 pub fn get_namespace_node_info(node: *namespace.NamespaceNode) error{OutOfMemory}!*NamespaceNodeInfo {
     var info: *NamespaceNodeInfo = undefined;
-    @as(void, try @errorCast(uacpi_get_namespace_node_info(node, &info).err()));
+    try @as(error{OutOfMemory}!void, @errorCast(uacpi_get_namespace_node_info(node, &info).err()));
     return info;
 }

@@ -48,7 +48,7 @@ pub inline fn CopyPtrAttrs(
                 .alignment = info.alignment,
                 .address_space = info.address_space,
                 .child = child,
-                .sentinel = null,
+                .sentinel_ptr = null,
             },
         }),
         else => @compileError("Invalid source for CopyPtrAttrs"),
@@ -210,7 +210,7 @@ pub inline fn EnumMask(comptime Enum: type) type {
         fields[i] = .{
             .name = std.fmt.comptimePrint("_{d}", .{i}),
             .type = u1,
-            .default_value = &@as(u1, 0),
+            .default_value_ptr = &@as(u1, 0),
             .is_comptime = false,
             .alignment = 0,
         };
@@ -219,7 +219,7 @@ pub inline fn EnumMask(comptime Enum: type) type {
                 fields[i] = .{
                     .name = f.name,
                     .type = bool,
-                    .default_value = &false,
+                    .default_value_ptr = &false,
                     .is_comptime = false,
                     .alignment = 0,
                 };

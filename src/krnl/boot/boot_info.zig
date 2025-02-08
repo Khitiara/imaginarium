@@ -110,12 +110,12 @@ pub noinline fn dupe_bootloader_data() !void {
             desc.memory_kind = switch (e.kind) {
                 inline else => |kind| @field(memory_map.MemoryKind, @tagName(kind)),
             };
-            const aligned_base = std.mem.alignForward(usize, e.base, std.mem.page_size);
+            const aligned_base = std.mem.alignForward(usize, e.base, std.heap.pageSize());
             const diff = aligned_base - e.base;
             const len = e.length - diff;
 
-            desc.base_page = @intCast(aligned_base / std.mem.page_size);
-            desc.page_count = @intCast(@divFloor(len, std.mem.page_size));
+            desc.base_page = @intCast(aligned_base / std.heap.pageSize());
+            desc.page_count = @intCast(@divFloor(len, std.heap.pageSize()));
         }
     }
     switch (config.boot_protocol) {

@@ -199,7 +199,7 @@ pub const LapicNmiPin = packed struct(u8) {
     _: u2 = 0,
 };
 
-pub var lapic_ptr: [*]volatile u32 = undefined;
+pub var lapic_ptr: [*]u32 = undefined;
 
 pub var supports_eoi_broadcast_suppression: bool = false;
 
@@ -232,6 +232,7 @@ pub fn init() void {
 }
 
 pub inline fn read_register(comptime reg: RegisterId) RegisterType(reg) {
+    std.mem.doNotOptimizeAway(&lapic_ptr);
     if (x2apic.x2apic_enabled) {
         return x2apic.read_apic_register(reg);
     } else {

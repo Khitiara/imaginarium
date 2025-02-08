@@ -103,12 +103,12 @@ pub const AddrRangeSearchResult = struct {
 /// along with which child of the parent the new node should be, meaning the iteration in fetch_insert can be skipped
 /// and insert_at be used instead.
 pub fn find_empty_address_range_bottom_up(self: *VirtualAddressPool, length: usize, alignment: usize) ?AddrRangeSearchResult {
-    const pages = std.math.divCeil(usize, length, std.mem.page_size) catch unreachable;
-    const pg_align = alignment / std.mem.page_size;
-    var low_vpn = std.mem.alignForward(usize, std.math.divCeil(usize, self.base_address, std.mem.page_size) catch unreachable, pg_align);
+    const pages = std.math.divCeil(usize, length, std.heap.pageSize()) catch unreachable;
+    const pg_align = alignment / std.heap.pageSize();
+    var low_vpn = std.mem.alignForward(usize, std.math.divCeil(usize, self.base_address, std.heap.pageSize()) catch unreachable, pg_align);
     if (self.block_count == 0) {
         return .{
-            .base_address = low_vpn * std.mem.page_size,
+            .base_address = low_vpn * std.heap.pageSize(),
             .parent = null,
             .insert_right = false,
         };
@@ -121,14 +121,14 @@ pub fn find_empty_address_range_bottom_up(self: *VirtualAddressPool, length: usi
                 if (old_node) |prev| {
                     assert(VirtualAddressBlockTree.right(prev) == null);
                     return .{
-                        .base_address = low_vpn * std.mem.page_size,
+                        .base_address = low_vpn * std.heap.pageSize(),
                         .parent = prev,
                         .insert_right = true,
                     };
                 } else unreachable;
             } else {
                 return .{
-                    .base_address = low_vpn * std.mem.page_size,
+                    .base_address = low_vpn * std.heap.pageSize(),
                     .parent = n,
                     .insert_right = false,
                 };
@@ -143,9 +143,9 @@ pub fn find_empty_address_range_bottom_up(self: *VirtualAddressPool, length: usi
         node = VirtualAddressBlockTree.next(n);
     }
 
-    if (self.top_address / std.mem.page_size >= low_vpn + pages) {
+    if (self.top_address / std.heap.pageSize() >= low_vpn + pages) {
         return .{
-            .base_address = low_vpn * std.mem.page_size,
+            .base_address = low_vpn * std.heap.pageSize(),
             .parent = old_node,
             .insert_right = true,
         };
@@ -161,11 +161,11 @@ pub fn find_empty_address_range_bottom_up(self: *VirtualAddressPool, length: usi
 /// inserted block, along with which child of the parent the new node should be, meaning the traversal in fetch_insert
 /// can be skipped and insert_at be used instead. (see @insert_block_at)
 pub fn find_empty_address_range_top_down(self: *VirtualAddressPool, length: usize, max_addr: usize, alignment: usize) ?AddrRangeSearchResult {
-    const pages = std.math.divCeil(usize, length, std.mem.page_size) catch unreachable;
-    const pg_align = std.math.divCeil(usize, alignment, std.mem.page_size) catch unreachable;
+    const pages = std.math.divCeil(usize, length, std.heap.pageSize()) catch unreachable;
+    const pg_align = std.math.divCeil(usize, alignment, std.heap.pageSize()) catch unreachable;
     assert(max_addr <= self.top_address);
 
-    if (std.mem.alignForward(usize, std.math.divCeil(usize, self.base_address, std.mem.page_size) catch unreachable, pg_align) * std.mem.page_size + length >= max_addr) {
+    if (std.mem.alignForward(usize, std.math.divCeil(usize, self.base_address, std.heap.pageSize()) catch unreachable, pg_align) * std.heap.pageSize() + length >= max_addr) {
         return null;
     }
 
@@ -177,14 +177,14 @@ pub fn find_empty_address_range_top_down(self: *VirtualAddressPool, length: usiz
         };
     }
 
-    var high_vpn = (max_addr + 1) / std.mem.page_size;
+    var high_vpn = (max_addr + 1) / std.heap.pageSize();
 
     var node: ?*VirtualAddressBlock = VirtualAddressBlockTree.extreme_in_order(&self.root, 1);
     var old_node: ?*VirtualAddressBlock = null;
     while (node) |n| {
         const low_vpn = std.mem.alignForward(usize, n.end_addr + 1, pg_align);
         if (high_vpn > low_vpn and high_vpn - low_vpn >= pages) {
-            const base = std.mem.alignBackward(usize, high_vpn - pages, pg_align) * std.mem.page_size;
+            const base = std.mem.alignBackward(usize, high_vpn - pages, pg_align) * std.heap.pageSize();
             if (VirtualAddressBlockTree.right(n)) {
                 if (old_node) |prev| {
                     assert(VirtualAddressBlockTree.left(prev) == null);
@@ -211,10 +211,10 @@ pub fn find_empty_address_range_top_down(self: *VirtualAddressPool, length: usiz
         node = VirtualAddressBlockTree.prev(n);
     }
 
-    const low_vpn = std.mem.alignForward(usize, self.base_address, alignment) / std.mem.page_size;
+    const low_vpn = std.mem.alignForward(usize, self.base_address, alignment) / std.heap.pageSize();
     if (high_vpn > low_vpn and high_vpn - low_vpn >= pages) {
         return .{
-            .base_address = std.mem.alignBackward(usize, high_vpn - pages, pg_align) * std.mem.page_size,
+            .base_address = std.mem.alignBackward(usize, high_vpn - pages, pg_align) * std.heap.pageSize(),
             .parent = old_node,
             .insert_right = false,
         };
@@ -238,8 +238,8 @@ pub fn check_block_conflict(self: *VirtualAddressPool, start_addr: usize, end_ad
             },
         };
     }
-    const start_page = start_addr / std.mem.page_size;
-    const end_page = std.math.divCeil(usize, end_addr, std.mem.page_size) catch unreachable;
+    const start_page = start_addr / std.heap.pageSize();
+    const end_page = std.math.divCeil(usize, end_addr, std.heap.pageSize()) catch unreachable;
 
     const range: Range = .{ .s = start_page, .e = end_page };
     switch (VirtualAddressBlockTree.lookup_or_insert_position_adapted(&self.root, range, @as(RangeAdapter, undefined))) {
@@ -290,7 +290,7 @@ pub fn check_block_conflict(self: *VirtualAddressPool, start_addr: usize, end_ad
 /// and insert direction as part of their tree iterations, thus saving the traversal needed in the normal fetch_insert
 /// function on AvlTree.
 pub fn insert_block_at(self: *VirtualAddressPool, info: AddrRangeSearchResult, block: *VirtualAddressBlock, length: usize) void {
-    block.start_addr = info.base_address / std.mem.page_size;
+    block.start_addr = info.base_address / std.heap.pageSize();
     block.end_addr = block.start_addr + mm.pages_spanned(info.base_address, length);
     if (info.insert_right) {
         VirtualAddressBlockTree.insert_at(&self.root, info.parent, 1, block);

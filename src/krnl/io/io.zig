@@ -23,7 +23,7 @@ pub fn get_device_property(alloc: std.mem.Allocator, dev: *Device, id: UUID, ptr
             .int => |i| if (@typeInfo(std.meta.Child(@TypeOf(ptr))) == .int) {
                 ptr.* = @intCast(i);
             } else return error.InvalidPropertyType,
-            inline .str, .multi_str => |u| @as(util.CopyPtrAttrs(@TypeOf(ptr), .One, @TypeOf(u)), @ptrCast(ptr)).* = u,
+            inline .str, .multi_str => |u| @as(util.CopyPtrAttrs(@TypeOf(ptr), .one, @TypeOf(u)), @ptrCast(ptr)).* = u,
         }
         return;
     }
