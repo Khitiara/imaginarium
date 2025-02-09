@@ -72,6 +72,7 @@ pub fn register_drivers(alloc: std.mem.Allocator) !void {
 
     try @import("drv/AcpiEnumerator.zig").register(alloc);
     try @import("drv/PciBusEnumerator.zig").register(alloc);
+    try @import("drv/AcpiProcessor.zig").register(alloc);
 }
 
 const DeviceQueue = queue.DoublyLinkedList(Device, "queue_hook");

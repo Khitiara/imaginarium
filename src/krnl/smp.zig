@@ -9,6 +9,7 @@ const queue = collections.queue;
 const zuid = @import("zuid");
 const atomic = std.atomic;
 const msr = arch.msr;
+const io = @import("io/io.zig");
 
 pub const idle_thread_id = zuid.UUID.nul;
 pub const idle_client_thread_id = std.math.maxInt(u64) - 1;
@@ -29,6 +30,7 @@ pub const LocalControlBlock = struct {
     dpc_lock: hal.SpinLock = .{},
     frame: ?*arch.SavedRegisterState = null,
     arch_data: arch.smp.ArchPrcb = undefined,
+    processor_device: ?*io.Device = null,
 
     pub const LocalDispatcherQueueType = queue.PriorityQueue(Thread, "scheduler_hook", "priority", Thread.Priority);
     pub const DpcQueueType = queue.PriorityQueue(dispatcher.Dpc, "hook", "priority", dispatcher.Dpc.Priority);
