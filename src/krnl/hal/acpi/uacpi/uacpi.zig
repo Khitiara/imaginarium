@@ -4,6 +4,7 @@ pub const utilities = @import("utilities.zig");
 pub const namespace = @import("namespace.zig");
 pub const eval = @import("eval.zig");
 pub const resources = @import("resources.zig");
+pub const object = @import("object.zig");
 
 comptime {
     _ = resources;
@@ -33,6 +34,8 @@ pub const ObjectType = enum(u32) {
 };
 
 pub const ObjectTypeBits = @import("util").EnumMask(ObjectType);
+
+pub const Object = opaque{};
 
 pub const log_level = enum(u32) {
     err = 1,

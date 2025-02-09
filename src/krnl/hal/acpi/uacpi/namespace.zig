@@ -50,3 +50,6 @@ pub fn node_type(node: *const NamespaceNode) !uacpi.ObjectType {
     try uacpi_namespace_node_type(node, &typ).err();
     return typ;
 }
+
+extern fn uacpi_namespace_node_get_object(node: *const NamespaceNode) callconv(arch.cc) ?*uacpi.Object;
+pub const node_get_object = uacpi_namespace_node_get_object;

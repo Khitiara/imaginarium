@@ -8,3 +8,10 @@ pub fn eval_simple_integer(parent: *namespace.NamespaceNode, name: [:0]const u8)
     try uacpi_eval_simple_integer(parent, name.ptr, &out).err();
     return out;
 }
+
+pub fn eval_simple_integer_optional(parent: *namespace.NamespaceNode, name: [:0]const u8) !?u64 {
+    return eval_simple_integer(parent, name) catch |err| switch (err) {
+        error.NotFound => return null,
+        else => return err,
+    };
+}
