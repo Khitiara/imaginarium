@@ -118,7 +118,7 @@ fn enumerate_function(
     dev: *Device,
     multifunction: ?*bool,
 ) !bool {
-    const ids: [2]u16 = @bitCast(try pci.config_read_with_bridge(adr, 0, u32));
+    const ids: [2]u16 = @bitCast(try pci.config_read_with_bridge(adr, 0x0, u32));
     if (ids[0] == 0xFFFF) {
         return false;
     }
@@ -144,8 +144,8 @@ fn enumerate_function(
 
     errdefer if (!found) d.deinit(gpa);
 
-    const classes: [4]u8 = @bitCast(try pci.config_read_with_bridge(adr, 8, u32));
-    const stuff: [4]u8 = @bitCast(try pci.config_read_with_bridge(adr, 12, u32));
+    const classes: [4]u8 = @bitCast(try pci.config_read_with_bridge(adr, 0x8, u32));
+    const stuff: [4]u8 = @bitCast(try pci.config_read_with_bridge(adr, 0xC, u32));
 
     if (multifunction) |mf| {
         mf.* = stuff[2] & 0x80 != 0;

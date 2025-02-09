@@ -156,8 +156,15 @@ noinline fn descend(user: ?*anyopaque, ns_node: *uacpi.namespace.NamespaceNode, 
     defer uacpi.utilities.free_namespace_node_info(info);
 
     if (info.typ == .processor) {
-        dev.props.hardware_ids = try util.dupe_list(ctx.alloc, u8, &.{"ACPI0007"});
+        dev.props.hardware_ids = try util.dupe_list(ctx.alloc, u8, &.{"ACPI\\ProcessorObject"});
         dev.props.compatible_ids = try util.dupe_list(ctx.alloc, u8, &.{"ACPI\\Processor"});
+
+        if (uacpi.namespace.node_get_object(ns_node)) |obj| {
+            const i = try uacpi.object.get_processor_info(obj);
+            try dev.props.bag.put(ctx.alloc, Device.Properties.known_properties.acpi_uid, .{ .str = try std.fmt.allocPrint(ctx.alloc, "{d}", .{i.id}) });
+        } else {
+            return error.AcpiObjectNotFound;
+        }
     } else {
         if (info.flags.has_hid) {
             dev.props.hardware_ids = try util.dupe_list(ctx.alloc, u8, &.{info.hid.str_const()});
@@ -171,10 +178,16 @@ noinline fn descend(user: ?*anyopaque, ns_node: *uacpi.namespace.NamespaceNode, 
     }
     if (info.flags.has_uid) {
         try dev.props.bag.put(ctx.alloc, Device.Properties.known_properties.acpi_uid, .{ .str = try ctx.alloc.dupe(u8, info.uid.str_const()) });
-        if (info.typ == .processor) {
-            try dev.props.bag.put(ctx.alloc, Device.Properties.known_properties.processor_apic_id, .{ .str = try ctx.alloc.dupe(u8, info.uid.str_const()) });
-        }
     }
+
+    if (try uacpi.eval.eval_simple_integer_optional(ns_node, "_BBN")) |bbn| {
+        try dev.props.bag.put(ctx.alloc, Device.Properties.known_properties.pci_downstream_bus, .{ .int = bbn });
+    }
+
+    if (try uacpi.eval.eval_simple_integer_optional(ns_node, "_SEG")) |seg| {
+        try dev.props.bag.put(ctx.alloc, Device.Properties.known_properties.pci_downstream_segment, .{ .int = seg });
+    }
+
     const path = b: {
         const path = uacpi.namespace.node_generate_absolute_path(ns_node) orelse break :b "";
         defer uacpi.namespace.free_absolute_path(path);

@@ -9,6 +9,7 @@ pub const known_properties = struct {
     pub const pci_downstream_segment = UUID.deserialize("b017d0cd-fb23-43d4-bf6b-dfe3875a3b4e") catch unreachable;
     pub const pci_downstream_bus = UUID.deserialize("afc19b6b-30b0-4d15-81f3-a868fc101866") catch unreachable;
     pub const processor_apic_id = UUID.deserialize("aea14ac9-22f6-4325-b5a9-dd3750a8de84") catch unreachable;
+    pub const processor_uid = UUID.deserialize("2ccb8aad-d26f-49b7-87f2-1ebef8e7c890") catch unreachable;
     pub const acpi_uid = UUID.deserialize("11cbd9b9-8741-4c20-a349-e1a5faae4a88") catch unreachable;
     pub const acpi_path = UUID.deserialize("3db3689f-fbe7-4e7f-8055-a0225ad32e04") catch unreachable;
 };
