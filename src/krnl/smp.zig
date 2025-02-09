@@ -39,7 +39,8 @@ pub const LcbWrapper = struct {
     _pad: [std.heap.pageSize() - @sizeOf(LocalControlBlock)]u8 = undefined,
 };
 
-pub var lcbs: []LcbWrapper = undefined;
+pub var prcbs: [*]LcbWrapper = @import("hal/mm/map.zig").prcbs;
+
 pub var smp_initialized: bool = false;
 pub const lcb: *allowzero addrspace(.gs) const *LocalControlBlock = @ptrFromInt(@offsetOf(LcbWrapper, "lcb") + @offsetOf(LocalControlBlock, "self"));
 
@@ -65,24 +66,10 @@ fn init(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator, wait_for_aps: boo
 
 const boot = @import("boot/boot_info.zig");
 
-pub fn allocate_lcbs() !void {
-    lcbs = try std.heap.page_allocator.alignedAlloc(LcbWrapper, 1 << 12, apic.lapics.len);
-    const apic_ids = apic.lapics.items(.id);
-    const uids = apic.lapics.items(.uid);
-    for (lcbs, 0..) |*l, i| {
-        l.* = .{
-            .lcb = .{
-                .self = &l.lcb,
-                .apic_id = apic_ids[i],
-                .uid = uids[i],
-            },
-        };
-    }
-}
 pub fn enter_threading(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator) !void {
     const id = apic.get_lapic_id();
     const idx = apic.lapic_indices[id];
-    const base = @intFromPtr(&lcbs[idx]);
+    const base = @intFromPtr(&prcbs[id]);
     log.debug("APIC {x}, idx {x}, base 0x{x:0>16}->0x{x:0>16}", .{ id, idx, base, base + @offsetOf(LcbWrapper, "lcb") });
     set_lcb_base(base);
     @atomicStore(bool, &smp_initialized, true, .seq_cst);

@@ -107,7 +107,6 @@ noinline fn kmain() anyerror!noreturn {
     try arch.init.platform_init();
     // ldr_info.entries = arch.ptr_from_physaddr([*]hal.memory.MemoryMapEntry, @intFromPtr(ldr_info.entries));
     try arch.smp.init();
-    try smp.allocate_lcbs();
     try smp.enter_threading(hal.mm.pool.pool_page_allocator, hal.mm.pool.pool_allocator);
 
     log.debug("current gs base: {x}", .{arch.msr.read(.gs_base)});
