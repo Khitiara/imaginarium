@@ -142,7 +142,7 @@ pub noinline fn report_device(alloc: std.mem.Allocator, dev: *Device) !void {
         @branchHint(.likely);
         _ = try devices_dir.insert(alloc, &dev.header, try std.fmt.bufPrint(&uid_print_buf, "{{{s}}}", .{dev.header.id}));
     }
-    // if (comptime std.log.logEnabled(.debug, .io)) {
+    // if (comptime log.enabled(.debug)) {
     //     const hids = if (dev.props.hardware_ids) |hids| try std.mem.join(alloc, ", ", hids) else try alloc.dupe(u8, "");
     //     defer alloc.free(hids);
     //     const cids = if (dev.props.compatible_ids) |cids| try std.mem.join(alloc, ", ", cids) else try alloc.dupe(u8, "");
@@ -189,7 +189,7 @@ noinline fn find_driver(device: *Device, alloc: std.mem.Allocator) !void {
                             debug.print_err_trace(log, "ATTACHING DRIVER", err, @errorReturnTrace());
                             continue;
                         }) {
-                            if (comptime std.log.logEnabled(.debug, .io)) {
+                            if (comptime log.enabled(.debug)) {
                                 const hids1 = try std.mem.join(alloc, ", ", hids);
                                 defer alloc.free(hids1);
                                 const cids = if (device.props.compatible_ids) |cids| try std.mem.join(alloc, ", ", cids) else try alloc.dupe(u8, "");
@@ -213,7 +213,7 @@ noinline fn find_driver(device: *Device, alloc: std.mem.Allocator) !void {
                             debug.print_err_trace(log, "ATTACHING DRIVER", err, @errorReturnTrace());
                             continue;
                         }) {
-                            if (comptime std.log.logEnabled(.debug, .io)) {
+                            if (comptime log.enabled(.debug)) {
                                 const hids = if (device.props.hardware_ids) |hids| try std.mem.join(alloc, ", ", hids) else try alloc.dupe(u8, "");
                                 defer alloc.free(hids);
                                 const cids1 = try std.mem.join(alloc, ", ", cids);

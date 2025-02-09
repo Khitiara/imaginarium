@@ -208,7 +208,7 @@ fn enumerate_function(
         ids[1],
     });
 
-    // if (comptime std.log.logEnabled(.debug, .io)) {
+    // if (comptime log.enabled(.debug)) {
     //     const hids1 = if (d.props.hardware_ids) |hids| try std.mem.join(gpa, ", ", hids) else try gpa.dupe(u8, "");
     //     defer gpa.free(hids1);
     //     const cids = if (d.props.compatible_ids) |cids| try std.mem.join(gpa, ", ", cids) else try gpa.dupe(u8, "");
