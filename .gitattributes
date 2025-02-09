@@ -1,3 +1,8 @@
 *.zig text eol=lf
 *.zon text eol=lf
 *.txt text eol=lf
+*.c text eol=lf
+*.h text eol=lf
+*.asm text eol=lf
+*.conf text eol=lf
+*.ld text eol=lf

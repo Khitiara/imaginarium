@@ -271,6 +271,10 @@ pub fn build(b: *Build) !void {
         },
     }
 
+    if (b.args) |args| {
+        qemu.addArgs(args);
+    }
+
     qemu.step.dependOn(imgstep);
 
     const run = b.step("qemu", "Run the OS in qemu");
