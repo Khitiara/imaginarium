@@ -5,9 +5,23 @@ const UUID = @import("zuid").UUID;
 
 const Irp = @This();
 
+/// the result of dispatching an Irp
 pub const InvocationResult = enum {
+    /// the Irp was fully completed Irp dispatch stops here
     complete,
+    /// the Irp was partially handled but lower drivers may have more to do
+    ///
+    /// (e.g. resource enumeration where lower drivers may have additional resources not
+    /// enumerable by the higher driver)
+    ///
+    /// if partial is returned by the last dispatch routine, complete is returned by io.execute_irp
+    partial,
+    /// the Irp is pending asynchronous completion, and either the completion callback or a dispatcher
+    /// Event object will be signalled when the operation completes
     pending,
+    /// the Irp could not be handled by the current driver but no error was generated, and lower
+    /// drivers may be able to process the request. if pass is returned by the last dispatch routine,
+    /// error.IrpNotHandled is returned by io.execute_irp
     pass,
 };
 

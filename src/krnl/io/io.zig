@@ -32,7 +32,7 @@ pub fn get_device_property(alloc: std.mem.Allocator, dev: *Device, id: UUID, ptr
         .enumeration = .{
             .properties = .{
                 .id = id,
-                .result = ptr,
+                .result = @ptrCast(ptr),
             },
         },
     });
@@ -41,7 +41,7 @@ pub fn get_device_property(alloc: std.mem.Allocator, dev: *Device, id: UUID, ptr
         error.IrpNotHandled => return error.NotFound,
         else => return err,
     }) {
-        .complete => {},
+        .complete, .partial => {},
         .pending => @panic("UNIMPLEMENTED"),
         .pass => unreachable,
     }
@@ -50,14 +50,18 @@ pub fn get_device_property(alloc: std.mem.Allocator, dev: *Device, id: UUID, ptr
 pub fn execute_irp(irp: *Irp) anyerror!Irp.InvocationResult {
     defer irp.stack_position = null;
     var entry: ?*Device.DriverStackEntry = irp.stack_position orelse irp.device.driver_stack orelse return error.NoDriver;
+    var partial: bool = false;
     while (entry) |e| : (entry = e.next) {
         irp.stack_position = entry;
         switch (try e.driver.dispatch(irp)) {
             .complete, .pending => |r| return r,
+            .partial => {
+                partial = true;
+            },
             .pass => {},
         }
     }
-    return error.IrpNotHandled;
+    return if(partial) .complete else error.IrpNotHandled;
 }
 
 pub var drivers_dir: *ob.Directory = undefined;
