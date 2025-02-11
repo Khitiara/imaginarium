@@ -54,7 +54,17 @@ pub fn config_read(address: PciAddress, offset: u64, comptime T: type) !T {
 pub fn config_read_with_bridge(address: PciBridgeAddress, offset: u64, comptime T: type) !T {
     if (address.bridge) |host_bridge_map| {
         const w = offset & 0x3;
-        const value = host_bridge_map.block(address.bus, address.device, address.function)[offset / 4];
+        const block = host_bridge_map.block(address.bus, address.device, address.function);
+
+        // https://github.com/ziglang/zig/issues/10367
+        const value = asm volatile (
+            \\ movl (%[block], %[offset], 4), %[out]
+            : [out] "={eax}" (-> u32),
+            : [block] "r" (block),
+              [offset] "r" (offset / 4),
+            : "memory"
+        );
+
         return @intCast((value >> @intCast(8 * w)) & std.math.maxInt(T));
     } else {
         if (address.segment != 0) return error.InvalidArgument;
@@ -85,10 +95,23 @@ pub fn config_write(address: PciAddress, offset: u64, value: anytype) !void {
 pub fn config_write_with_bridge(address: PciBridgeAddress, offset: u64, value: anytype) !void {
     if (address.bridge) |host_bridge_map| {
         const w = offset & 0x3;
-        const old_mask: u32 = @as(u32, std.math.maxInt(@TypeOf(value))) << @intCast(8 * w);
+        const old_mask: u32 = ~(@as(u32, std.math.maxInt(@TypeOf(value))) << @intCast(8 * w));
+        const shifted: u32 = @intCast(value << @intCast(8 * w));
         const block = host_bridge_map.block(address.bus, address.device, address.function);
-        const old = block[offset / 4] & old_mask;
-        block[offset / 4] = @intCast(old | (value << @intCast(8 * w)));
+
+        // https://github.com/ziglang/zig/issues/10367
+        asm volatile (
+            \\ movl (%[base], %[offset], 4), %%eax
+            \\ andl %[mask], %%eax
+            \\ orl %[shifted], %%eax
+            \\ movl %%eax, (%[base], %[offset], 4)
+            :
+            : [base] "r" (block),
+              [offset] "r" (offset / 4),
+              [mask] "ir" (old_mask),
+              [shifted] "ir" (shifted),
+            : "eax", "memory"
+        );
     } else {
         if (address.segment != 0) return error.InvalidArgument;
         config_write_legacy(.{
@@ -105,21 +128,39 @@ pub fn config_read_legacy(address: ConfigAddress, comptime T: type) T {
     const w = address.register_offset & 0x3;
     var a = address;
     a.register_offset = address.register_offset & 0xFC;
-    serial.out(IoLocation.config_address, a);
-    const dword = serial.in(IoLocation.config_data, u32);
-    return @intCast(@as(u32, @bitCast(dword >> @intCast(8 * w) & std.math.maxInt(T))));
+    // in theory the data should be a DWORD access from port 0xCFC followed by some bit
+    // math but linux does a target-type-sized access to port (0xCFC + (offset % 3)) and
+    // if it works for them then its not my fault if it breaks later
+    return asm volatile (
+        \\ movw $0xCF8, %%dx
+        \\ outl %[addr], %%dx
+        \\ movw %[dataport], %%dx
+        \\ in %%dx, %[result]
+        : [result] "={al},={ax},={eax}" (-> T),
+        : [addr] "{al},{ax},{eax}" (a),
+          [dataport] "r" (@as(u16, 0xCFC) + w),
+        : "memory", "dx"
+    );
 }
 
 pub fn config_write_legacy(address: ConfigAddress, value: anytype) void {
     const w = address.register_offset & 0x3;
     var a = address;
     a.register_offset = address.register_offset & 0xFC;
-    const dword: u32 = switch (@TypeOf(value)) {
-        inline i8, u8 => @as(u32, @as(u8, @bitCast(value))) << @intCast(8 * w),
-        inline i16, u16 => @as(u32, @as(u16, @bitCast(value))) << @intCast(8 * w),
-        inline i32, u32 => @bitCast(value),
-        else => @compileError("invalid pci config register type"),
-    };
-    serial.out(IoLocation.config_address, a);
-    serial.out(IoLocation.config_data, dword);
+
+    // in theory this should be a DWORD read from port 0xCFC followed by some bit math
+    // and another write to the same port 0xCFC, but linux does a target-type-sized
+    // access to port (0xCFC + (offset % 3)) and if it works for them then its not my
+    // fault if it breaks later
+    asm volatile (
+        \\ movw $0xCF8, %%dx
+        \\ outl %[addr], %%dx
+        \\ movw %[dataport], %%dx
+        \\ out %[value], %%dx
+        :
+        : [addr] "{al},{ax},{eax}" (a),
+          [value] "{al},{ax},{eax}" (value),
+          [dataport] "N{dx}" (@as(u16, 0xCFC) + w),
+    : "memory", "dx"
+    );
 }

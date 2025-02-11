@@ -32,7 +32,7 @@ var bridge_map_lock: hal.SpinLock = .{};
 
 pub const PciHostBridge = struct {
     base: u64,
-    ptr: ?[]align(4096) volatile [32][8][4096 / 4]u32 = null,
+    ptr: ?[]align(4096) [32][8][4096 / 4]u32 = null,
     segment_group: u16,
     bus_start: u8,
     bus_end: u8,
@@ -63,7 +63,7 @@ pub const PciHostBridge = struct {
         self.ptr = @alignCast(std.mem.bytesAsSlice([32][8][4096 / 4]u32, b));
     }
 
-    pub fn block(self: *const PciHostBridge, bus: u8, device: u5, function: u3) *align(4096) volatile [4096 / 4]u32 {
+    pub fn block(self: *const PciHostBridge, bus: u8, device: u5, function: u3) *align(4096) [4096 / 4]u32 {
         assert(bus >= self.bus_start);
         assert(bus <= self.bus_end);
 
