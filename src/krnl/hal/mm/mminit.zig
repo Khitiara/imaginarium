@@ -568,13 +568,16 @@ noinline fn init_mm_impl() linksection(".init") !void {
     log.info("[STAGE {d}]: SYSPTEs initialized", .{bootstrap_stage});
 
     // allocate processor control blocks
-    for (boot.cpus) |proc| {
-        const lcb: *@import("../../smp.zig").LcbWrapper = @ptrCast(late_bootstrap_alloc_block(@intFromPtr(map.prcbs + proc.processor_id), 4096).ptr);
+    for (boot.cpus, 0..) |proc, idx| {
+        const lcb: *@import("../../smp.zig").LcbWrapper = @ptrCast(late_bootstrap_alloc_block(@intFromPtr(map.prcbs + proc.lapic_id), 4096).ptr);
         lcb.* = .{
             .lcb = .{
                 .self = &lcb.lcb,
-                .apic_id = proc.lapic_id,
-                .uid = proc.processor_id,
+                .info = .{
+                    .apic_id = proc.lapic_id,
+                    .uid = proc.processor_id,
+                    .boot_info_index = idx,
+                },
             },
         };
         lcb.lcb.arch_data.init();

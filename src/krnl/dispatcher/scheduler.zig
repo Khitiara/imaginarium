@@ -39,7 +39,7 @@ fn cancel_impl(alloc: std.mem.Allocator, wait: *WaitBlock, from_waitall_finish: 
 pub fn schedule(thread: *Thread, processor: ?u8) void {
     const l: *smp.LocalControlBlock = lcb.*;
     const target = processor orelse thread.affinity.last_processor;
-    if (l.apic_id != target) {
+    if (l.info.apic_id != target) {
         // TODO trampoline into a DPC on the target processor
         // DPC execution is not implemented yet so for now dont bother and just eat the lock penalty
     }

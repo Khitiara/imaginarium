@@ -129,7 +129,7 @@ pub noinline fn read_madt(ptr: *align(1) const Madt) !void {
                         .trigger = .default,
                     },
                 });
-                apic.lapic_indices[payload.local_apic_id] = idx;
+                mm.map.prcbs[payload.local_apic_id].lcb.info.lapic_index = idx;
             },
             .io_apic => {
                 const payload: *align(1) const MadtEntryPayload(.io_apic) = @ptrCast(entry);

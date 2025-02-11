@@ -14,10 +14,12 @@ const hal = @import("../hal.zig");
 const arch = @import("arch.zig");
 const delay_unsafe = arch.delay_unsafe;
 
+const ksmp = @import("../../smp.zig");
+
 var ap_stacks: []*[8 << 20]u8 = undefined;
 
 pub fn get_local_krnl_stack() *[8 << 20]u8 {
-    return ap_stacks[apic.lapic_indices[apic.get_lapic_id()]];
+    return ap_stacks[ksmp.prcbs[apic.get_lapic_id()].lcb.info.lapic_index];
 }
 pub fn get_local_krnl_stack_top() *anyopaque {
     return get_local_krnl_stack() + (8 << 20);

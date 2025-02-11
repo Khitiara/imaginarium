@@ -15,10 +15,16 @@ pub const idle_thread_id = zuid.UUID.nul;
 pub const idle_client_thread_id = std.math.maxInt(u64) - 1;
 const log = std.log.scoped(.smp);
 
-pub const LocalControlBlock = struct {
-    self: *LocalControlBlock,
+pub const ProcInfo = struct {
     apic_id: u32,
     uid: u32,
+    boot_info_index: usize = 0,
+    lapic_index: usize = 0,
+};
+
+pub const LocalControlBlock = struct {
+    self: *LocalControlBlock,
+    info: ProcInfo,
     current_thread: ?*Thread = null,
     standby_thread: ?*Thread = null,
     idle_thread: *Thread = undefined,
@@ -43,7 +49,6 @@ pub const LcbWrapper = struct {
 
 pub var prcbs: [*]LcbWrapper = @import("hal/mm/map.zig").prcbs;
 
-pub var smp_initialized: bool = false;
 pub const lcb: *allowzero addrspace(.gs) const *LocalControlBlock = @ptrFromInt(@offsetOf(LcbWrapper, "lcb") + @offsetOf(LocalControlBlock, "self"));
 
 fn init(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator, wait_for_aps: bool) !void {
@@ -70,14 +75,12 @@ const boot = @import("boot/boot_info.zig");
 
 pub fn enter_threading(page_alloc: std.mem.Allocator, gpa: std.mem.Allocator) !void {
     const id = apic.get_lapic_id();
-    const idx = apic.lapic_indices[id];
     const base = @intFromPtr(&prcbs[id]);
-    log.debug("APIC {x}, idx {x}, base 0x{x:0>16}->0x{x:0>16}", .{ id, idx, base, base + @offsetOf(LcbWrapper, "lcb") });
+    log.debug("APIC {x}, base 0x{x:0>16}->0x{x:0>16}", .{ id, base, base + @offsetOf(LcbWrapper, "lcb") });
     set_lcb_base(base);
-    @atomicStore(bool, &smp_initialized, true, .seq_cst);
     try init(page_alloc, gpa, false);
     const is_bsp = id == apic.bspid;
-    const t: *Thread = try Thread.init(gpa, if (is_bsp) zuid.UUID.max else zuid.UUID.new.v4(), if (is_bsp) 0 else std.crypto.random.intRangeAtMost(u64, 1, std.math.maxInt(u64) - 2));
+    const t: *Thread = try Thread.init(gpa, zuid.UUID.new.v4(), if (is_bsp) 0 else std.crypto.random.intRangeAtMost(u64, 1, std.math.maxInt(u64) - 2));
     t.stack = arch.smp.get_local_krnl_stack();
     lcb.*.current_thread = t;
     dispatcher.interrupts.enter_thread_ctx();

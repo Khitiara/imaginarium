@@ -172,7 +172,6 @@ export fn uacpi_kernel_free_mutex(ptr: *Mutex) callconv(arch.cc) void {
 }
 
 export fn uacpi_kernel_acquire_mutex(mutex: *Mutex, timeout: u16) callconv(arch.cc) uacpi.uacpi_status {
-    if (!smp.smp_initialized) return .ok;
     if (timeout != 0) {
         dispatcher.wait_for_single_object(&mutex.wait_handle) catch return .internal_error;
         return .ok;
@@ -196,7 +195,6 @@ export fn uacpi_kernel_free_event(ptr: *Semaphore) callconv(arch.cc) void {
 }
 
 export fn uacpi_kernel_wait_for_event(sema: *Semaphore, timeout: u16) callconv(arch.cc) bool {
-    if (!smp.smp_initialized) return true;
     if (timeout != 0) {
         dispatcher.wait_for_single_object(&sema.wait_handle) catch unreachable;
         return true;

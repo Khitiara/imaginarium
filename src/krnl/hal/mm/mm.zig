@@ -4,7 +4,7 @@ pub const mminit = @import("mminit.zig");
 pub const pool = @import("pool.zig");
 pub const syspte = @import("syspte.zig");
 
-const map = @import("map.zig");
+pub const map = @import("map.zig");
 const pte = @import("pte.zig");
 
 const std = @import("std");

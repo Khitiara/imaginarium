@@ -214,8 +214,6 @@ pub const Lapic = struct {
 pub const Lapics = @import("util").MultiBoundedArray(Lapic, 255);
 pub var lapics: Lapics = undefined;
 
-pub var lapic_indices: [255]u8 = undefined;
-
 pub fn init() void {
     _ = x2apic.check_enable_x2apic();
     supports_eoi_broadcast_suppression = read_register(.version).supports_eoi_broadcast_suppression;

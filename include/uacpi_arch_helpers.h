@@ -9,17 +9,17 @@
 #endif
 
 typedef uint8_t uacpi_cpu_flags;
-typedef uint64_t uacpi_thread_id;
+typedef size_t uacpi_thread_id;
 
 #ifndef UACPI_ATOMIC_LOAD_THREAD_ID
-#define UACPI_ATOMIC_LOAD_THREAD_ID(ptr) ((uacpi_thread_id)uacpi_atomic_load64(ptr))
+#define UACPI_ATOMIC_LOAD_THREAD_ID(ptr) ((uacpi_thread_id)uacpi_atomic_load_ptr(ptr))
 #endif
 #ifndef UACPI_ATOMIC_STORE_THREAD_ID
-#define UACPI_ATOMIC_STORE_THREAD_ID(ptr, value) uacpi_atomic_store64(ptr, value)
+#define UACPI_ATOMIC_STORE_THREAD_ID(ptr, value) uacpi_atomic_store_ptr(ptr, value)
 #endif
 
 #ifndef UACPI_THREAD_ID_NONE
-#define UACPI_THREAD_ID_NONE ((uacpi_thread_id)-1)
+#define UACPI_THREAD_ID_NONE ((uacpi_thread_id)NULL)
 #endif
 
 #endif //UACPI_ARCH_HELPERS_H
