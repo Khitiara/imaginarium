@@ -1,0 +1,1 @@
+//! PCI(e) BAR access and management

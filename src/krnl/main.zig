@@ -64,7 +64,11 @@ pub const std_options: std.Options = .{
     .crypto_always_getrandom = true,
     .cryptoRandomSeed = arch.rand.fill_secure,
     .log_scope_levels = &.{
+        // .{ .scope = .io, .level = .info },
         .{ .scope = .@"mm.init", .level = .info },
+        .{ .scope = .@"drv.acpi", .level = .info },
+        // .{ .scope = .@"drv.pci", .level = .info },
+        .{ .scope = .@"drv.acpi_proc", .level = .info },
     },
     .page_size_min = 4096,
     .page_size_max = 4096,
