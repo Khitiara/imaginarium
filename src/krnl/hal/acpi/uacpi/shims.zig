@@ -133,20 +133,10 @@ comptime {
 }
 
 const smp = @import("../../../smp.zig");
+const Thread = @import("../../../thread/Thread.zig");
 
-export fn uacpi_kernel_get_thread_id() callconv(arch.cc) u64 {
-    if (!smp.smp_initialized) {
-        return 0;
-    }
-    if (smp.lcb.*.current_thread) |t| {
-        return t.client_ids.threadid;
-    } else {
-        // the initial thread of the BSP will always be thread id 0
-        // the invalid thread id is always -1
-        // the idle thread will always be thread id -2
-        // all other thread ids are randomly generated
-        return 0;
-    }
+export fn uacpi_kernel_get_thread_id() callconv(arch.cc) ?*Thread {
+    return smp.lcb.*.current_thread;
 }
 
 export fn uacpi_kernel_get_nanoseconds_since_boot() callconv(arch.cc) u64 {

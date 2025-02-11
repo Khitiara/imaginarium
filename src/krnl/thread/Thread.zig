@@ -68,10 +68,6 @@ affinity: Affinity = .{},
 scheduler_hook: queue.SinglyLinkedNode = .{},
 saved_state: SavedThreadState = undefined,
 stack: ?[]const u8 = null,
-client_ids: struct {
-    threadid: u64,
-    procid: u64,
-},
 
 pub const WaitListType = queue.DoublyLinkedList(dispatcher.WaitBlock, "thread_wait_list");
 
@@ -89,7 +85,7 @@ fn check_wait(handle: *dispatcher.WaitHandle, thread: *Thread) !bool {
     return true;
 }
 
-pub fn init(alloc: std.mem.Allocator, id: zuid.UUID, tid: u64) !*Thread {
+pub fn init(alloc: std.mem.Allocator, id: zuid.UUID) !*Thread {
     const self = try alloc.create(Thread);
     self.* = .{
         .header = .{
@@ -99,10 +95,6 @@ pub fn init(alloc: std.mem.Allocator, id: zuid.UUID, tid: u64) !*Thread {
             .vtable = &vtable,
         },
         .priority = .p1,
-        .client_ids = .{
-            .procid = 0,
-            .threadid = tid,
-        },
         .join = .{ .check_wait = &check_wait },
     };
     return self;
