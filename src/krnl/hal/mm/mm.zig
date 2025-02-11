@@ -68,13 +68,29 @@ pub var valid_pte: @import("pte.zig").Pte = .{
     },
 };
 
+pub var wt_pte: @import("pte.zig").Pte = .{
+    .valid = .{
+        .writable = true,
+        .user_mode = false,
+        .write_through = true,
+        .cache_disable = false,
+        .pat_size = false,
+        .global = false,
+        .copy_on_write = false,
+        .sw_dirty = false,
+        .addr = .{ .pfi = 0 },
+        .pk = 0,
+        .xd = false,
+    },
+};
+
 pub noinline fn map_io(physaddr: PhysAddr, len: usize) ![]u8 {
     const pages = pages_spanned(@intFromEnum(physaddr), len);
 
     const ptes = syspte.reserve(@intCast(pages)) orelse return error.OutOfMemory;
     for (ptes, physaddr.page()..) |*p, page| {
-        valid_pte.valid.addr.pfi = @truncate(page);
-        p.* = valid_pte;
+        wt_pte.valid.addr.pfi = @truncate(page);
+        p.* = wt_pte;
     }
 
     const block = @as([*]u8, @ptrCast(map.addr_from_pte(&ptes[0])))[@intFromEnum(physaddr) & 0xFFF ..][0..len];
