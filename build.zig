@@ -215,7 +215,7 @@ pub fn build(b: *Build) !void {
         b.fmt("qemu-system-{s}", .{@tagName(arch)}),
         "-drive",
     });
-    qemu.addPrefixedFileArg("format=raw,file=", imgFile);
+    qemu.addPrefixedFileArg("id=bootdisk,format=raw,if=none,file=", imgFile);
 
     if (b.option(bool, "qemu-no-accel", "disable native accel for qemu") != true) {
         switch (b.graph.host.result.os.tag) {
@@ -243,15 +243,13 @@ pub fn build(b: *Build) !void {
         "-cpu",
         try std.mem.join(b.allocator, ",", try cpu_flags.toOwnedSlice()),
         "-m",
-        "4G",
+        "2G",
+        "-device",
+        "nvme,serial=deadbeef,drive=bootdisk",
+        // "-chardev",
+        // "file,id=bios-logs,path=aaabios.txt",
         // "-device",
-        // "pxb-pcie,id=pcie.1,bus_nr=1",
-        // "-device",
-        // "pcie-pci-bridge,id=pcie_pci_bridge1,bus=pcie.1",
-        // "-serial",
-        // "stdio",
-        // "-monitor",
-        // "stdio",
+        // "isa-debugcon,iobase=0x402,chardev=bios-logs",
     });
 
     qemu.setCwd(b.path("test"));
