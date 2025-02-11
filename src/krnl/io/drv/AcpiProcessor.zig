@@ -30,7 +30,7 @@ pub fn register(alloc: std.mem.Allocator) !void {
     d.drv.init_internal();
     d.drv.vtable = &vtable;
     d.drv.supported_devices = .{
-        .hardware_ids = &.{"ACPI0007", "ACPI\\ProcessorObject"},
+        .hardware_ids = &.{ "ACPI0007", "ACPI\\ProcessorObject" },
         .compatible_ids = &.{"ACPI\\Processor"},
     };
     log.debug("registered acpi processor object driver", .{});
@@ -42,28 +42,31 @@ fn load(_: *Driver, _: std.mem.Allocator) anyerror!?*Device {
 }
 
 fn attach(drv: *Driver, dev: *Device, alloc: std.mem.Allocator) anyerror!bool {
-    var tok: QueuedSpinLock.Token = undefined;
-    dev.props.bag_lock.lock(&tok);
-    defer tok.unlock();
+    var uid: []const u8 = undefined;
+    io.get_device_property(alloc, dev, Device.Properties.known_properties.acpi_uid, &uid) catch |err| switch (err) {
+        error.NotFound => {
+            log.err("No APIC id in ACPI tables for processor device!", .{});
+        },
+        else => return err,
+    };
 
-    if (dev.props.bag.get(Device.Properties.known_properties.acpi_uid)) |uid| {
-        b: {
-            const uid_int = try std.fmt.parseInt(u32, uid.str, 0);
-            try dev.props.bag.put(alloc, Device.Properties.known_properties.processor_uid, .{ .int = uid_int });
-            const lapic_id = for (apic.lapics.items(.uid), apic.lapics.items(.id)) |lapic_uid, lapic_id| {
-                if (lapic_uid == uid_int) {
-                    break lapic_id;
-                }
-            } else {
-                log.warn("Could not find LAPIC info for processor with UID {d}", .{uid_int});
-                break :b;
-            };
-            log.debug("ACPI processor device registered for processor with ACPI uid {d}, LAPIC id {d}", .{ uid_int, lapic_id });
-            try dev.props.bag.put(alloc, Device.Properties.known_properties.processor_apic_id, .{ .int = lapic_id });
-            smp.prcbs[lapic_id].lcb.processor_device = dev;
-        }
-    } else {
-        log.err("No APIC id in ACPI tables for processor device!", .{});
+    b: {
+        var tok: QueuedSpinLock.Token = undefined;
+        dev.props.bag_lock.lock(&tok);
+        defer tok.unlock();
+        const uid_int = try std.fmt.parseInt(u32, uid, 0);
+        try dev.props.bag.put(alloc, Device.Properties.known_properties.processor_uid, .{ .int = uid_int });
+        const lapic_id = for (apic.lapics.items(.uid), apic.lapics.items(.id)) |lapic_uid, lapic_id| {
+            if (lapic_uid == uid_int) {
+                break lapic_id;
+            }
+        } else {
+            log.warn("Could not find LAPIC info for processor with UID {d}", .{uid_int});
+            break :b;
+        };
+        log.debug("ACPI processor device registered for processor with ACPI uid {d}, LAPIC id {d}", .{ uid_int, lapic_id });
+        try dev.props.bag.put(alloc, Device.Properties.known_properties.processor_apic_id, .{ .int = lapic_id });
+        smp.prcbs[lapic_id].lcb.processor_device = dev;
     }
 
     const entry = try alloc.create(Device.DriverStackEntry);
