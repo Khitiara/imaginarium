@@ -4,7 +4,6 @@ const serial = arch.serial;
 const std = @import("std");
 
 pub const msi = @import("msi.zig");
-pub const pcie = @import("pcie.zig");
 
 const IoLocation = struct {
     pub const config_address: u16 = 0xCF8;
