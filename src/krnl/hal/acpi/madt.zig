@@ -135,7 +135,7 @@ pub noinline fn read_madt(ptr: *align(1) const Madt) !void {
                 log.debug("IOApic: gsi base {x}", .{payload.gsi_base});
                 apic.ioapic.ioapics_buf[apic.ioapic.ioapics_count] = .{
                     .id = payload.ioapic_id,
-                    .base_addr = @alignCast(@ptrCast((try mm.map_io(@enumFromInt(payload.ioapic_addr), 0x20)).ptr)),
+                    .base_addr = @alignCast(@ptrCast((try mm.map_io(@enumFromInt(payload.ioapic_addr), 0x20, .uncached_minus)).ptr)),
                     .gsi_base = payload.gsi_base,
                 };
                 apic.ioapic.ioapics_count += 1;
@@ -198,7 +198,7 @@ pub noinline fn read_madt(ptr: *align(1) const Madt) !void {
         }
     }
     log.info("LAPIC base at phys {x}", .{@intFromEnum(lapic_ptr)});
-    apic.lapic_ptr = @alignCast(@ptrCast((try mm.map_io(lapic_ptr, 4096)).ptr));
+    apic.lapic_ptr = @alignCast(@ptrCast((try mm.map_io(lapic_ptr, 4096, .uncached_minus)).ptr));
 }
 
 test {

@@ -45,7 +45,7 @@ export fn uacpi_kernel_free(address: [*]align(16) u8, size: usize) callconv(arch
 }
 
 export fn uacpi_kernel_map(address: PhysAddr, length: usize) callconv(arch.cc) ?*anyopaque {
-    return (hal.mm.map_io(address, length) catch |e| {
+    return (hal.mm.map_io(address, length, .write_back) catch |e| {
         log.err("error in io mapping: {}", .{e});
         if(@errorReturnTrace()) |trc| {
             @import("../../../debug.zig").print_stack_trace(log, null, trc);

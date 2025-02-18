@@ -53,7 +53,7 @@ pub const PciHostBridge = struct {
 
 
         const len: usize = (@as(usize, self.bus_end - self.bus_start) + 1) * comptime (std.heap.pageSize() * 32 * 8);
-        const b = try mm.map_io(@enumFromInt(@as(u64, @bitCast(bdown))), len);
+        const b = try mm.map_io(@enumFromInt(@as(u64, @bitCast(bdown))), len, .uncached_minus);
 
         // log.debug("bridge {d}-{d} mapped to address {*} with length {x}", .{ self.bus_start, self.bus_end, b.ptr, len });
 

@@ -6,6 +6,7 @@ pub const syspte = @import("syspte.zig");
 
 pub const map = @import("map.zig");
 const pte = @import("pte.zig");
+pub const paging = @import("paging.zig");
 
 const std = @import("std");
 const arch = @import("../arch/arch.zig");
@@ -68,7 +69,7 @@ pub var valid_pte: @import("pte.zig").Pte = .{
     },
 };
 
-pub var wt_pte: @import("pte.zig").Pte = .{
+pub var io_pte: @import("pte.zig").Pte = .{
     .valid = .{
         .writable = true,
         .user_mode = false,
@@ -84,13 +85,18 @@ pub var wt_pte: @import("pte.zig").Pte = .{
     },
 };
 
-pub noinline fn map_io(physaddr: PhysAddr, len: usize) ![]u8 {
+pub noinline fn map_io(physaddr: PhysAddr, len: usize, cache_type: paging.MemoryCacheType) ![]u8 {
     const pages = pages_spanned(@intFromEnum(physaddr), len);
+    const cache_bits: paging.PATBits = .{ .typ = cache_type };
+    var tmp_pte = io_pte;
+    tmp_pte.valid.write_through = cache_bits.bits.pwt;
+    tmp_pte.valid.cache_disable = cache_bits.bits.pcd;
+    tmp_pte.valid.pat_size = cache_bits.bits.pat;
 
     const ptes = syspte.reserve(@intCast(pages)) orelse return error.OutOfMemory;
     for (ptes, physaddr.page()..) |*p, page| {
-        wt_pte.valid.addr.pfi = @truncate(page);
-        p.* = wt_pte;
+        tmp_pte.valid.addr.pfi = @truncate(page);
+        p.* = tmp_pte;
     }
 
     const block = @as([*]u8, @ptrCast(map.addr_from_pte(&ptes[0])))[@intFromEnum(physaddr) & 0xFFF ..][0..len];
