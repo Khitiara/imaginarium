@@ -13,8 +13,8 @@
             .hash = "12200468fb671c04225f04d87e0fe1131e49ccd153e870be6e858dc80e39cb4e18df",
         },
         .limine = .{
-            .url = "git+https://github.com/limine-bootloader/limine?ref=v8.x-binary#4ccea35dbb35a6fef17985bf56d655ff366e1f27",
-            .hash = "1220533e700e69d712c0a656739b83a5aa50c1ad1ee7b05781ca1ee97e28457d0807",
+            .url = "git+https://github.com/limine-bootloader/limine?ref=v9.x-binary#c5df5d5cd1eb2a600cfa90628b243ffc7f849604",
+            .hash = "12202b853547b15bee83729be72dca9eb3168172fdec54c581fc3c7330714798353d",
         },
         .disk_image_step = .{ .path = "build/complex-disk-image/" },
         .chdrs = .{
