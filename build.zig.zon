@@ -17,6 +17,10 @@
             .hash = "1220533e700e69d712c0a656739b83a5aa50c1ad1ee7b05781ca1ee97e28457d0807",
         },
         .disk_image_step = .{ .path = "build/complex-disk-image/" },
+        .chdrs = .{
+            .url = "git+https://github.com/osdev0/freestnd-c-hdrs-0bsd.git?ref=trunk#a87c192f3eb66b0806740dc67325f9ad23fc2d0b",
+            .hash = "122074a40c30a067efd5f97c79bf9696f95e6e5822f3da600361062035b4365b79ec",
+        },
     },
     .paths = .{
         "src/",

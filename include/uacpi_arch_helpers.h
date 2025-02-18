@@ -2,7 +2,7 @@
 #define UACPI_ARCH_HELPERS_H
 
 #include <uacpi/platform/atomic.h>
-#include <uacpi_types.h>
+#include <stdint.h>
 
 #ifndef UACPI_ARCH_FLUSH_CPU_CACHE
 #define UACPI_ARCH_FLUSH_CPU_CACHE() do {} while (0)

@@ -27,7 +27,7 @@ const uacpi_flags: []const []const u8 = &.{
     "-nostdlib",
     "-DUACPI_OVERRIDE_LIBC",
     "-DUACPI_SIZED_FREES",
-    "-DUACPI_OVERRIDE_TYPES",
+    // "-DUACPI_OVERRIDE_TYPES",
     "-DUACPI_OVERRIDE_ARCH_HELPERS",
     "-DUACPI_DEFAULT_LOG_LEVEL=UACPI_LOG_INFO",
 };
@@ -36,6 +36,8 @@ pub fn add_uacpi_to_module(b: *Build, module: *Build.Module) void {
     const uacpi = b.dependency("uacpi", .{});
     module.addIncludePath(b.path("include"));
     module.addIncludePath(uacpi.path("include"));
+    const headers = b.dependency("chdrs", .{});
+    module.addIncludePath(headers.path("."));
 
     module.addCSourceFiles(.{
         .root = uacpi.path("source"),

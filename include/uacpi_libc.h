@@ -1,5 +1,5 @@
 #pragma once
-#include <uacpi_types.h>
+#include <stdint.h>
 
 #define UACPI_PRIx64 "lx"
 #define UACPI_PRIX64 "lX"
