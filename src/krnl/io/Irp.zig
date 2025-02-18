@@ -1,7 +1,13 @@
+//! IO request packets, the managed infrastructure for passing io operations through a device stack with room
+//! for compatible expansion. The core of an IRP is its Parameters, which specify what IO operation is to be
+//! performed. A driver SHALL specify a dispatch routine in its vtable, which routine takes an IRP and returns
+//! an InvocationResult.
+
 const std = @import("std");
 const Device = @import("Device.zig");
 const queue = @import("collections").queue;
 const UUID = @import("zuid").UUID;
+const Event = @import("../thread/Event.zig");
 
 const Irp = @This();
 
@@ -25,11 +31,12 @@ pub const InvocationResult = enum {
     pass,
 };
 
-pub const Function = enum {
-    enumeration,
-};
-
-pub const Parameters = union(Function) {
+/// Irp parameters, a union tagged by the major operation to be performed.
+/// The innermost struct of the active tag(s) SHALL have fields sufficient to
+/// include enough information for the driver to complete the IO request, and
+/// fields sufficient to store or point to storage for any information returned
+/// by the requested IO operation.
+pub const Parameters = union(enum) {
     enumeration: union(enum) {
         properties: struct {
             id: UUID,
@@ -38,22 +45,49 @@ pub const Parameters = union(Function) {
     },
 };
 
+const Dpc = @import("../dispatcher/Dpc.zig");
+
+pub fn irp_callback_dpc(dpc: *Dpc, irp: *Irp, cb: *const fn (*Irp, ?*anyopaque) void, user_ctx: ?*anyopaque) void {
+    dpc.deinit();
+    cb(irp, user_ctx);
+}
+
+pub const IrpCompletion = union(enum) {
+    /// a callback and context for asynchronous completion.
+    /// the callback SHALL be executed by a DPC in lieu of APCs, using irp_callback_dpc
+    callback: struct {
+        routine: *const fn (*Irp, ?*anyopaque) void,
+        ctx: ?*anyopaque,
+    },
+    /// an event for blocking completion, which SHALL be set (passing true for reset_irql)
+    /// when the result of the IO request is completed.
+    event: *Event,
+
+    pub fn blocking() !IrpCompletion {
+        return .{ .event = try irp_completion_event_pool.create() };
+    }
+};
+
+var irp_completion_event_pool: std.heap.MemoryPool(Event) = .init(@import("../hal/mm/pool.zig").pool_allocator);
+
 alloc: std.mem.Allocator,
 device: *Device,
+/// the current entry in the driver extra data stack
 stack_position: ?*Device.DriverStackEntry = null,
-queue_hook: queue.SinglyLinkedNode = .{},
+/// a queue hook for storing deferrable IRPs
+queue_hook: queue.DoublyLinkedNode = .{},
+/// the request parameters
 parameters: Parameters,
-completion: ?struct {
-    routine: *const fn (*Irp, ?*anyopaque) anyerror!void,
-    ctx: ?*anyopaque,
-} = null,
+/// completion information for blocking or asynchronous completion
+completion: IrpCompletion,
 
-pub fn init(alloc: std.mem.Allocator, device: *Device, parameters: Parameters) !*Irp {
+pub fn init(alloc: std.mem.Allocator, device: *Device, parameters: Parameters, completion: IrpCompletion) !*Irp {
     const irp = try alloc.create(Irp);
     irp.* = .{
         .alloc = alloc,
         .device = device,
         .parameters = parameters,
+        .completion = completion,
     };
     return irp;
 }
@@ -65,6 +99,12 @@ pub fn deinit(self: *Irp) void {
                 .properties => {},
             }
         },
+    }
+    switch (self.completion) {
+        .event => |e| {
+            irp_completion_event_pool.destroy(e);
+        },
+        .callback => {},
     }
     self.alloc.destroy(self);
 }

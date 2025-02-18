@@ -7,6 +7,7 @@ const hal = @import("../hal/hal.zig");
 const QueuedSpinLock = hal.QueuedSpinLock;
 const log = std.log.scoped(.io);
 const Event = @import("../thread/Event.zig");
+const dispatcher = @import("../dispatcher/dispatcher.zig");
 
 pub const Device = @import("Device.zig");
 pub const Driver = @import("Driver.zig");
@@ -35,14 +36,16 @@ pub fn get_device_property(alloc: std.mem.Allocator, dev: *Device, id: UUID, ptr
                 .result = @ptrCast(ptr),
             },
         },
-    });
+    }, try .blocking());
     defer irp.deinit();
     switch (execute_irp(irp) catch |err| switch (err) {
         error.IrpNotHandled => return error.NotFound,
         else => return err,
     }) {
         .complete, .partial => {},
-        .pending => @panic("UNIMPLEMENTED"),
+        .pending => {
+            try dispatcher.wait_for_single_object(&irp.completion.event.wait_handle);
+        },
         .pass => unreachable,
     }
 }
