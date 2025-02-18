@@ -29,20 +29,8 @@ pub fn load_table(t: *align(1) const sdt.SystemDescriptorTableHeader) !void {
     }
 }
 
-const PhysAddr = @import("cmn").types.PhysAddr;
-
-var rsdp_ptr:  ?PhysAddr = null;
-
-// pub fn find_rsdp() !PhysAddr {
-//     if(rsdp_ptr) |p| return p;
-//     const p = try rsdp.locate_rsdp();
-//     rsdp_ptr = p;
-//     return p;
-// }
-
 test {
     _ = sdt;
-    // _ = rsdp;
     _ = madt;
     _ = load_table;
 }

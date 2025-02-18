@@ -1,12 +1,13 @@
 const std = @import("std");
 const acpi_hpet = @import("../acpi/acpi.zig").hpet;
+const Gas = @import("../acpi/gas.zig").Gas;
 
 pub const HpetCapabilities = acpi_hpet.HpetCapabilities;
 
 pub var hpet_count: u8 = 0;
 pub var hpet_ids: [256]u8 = undefined;
 pub var hpet_indices: [256]u8 = undefined;
-pub var hpets = [_]?*volatile HpetRegisters{null} ** @import("config").max_hpets;
+pub var hpets: [@import("config").max_hpets]Gas = undefined;
 pub var caps: [hpets.len]HpetCapabilities = undefined;
 pub var min_periodic_ticks: [hpets.len]u64 = undefined;
 

@@ -27,8 +27,6 @@ pub fn early_tables(alloc: std.mem.Allocator) !void {
     log.debug("madt initialized", .{});
     try find_load_table(.MCFG);
     log.debug("mcfg initialized", .{});
-    try find_load_table(.HPET);
-    log.debug("hpet initialized", .{});
 }
 
 pub fn init() !void {
@@ -62,7 +60,7 @@ pub fn initialize_namespace() !void {
     log.info("ACPI namespace initialized", .{});
 }
 
-fn find_load_table(sig: sdt.Signature) !void {
+pub fn find_load_table(sig: sdt.Signature) !void {
     var tbl = (try uacpi.tables.find_table_by_signature(sig)) orelse return;
     try acpi.load_table(tbl.location.hdr);
     try uacpi.tables.table_unref(&tbl);
