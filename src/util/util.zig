@@ -1,4 +1,3 @@
-pub const checksum = @import("checksum.zig");
 pub const WindowStructIndexer = @import("window_struct_indexer.zig").WindowStructIndexer;
 pub const WindowStructIndexerMut = @import("window_struct_indexer.zig").WindowStructIndexerMut;
 pub const masking = @import("masking.zig");
@@ -250,7 +249,6 @@ test EnumMask {
 
 test {
     _ = lower_string_comptime;
-    _ = checksum.add_checksum;
     _ = signExtend;
     // _ = unwrapArgumentTuple;
     // std.testing.refAllDecls(errMarshal);

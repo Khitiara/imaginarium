@@ -1,7 +1,5 @@
 const std = @import("std");
 
-const util = @import("util");
-
 inline fn cast_signature(sig: *const [4]u8) u32 {
     return @bitCast(sig.*);
 }
@@ -48,33 +46,4 @@ pub const SystemDescriptorTableHeader = extern struct {
     oem_revision: u32 align(1),
     creator_id: u32 align(1),
     creator_revision: u32 align(1),
-
-    pub usingnamespace util.checksum.add_checksum(@This(), *const SystemDescriptorTableHeader, true);
 };
-
-test "basic header checksum" {
-    const hdr1 = SystemDescriptorTableHeader{
-        .signature = Signature.APIC,
-        .checksum = 179,
-        .length = @sizeOf(SystemDescriptorTableHeader),
-        .creator_id = 4,
-        .revision = 5,
-        .oemid = std.mem.zeroes([6]u8),
-        .oem_table_id = std.mem.zeroes([8]u8),
-        .oem_revision = 1,
-        .creator_revision = 2,
-    };
-    try std.testing.expectEqual(0, hdr1.compute_checksum());
-    const hdr2 = SystemDescriptorTableHeader{
-        .signature = Signature.APIC,
-        .checksum = 180,
-        .length = @sizeOf(SystemDescriptorTableHeader),
-        .creator_id = 4,
-        .revision = 5,
-        .oemid = std.mem.zeroes([6]u8),
-        .oem_table_id = std.mem.zeroes([8]u8),
-        .oem_revision = 1,
-        .creator_revision = 2,
-    };
-    try std.testing.expectError(util.checksum.ChecksumErrors.invalid_sdt_checksum, hdr2.verify_checksum());
-}

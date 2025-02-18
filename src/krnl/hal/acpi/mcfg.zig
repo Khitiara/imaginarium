@@ -5,13 +5,10 @@ const hal = @import("../hal.zig");
 const arch = hal.arch;
 const mm = hal.mm;
 const assert = std.debug.assert;
-const checksum = util.checksum;
 
 pub const Mcfg = extern struct {
     header: sdt.SystemDescriptorTableHeader,
     _: [8]u8 align(1) = [_]u8{0} ** 8,
-
-    pub usingnamespace checksum.add_acpi_checksum(Mcfg);
 
     pub fn bridges(self: *align(1) const Mcfg) []align(1) const RawPciHostBridge {
         return std.mem.bytesAsSlice(RawPciHostBridge, @as([*]const u8, @ptrCast(self))[@sizeOf(Mcfg)..self.header.length]);

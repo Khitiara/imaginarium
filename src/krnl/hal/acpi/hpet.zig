@@ -2,7 +2,6 @@ const std = @import("std");
 const sdt = @import("sdt.zig");
 const util = @import("util");
 const Gas = @import("gas.zig").Gas;
-const checksum = util.checksum;
 const acpi = @import("acpi.zig");
 const arch = @import("../arch/arch.zig");
 const mm = @import("../mm/mm.zig");
@@ -45,14 +44,4 @@ pub const Hpet = extern struct {
         },
         oem_reserved: u4,
     },
-
-    pub usingnamespace checksum.add_acpi_checksum(Hpet);
-
-    pub fn address(self: *align(1) const Hpet) usize {
-        switch (self.base_address.address_space) {
-            .system_memory => return self.base_address.address.system_memory,
-            .system_io => return self.base_address.address.system_io,
-            else => @panic("idk whats happening here"),
-        }
-    }
 };

@@ -1,6 +1,5 @@
 const sdt = @import("sdt.zig");
 const util = @import("util");
-const checksum = util.checksum;
 const WindowStructIndexer = util.WindowStructIndexer;
 
 const apic = @import("../apic/apic.zig");
@@ -21,8 +20,6 @@ pub const Madt = extern struct {
     header: sdt.SystemDescriptorTableHeader,
     lapic_addr: u32,
     flags: MadtFlags,
-
-    pub usingnamespace checksum.add_acpi_checksum(Madt);
 };
 
 const MadtEntryType = enum(u8) {
