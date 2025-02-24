@@ -25,7 +25,6 @@ const uacpi_src: []const []const u8 = &.{
 const uacpi_flags: []const []const u8 = &.{
     "-ffreestanding",
     "-nostdlib",
-    "-DUACPI_OVERRIDE_LIBC",
     "-DUACPI_SIZED_FREES",
     // "-DUACPI_OVERRIDE_TYPES",
     "-DUACPI_OVERRIDE_ARCH_HELPERS",

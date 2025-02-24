@@ -9,8 +9,8 @@
             .path = "libs/zuid/",
         },
         .uacpi = .{
-            .url = "git+https://github.com/uACPI/uACPI?ref=master#757dcece1a9f1c069355b23f7feaf21656728f94",
-            .hash = "12200468fb671c04225f04d87e0fe1131e49ccd153e870be6e858dc80e39cb4e18df",
+            .url = "git+https://github.com/uACPI/uACPI?ref=master#4ab3a78006a930e2cda5a92f33fc84e1ec6b4a3d",
+            .hash = "1220172694f04b562cf0f09ab554ca7bbd30babed7071ff1b9391f26dc98c14055e5",
         },
         .limine = .{
             .url = "git+https://github.com/limine-bootloader/limine?ref=v9.x-binary#c5df5d5cd1eb2a600cfa90628b243ffc7f849604",
