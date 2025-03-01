@@ -175,18 +175,11 @@ pub inline fn RegisterType(comptime reg: RegisterId) type {
 
 pub const RegisterSlice = *align(16) volatile [0x40]extern struct { item: u32 align(16) };
 
-pub const AcpiPolarity = enum(u2) {
-    default,
-    active_high,
-    reserved,
-    active_low,
-};
-pub const AcpiTrigger = enum(u2) {
-    default,
-    edge_triggered,
-    reserved,
-    level_triggered,
-};
+
+const zuacpi = @import("zuacpi");
+
+pub const AcpiPolarity = zuacpi.madt.AcpiPolarity;
+pub const AcpiTrigger = zuacpi.madt.AcpiTrigger;
 
 pub const LapicNmiPin = packed struct(u8) {
     pin: enum(u2) {

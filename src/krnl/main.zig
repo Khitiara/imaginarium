@@ -17,6 +17,8 @@ const font_rendering = @import("font_rendering.zig");
 const debug = @import("debug.zig");
 const smp = @import("smp.zig");
 
+const zuacpi = @import("zuacpi");
+
 const log = std.log.default;
 
 pub const tty: std.io.tty.Config = .no_color;
@@ -54,6 +56,10 @@ pub const os = struct {
     pub const heap = struct {
         pub const page_allocator = hal.mm.pool.pool_page_allocator;
     };
+};
+
+pub const zuacpi_options: zuacpi.Options = .{
+    .allocator = hal.mm.pool.pool_allocator,
 };
 
 pub const Panic = std.debug.FullPanic(debug.panic);
@@ -104,8 +110,7 @@ pub fn nanoTimestamp() i128 {
     return arch.time.ns_since_boot_tsc() catch @panic("");
 }
 
-const uacpi = @import("hal/acpi/uacpi/uacpi.zig");
-const zuacpi = @import("hal/acpi/zuacpi.zig");
+const uacpi = zuacpi.uacpi;
 
 noinline fn kmain() anyerror!noreturn {
     try arch.init.platform_init();

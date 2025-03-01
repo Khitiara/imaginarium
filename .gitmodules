@@ -7,3 +7,6 @@
 [submodule "zfat"]
 	path = libs/zfat
 	url = https://github.com/Khitiara/zfat
+[submodule "zuacpi"]
+	path = libs/zuacpi
+	url = https://github.com/uACPI/zuacpi.git

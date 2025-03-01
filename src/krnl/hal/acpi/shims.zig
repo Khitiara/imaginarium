@@ -1,14 +1,14 @@
-const uacpi = @import("uacpi.zig");
+const uacpi = @import("zuacpi").uacpi;
 const std = @import("std");
 const cmn = @import("cmn");
 const types = cmn.types;
 
-const pci = @import("../../pci/pci.zig");
-const mcfg = @import("../mcfg.zig");
+const pci = @import("../pci/pci.zig");
+const mcfg = @import("mcfg.zig");
 
 const log = std.log.scoped(.uacpi);
 
-const hal = @import("../../hal.zig");
+const hal = @import("../hal.zig");
 const apic = hal.apic;
 const ioapic = apic.ioapic;
 const arch = hal.arch;
@@ -16,39 +16,19 @@ const serial = arch.serial;
 const uacpi_allocator = hal.mm.pool.pool_allocator;
 const PhysAddr = types.PhysAddr;
 
-const dispatcher = @import("../../../dispatcher/dispatcher.zig");
+const dispatcher = @import("../../dispatcher/dispatcher.zig");
 
-const interrupts = @import("../../../io/interrupts.zig");
+const interrupts = @import("../../io/interrupts.zig");
 
 const SpinLock = hal.SpinLock;
-const Mutex = @import("../../../thread/Mutex.zig");
-const Semaphore = @import("../../../thread/Semaphore.zig");
-
-export fn uacpi_kernel_log(level: uacpi.log_level, string: [*:0]const u8) callconv(arch.cc) void {
-    const str = std.mem.span(string);
-    const s = std.mem.trim(u8, str, " \n\r\t");
-    switch (level) {
-        .debug, .trace => log.debug("{s}", .{s}),
-        .info => log.info("{s}", .{s}),
-        .warn => log.warn("{s}", .{s}),
-        .err => log.err("{s}", .{s}),
-    }
-}
-
-export fn uacpi_kernel_alloc(size: usize) callconv(arch.cc) ?[*]align(16) u8 {
-    const ret = uacpi_allocator.alignedAlloc(u8, 16, size) catch return null;
-    return ret.ptr;
-}
-
-export fn uacpi_kernel_free(address: [*]align(16) u8, size: usize) callconv(arch.cc) void {
-    uacpi_allocator.free(address[0..size]);
-}
+const Mutex = @import("../../thread/Mutex.zig");
+const Semaphore = @import("../../thread/Semaphore.zig");
 
 export fn uacpi_kernel_map(address: PhysAddr, length: usize) callconv(arch.cc) ?*anyopaque {
     return (hal.mm.map_io(address, length, .write_back) catch |e| {
         log.err("error in io mapping: {}", .{e});
         if(@errorReturnTrace()) |trc| {
-            @import("../../../debug.zig").print_stack_trace(log, null, trc);
+            @import("../../debug.zig").print_stack_trace(log, null, trc);
         }
         return null;
     }).ptr;
@@ -59,7 +39,7 @@ export fn uacpi_kernel_unmap(address: [*]u8, length: usize) callconv(arch.cc) vo
 }
 
 export fn uacpi_kernel_get_rsdp(addr: *PhysAddr) callconv(arch.cc) uacpi.uacpi_status {
-    addr.* = @import("../../../boot/boot_info.zig").rsdp_addr;
+    addr.* = @import("../../boot/boot_info.zig").rsdp_addr;
     return .ok;
 }
 
@@ -132,8 +112,8 @@ comptime {
     }
 }
 
-const smp = @import("../../../smp.zig");
-const Thread = @import("../../../thread/Thread.zig");
+const smp = @import("../../smp.zig");
+const Thread = @import("../../thread/Thread.zig");
 
 export fn uacpi_kernel_get_thread_id() callconv(arch.cc) ?*Thread {
     return smp.lcb.*.current_thread;
@@ -221,7 +201,7 @@ fn do_handle(_: *interrupts.InterruptRegistration, context: ?*anyopaque) bool {
 
 noinline fn find_redirect_suitable_vector(gsi: u32) !u8 {
     if (gsi < 32) {
-        const isa_irq = ioapic.isa_irqs[gsi];
+        const isa_irq = &ioapic.isa_irqs[gsi];
         if (isa_irq.cpu_irq == 0) {
             const vector = arch.idt.allocate_vector_any(.dispatch) catch return error.InternalError;
             const redir: ioapic.IoRedTblEntry = .{
@@ -237,6 +217,7 @@ noinline fn find_redirect_suitable_vector(gsi: u32) !u8 {
                 error.AlreadyMappedIsaIrq => return error.AlreadyExists,
                 inline else => |e| return e,
             };
+            isa_irq.cpu_irq = @bitCast(vector);
         }
         return isa_irq.cpu_irq;
     } else @panic("unimplemented");

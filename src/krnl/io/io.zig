@@ -77,6 +77,7 @@ pub fn register_drivers(alloc: std.mem.Allocator) !void {
     devices_dir = try .init(alloc);
     try ob.root.children.put(alloc, "/Devices", &devices_dir.header);
 
+    try @import("drv/AcpiHal.zig").register(alloc);
     try @import("drv/AcpiEnumerator.zig").register(alloc);
     try @import("drv/PciBusEnumerator.zig").register(alloc);
     try @import("drv/AcpiProcessor.zig").register(alloc);

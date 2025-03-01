@@ -1,6 +1,6 @@
 const std = @import("std");
-const acpi_hpet = @import("../acpi/acpi.zig").hpet;
-const Gas = @import("../acpi/gas.zig").Gas;
+const acpi_hpet = @import("zuacpi").hpet;
+const Gas = @import("zuacpi").Gas;
 
 pub const HpetCapabilities = acpi_hpet.HpetCapabilities;
 

@@ -8,7 +8,6 @@ const LazyPath = Build.LazyPath;
 const utils = @import("build/util.zig");
 const add_krnl = @import("build/krnl.zig").add_krnl;
 const add_stage2 = @import("build/ldr.zig").add_stage2;
-const uacpi = @import("build/uacpi.zig");
 
 fn target_features(query: *Target.Query) !void {
     query.cpu_model = .{ .explicit = std.Target.Cpu.Model.generic(query.cpu_arch.?) };
@@ -158,7 +157,6 @@ pub fn build(b: *Build) !void {
     try target_features(&selected_target);
     const target = b.resolveTargetQuery(selected_target);
     const optimize = b.standardOptimizeOption(.{});
-    uacpi.add_uacpi_to_build(b, target, optimize);
 
     const max_ioapics = b.option(u32, "max-ioapics", "maximum number of ioapics supported (default 5)") orelse 5;
     const max_hpets = b.option(u32, "max-hpets", "maximum number of HPET blocks supported (default 1)") orelse 1;

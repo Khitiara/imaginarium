@@ -1,29 +1,15 @@
 const std = @import("std");
-const sdt = @import("sdt.zig");
 const util = @import("util");
 const hal = @import("../hal.zig");
 const arch = hal.arch;
 const mm = hal.mm;
 const assert = std.debug.assert;
 
-pub const Mcfg = extern struct {
-    header: sdt.SystemDescriptorTableHeader,
-    _: [8]u8 align(1) = [_]u8{0} ** 8,
-
-    pub fn bridges(self: *align(1) const Mcfg) []align(1) const RawPciHostBridge {
-        return std.mem.bytesAsSlice(RawPciHostBridge, @as([*]const u8, @ptrCast(self))[@sizeOf(Mcfg)..self.header.length]);
-    }
-};
+const zuacpi = @import("zuacpi");
+const find_table_by_signature = zuacpi.uacpi.tables.find_table_by_signature;
+const mcfg = zuacpi.mcfg;
 
 pub var host_bridges: []const PciHostBridge = undefined;
-
-const RawPciHostBridge = extern struct {
-    base: u64,
-    segment_group: u16,
-    bus_start: u8,
-    bus_end: u8,
-    _: u32 = 0,
-};
 
 var bridge_map_lock: hal.SpinLock = .{};
 
@@ -70,7 +56,12 @@ pub const PciHostBridge = struct {
 
 const log = @import("acpi.zig").log;
 
-pub noinline fn set_table(table: *align(1) const Mcfg) !void {
+pub fn load_mcfg() !void {
+    const tbl = (try find_table_by_signature(.MCFG)) orelse return;
+    try set_table(@ptrCast(tbl.location.hdr));
+}
+
+pub noinline fn set_table(table: *align(1) const mcfg.Mcfg) !void {
     log.info("PCI(E) MCFG table loaded at {*}", .{table});
     const b = table.bridges();
     const b2 = try mm.pool.pool_allocator.alloc(PciHostBridge, b.len);

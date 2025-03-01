@@ -3,7 +3,6 @@ const Target = std.Target;
 const Build = std.Build;
 const LazyPath = Build.LazyPath;
 
-const uacpi = @import("uacpi.zig");
 const utils = @import("util.zig");
 const nasm = @import("nasm.zig");
 
@@ -34,7 +33,14 @@ pub fn add_krnl(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, 
 
     exe_module.addObjectFile(nasm.buildAsmFile(b, b.path("src/krnl/hal/arch/kstart.asm"), "kstart.o"));
 
-    uacpi.add_uacpi_to_module(b, exe_module);
+    const zuacpi = b.dependency("zuacpi", .{ .log_level = .info, .override_arch_helpers = true });
+
+    const zuacpi_module = zuacpi.module("zuacpi");
+    zuacpi_module.addIncludePath(b.path("include"));
+    const headers = b.dependency("chdrs", .{});
+    zuacpi_module.addIncludePath(headers.path("."));
+
+    exe_module.addImport("zuacpi", zuacpi_module);
 
     utils.addImportFromTable(exe_module, "util");
     utils.addImportFromTable(exe_module, "config");
