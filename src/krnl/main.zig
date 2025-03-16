@@ -110,6 +110,10 @@ pub fn nanoTimestamp() i128 {
     return arch.time.ns_since_boot_tsc() catch @panic("");
 }
 
+pub fn instant() u64 {
+    return arch.time.rdtsc();
+}
+
 const uacpi = zuacpi.uacpi;
 
 noinline fn kmain() anyerror!noreturn {
