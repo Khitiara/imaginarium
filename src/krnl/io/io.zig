@@ -12,6 +12,7 @@ const dispatcher = @import("../dispatcher/dispatcher.zig");
 pub const Device = @import("Device.zig");
 pub const Driver = @import("Driver.zig");
 pub const Irp = @import("Irp.zig");
+pub const resources = @import("resources.zig");
 
 pub fn get_device_property(alloc: std.mem.Allocator, dev: *Device, id: UUID, ptr: anytype) anyerror!void {
     if (b: {
@@ -64,7 +65,7 @@ pub fn execute_irp(irp: *Irp) anyerror!Irp.InvocationResult {
             .pass => {},
         }
     }
-    return if(partial) .complete else error.IrpNotHandled;
+    return if (partial) .complete else error.IrpNotHandled;
 }
 
 pub var drivers_dir: *ob.Directory = undefined;
@@ -198,6 +199,12 @@ noinline fn find_driver(device: *Device, alloc: std.mem.Allocator) !void {
                             debug.print_err_trace(log, "ATTACHING DRIVER", err, @errorReturnTrace());
                             continue;
                         }) {
+                            if (device.props.transient_resources.length() != 0) {
+                                const hids1 = try std.mem.join(alloc, ", ", hids);
+                                defer alloc.free(hids1);
+                                std.debug.panic("Driver failed to free transient resources for device with HID [{s}]", .{hids1});
+                            }
+
                             if (comptime log.enabled(.debug)) {
                                 const hids1 = try std.mem.join(alloc, ", ", hids);
                                 defer alloc.free(hids1);
@@ -222,6 +229,12 @@ noinline fn find_driver(device: *Device, alloc: std.mem.Allocator) !void {
                             debug.print_err_trace(log, "ATTACHING DRIVER", err, @errorReturnTrace());
                             continue;
                         }) {
+                            if (device.props.transient_resources.length() != 0) {
+                                const hids = if (device.props.hardware_ids) |hids| try std.mem.join(alloc, ", ", hids) else try alloc.dupe(u8, "");
+                                defer alloc.free(hids);
+                                std.debug.panic("Driver failed to free transient resources for device with HID [{s}]", .{hids});
+                            }
+
                             if (comptime log.enabled(.debug)) {
                                 const hids = if (device.props.hardware_ids) |hids| try std.mem.join(alloc, ", ", hids) else try alloc.dupe(u8, "");
                                 defer alloc.free(hids);

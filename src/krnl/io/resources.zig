@@ -15,17 +15,25 @@ const PhysAddr = @import("cmn").types.PhysAddr;
 const apic = @import("../hal/apic/apic.zig");
 const hal = @import("../hal/hal.zig");
 
-pub const PortRange = struct {
-    start: u16,
-    len: u16,
-};
+const std = @import("std");
+
+pub var resource_pool: std.heap.MemoryPool(Resource) = .init(hal.mm.pool.pool_allocator);
+
+pub const ResourceList = queue.Queue(Resource, "hook");
+
+pub fn free(list: *ResourceList) void {
+    var peer = list.clear();
+    while (peer) |item| {
+        peer = ResourceList.next(item);
+        item.deinit();
+    }
+}
 
 pub const Resource = struct {
     _: union(enum) {
-        ports: union(enum) {
-            @"8": PortRange,
-            @"16": PortRange,
-            @"32": PortRange,
+        ports: struct {
+            start: u16,
+            len: u16,
         },
         memory: struct {
             start: PhysAddr,
@@ -45,5 +53,9 @@ pub const Resource = struct {
             vector: u8,
         },
     },
-    hook: queue.SinglyLinkedNode,
+    hook: queue.SinglyLinkedNode = .{},
+
+    pub fn deinit(self: *Resource) void {
+        resource_pool.destroy(self);
+    }
 };

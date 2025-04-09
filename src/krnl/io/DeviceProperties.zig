@@ -3,6 +3,8 @@ const std = @import("std");
 const util = @import("util");
 const QueuedSpinLock = @import("../hal/QueuedSpinLock.zig");
 
+const resources = @import("resources.zig");
+
 const DeviceProperties = @This();
 
 pub const known_properties = struct {
@@ -19,6 +21,10 @@ compatible_ids: ?[]const []const u8 = null,
 address: ?u64 = null,
 bag: std.AutoArrayHashMapUnmanaged(UUID, union(enum) { int: u64, str: []const u8, multi_str: []const []const u8 }) = .{},
 bag_lock: QueuedSpinLock = .{},
+
+/// a list of device-owned resources found by bus drivers.
+/// this is intended to be transient and MUST be freed by the function driver on attach.
+transient_resources: resources.ResourceList = .{},
 
 pub fn deinit(self: *const DeviceProperties, alloc: std.mem.Allocator) void {
     @import("std").log.warn("freeing device properties", .{});

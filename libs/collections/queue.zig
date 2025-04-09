@@ -63,6 +63,7 @@ pub const UntypedQueue = struct {
         defer {
             self.head = null;
             self.tail = null;
+            self.len = 0;
         }
         return self.head;
     }

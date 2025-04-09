@@ -1,5 +1,6 @@
 # IDE Bits
 **/.idea/
+*.iml
 **/.vs/
 
 # Zig Stuff

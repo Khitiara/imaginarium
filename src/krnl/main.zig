@@ -62,7 +62,7 @@ pub const zuacpi_options: zuacpi.Options = .{
     .allocator = hal.mm.pool.pool_allocator,
 };
 
-pub const Panic = std.debug.FullPanic(debug.panic);
+pub const panic = std.debug.FullPanic(debug.panic);
 
 pub const std_options: std.Options = .{
     .logFn = logFn,
@@ -72,7 +72,7 @@ pub const std_options: std.Options = .{
     .log_scope_levels = &.{
         // .{ .scope = .io, .level = .info },
         .{ .scope = .@"mm.init", .level = .info },
-        .{ .scope = .@"drv.acpi", .level = .info },
+        // .{ .scope = .@"drv.acpi", .level = .info },
         // .{ .scope = .@"drv.pci", .level = .info },
         .{ .scope = .@"drv.acpi_proc", .level = .info },
     },
@@ -95,7 +95,7 @@ fn kstart2_bootelf(ldr_info: *bootelf.BootelfData) callconv(arch.cc) noreturn {
 fn kstart3() callconv(arch.cc) noreturn {
     kmain() catch |e| {
         debug.print_err_trace(log, "uncaught error", e, @errorReturnTrace());
-        Panic.unwrapError(e);
+        panic.unwrapError(e);
     };
 }
 

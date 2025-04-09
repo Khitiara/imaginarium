@@ -32,7 +32,7 @@ fn re_query(arch: Target.Cpu.Arch) !Target.Query {
     return query;
 }
 
-pub fn add_stage2(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, optimize: std.builtin.OptimizeMode)  !struct {
+pub fn add_stage2(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) !struct {
     *std.Build.Step.Compile,
     *std.Build.Step,
     LazyPath,
@@ -58,13 +58,19 @@ pub fn add_stage2(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget
     exe.pie = false;
     exe.entry = .disabled;
 
-    exe.addAssemblyFile(b.path("src/ldr/init.S"));
-    exe.addAssemblyFile(b.path("src/ldr/real.S"));
-
     const exe_module = exe.root_module;
     utils.addImportFromTable(exe_module, "util");
     utils.addImportFromTable(exe_module, "config");
     utils.addImportFromTable(exe_module, "cmn");
+
+    const zuacpi = b.dependency("zuacpi", .{ .log_level = .info, .override_arch_helpers = true });
+
+    const zuacpi_module = zuacpi.module("zuacpi_barebones");
+    zuacpi_module.addIncludePath(b.path("include"));
+    const headers = b.dependency("chdrs", .{});
+    zuacpi_module.addIncludePath(headers.path("."));
+
+    exe_module.addImport("zuacpi", zuacpi_module);
 
     exe.setLinkerScript(b.path("src/ldr/link.ld"));
 

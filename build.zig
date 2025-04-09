@@ -24,11 +24,10 @@ fn target_features(query: *Target.Query) !void {
             query.cpu_features_sub.addFeature(@intFromEnum(Features.sse2));
             query.cpu_features_sub.addFeature(@intFromEnum(Features.avx));
             query.cpu_features_sub.addFeature(@intFromEnum(Features.avx2));
-            query.cpu_features_add.addFeature(@intFromEnum(Features.soft_float));
         },
-        .aarch64 => {
-            // for now nothing, idk what needs tweaking here
-        },
+        // .aarch64 => {
+        //     // for now nothing, idk what needs tweaking here
+        // },
         else => return error.invalid_imaginarium_arch,
     }
 }

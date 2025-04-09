@@ -28,7 +28,7 @@ pub fn register(alloc: std.mem.Allocator) !void {
     d.drv.vtable = &vtable;
     d.drv.supported_devices = .{
         .hardware_ids = &.{"ACPI_HAL\\PNP0C08"},
-        .compatible_ids = &.{ "PNP0C08" },
+        .compatible_ids = &.{"PNP0C08"},
     };
     log.debug("registered acpi enumerating driver", .{});
     try ob.insert(alloc, &d.drv.header, "/?/Drivers/acpi_sb");
@@ -112,10 +112,7 @@ fn dispatch(_: *Driver, irp: *Irp) anyerror!Irp.InvocationResult {
 
 fn recurse(drv: *Driver, parent: *Device, alloc: std.mem.Allocator, node: *ns.NamespaceNode) !void {
     var iter: ?*ns.NamespaceNode = null;
-    while (try ns.node_next_typed(node, &iter,         .{
-        .device = true,
-        .processor = true
-    })) |n| {
+    while (try ns.node_next_typed(node, &iter, .{ .device = true, .processor = true })) |n| {
         const dev = try descend(drv, parent, alloc, n);
         try recurse(drv, dev, alloc, n);
     }
@@ -155,6 +152,31 @@ noinline fn descend(drv: *Driver, parent: *Device, alloc: std.mem.Allocator, ns_
         if (info.flags.has_cid) {
             dev.props.compatible_ids = try info.cid.dupe(alloc);
         }
+
+        {
+            if (try uacpi.resources.get_current_resources(ns_node)) |uacpi_resources| {
+                defer uacpi_resources.deinit();
+                var iterator = uacpi_resources.iterator();
+                while (iterator.next()) |res| {
+                    log.debug("uacpi resource: {}", .{res});
+                    switch (res) {
+                        .io => |ports| {
+                            const io_res = try io.resources.resource_pool.create();
+                            io_res._ = .{
+                                .ports = .{
+                                    .start = ports.minimum,
+                                    .len = ports.length,
+                                },
+                            };
+                            dev.props.transient_resources.append(io_res);
+                        },
+                        else => {
+                            log.warn("unimplemented resource type {s}", .{@tagName(res)});
+                        },
+                    }
+                }
+            }
+        }
     }
     if (info.flags.has_adr) {
         dev.props.address = info.adr;
@@ -186,6 +208,7 @@ noinline fn descend(drv: *Driver, parent: *Device, alloc: std.mem.Allocator, ns_
             path,
         });
     }
+
     try io.report_device(alloc, dev);
 
     return dev;

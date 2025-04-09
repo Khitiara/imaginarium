@@ -43,6 +43,8 @@ fn load(_: *Driver, _: std.mem.Allocator) anyerror!?*Device {
 }
 
 fn attach(drv: *Driver, dev: *Device, alloc: std.mem.Allocator) anyerror!bool {
+    defer io.resources.free(&dev.props.transient_resources);
+
     @atomicStore(bool, &dev.has_driver, true, .release);
     var seg: u16 = undefined;
     try io.get_device_property(alloc, dev, Device.Properties.known_properties.pci_downstream_segment, &seg);
