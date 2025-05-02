@@ -1,7 +1,6 @@
 const std = @import("std");
 const log = std.log;
 const Target = std.Target;
-const DiskImage = @import("build/disk_image.zig");
 const Build = std.Build;
 const LazyPath = Build.LazyPath;
 
