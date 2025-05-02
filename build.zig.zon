@@ -3,9 +3,6 @@
     .version = "0.0.0",
     .fingerprint = 0x9ac89bdbfb19b7c0,
     .dependencies = .{
-        .bootelf = .{
-            .path = "libs/bootelf/",
-        },
         .zuid = .{
             .path = "libs/zuid/",
         },

@@ -100,10 +100,7 @@ fn kstart3() callconv(arch.cc) noreturn {
 }
 
 comptime {
-    switch (@import("config").boot_protocol) {
-        .bootelf => @export(&kstart2_bootelf, .{ .name = "__kstart2" }),
-        .limine => @export(&kstart3, .{ .name = "__kstart2" }),
-    }
+    @export(&kstart3, .{ .name = "__kstart2" });
 }
 
 pub fn nanoTimestamp() i128 {

@@ -25,9 +25,6 @@ fn target_features(query: *Target.Query) !void {
             query.cpu_features_sub.addFeature(@intFromEnum(Features.avx));
             query.cpu_features_sub.addFeature(@intFromEnum(Features.avx2));
         },
-        // .aarch64 => {
-        //     // for now nothing, idk what needs tweaking here
-        // },
         else => return error.invalid_imaginarium_arch,
     }
 }
@@ -54,13 +51,6 @@ fn parseQemuGdbOption(v: ?[]const u8) QemuGdbOption {
         return .none;
     }
 }
-
-const LoaderProtocol = enum {
-    bootelf,
-    limine,
-};
-
-const loader_protocol: LoaderProtocol = .limine;
 
 const complex_img = @import("disk_image_step");
 
@@ -162,7 +152,6 @@ pub fn build(b: *Build) !void {
     const force_hypervisor = b.option(bool, "force-hypervisor", "force assume a hypervisor is present (running in a VM, default false)") orelse false;
 
     const options = b.addOptions();
-    options.addOption(LoaderProtocol, "boot_protocol", loader_protocol);
     options.addOption(u32, "max_ioapics", max_ioapics);
     options.addOption(u32, "max_hpets", max_hpets);
     options.addOption(usize, "max_elf_size", 1 << 30);

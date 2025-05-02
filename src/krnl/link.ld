@@ -2,13 +2,13 @@ ENTRY(__kstart)
 
 PHDRS
 {
-  none      PT_NULL FLAGS(0);
-  init      PT_LOAD FLAGS((1 << 2) | (1 << 1) | (1 << 0) /* Read | Write | Execute */);
-  text      PT_LOAD FLAGS((1 << 2) | (1 << 0) /* Readable | Executable */);
-  stk       PT_LOAD FLAGS((1 << 2) | (1 << 1) /* Readable | Writeable  */);
-  data      PT_LOAD FLAGS((1 << 2) | (1 << 1) /* Readable | Writeable  */);
-  rodata    PT_LOAD FLAGS((1 << 2)            /* Readable */);
-  /*tls       PT_TLS  FLAGS((1 << 2) | (1 << 1) );*/
+    none      PT_NULL FLAGS(0);
+    init      PT_LOAD FLAGS((1 << 2) | (1 << 1) | (1 << 0) /* Read | Write | Execute */);
+    text      PT_LOAD FLAGS((1 << 2) | (1 << 0) /* Readable | Executable */);
+    stk       PT_LOAD FLAGS((1 << 2) | (1 << 1) /* Readable | Writeable  */);
+    data      PT_LOAD FLAGS((1 << 2) | (1 << 1) /* Readable | Writeable  */);
+    rodata    PT_LOAD FLAGS((1 << 2)            /* Readable */);
+    /*tls       PT_TLS  FLAGS((1 << 2) | (1 << 1) );*/
 }
 
 
