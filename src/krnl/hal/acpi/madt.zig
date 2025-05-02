@@ -15,8 +15,9 @@ const assert = std.debug.assert;
 const madt = zuacpi.madt;
 
 pub fn load_madt() !void {
-    const tbl = (try tables.find_table_by_signature(.APIC)) orelse return error.MadtNotFound;
+    var tbl = (try tables.find_table_by_signature(.APIC)) orelse return error.MadtNotFound;
     try read_madt(@ptrCast(tbl.location.hdr));
+    try tables.table_unref(&tbl);
 }
 
 pub noinline fn read_madt(ptr: *align(1) const madt.Madt) !void {

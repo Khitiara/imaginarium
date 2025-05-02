@@ -6,7 +6,7 @@ const mm = hal.mm;
 const assert = std.debug.assert;
 
 const zuacpi = @import("zuacpi");
-const find_table_by_signature = zuacpi.uacpi.tables.find_table_by_signature;
+const tables = zuacpi.uacpi.tables;
 const mcfg = zuacpi.mcfg;
 
 pub var host_bridges: []const PciHostBridge = undefined;
@@ -57,8 +57,9 @@ pub const PciHostBridge = struct {
 const log = @import("acpi.zig").log;
 
 pub fn load_mcfg() !void {
-    const tbl = (try find_table_by_signature(.MCFG)) orelse return;
+    var tbl = (try tables.find_table_by_signature(.MCFG)) orelse return;
     try set_table(@ptrCast(tbl.location.hdr));
+    try tables.table_unref(&tbl);
 }
 
 pub noinline fn set_table(table: *align(1) const mcfg.Mcfg) !void {

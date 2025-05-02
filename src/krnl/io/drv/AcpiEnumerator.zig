@@ -118,6 +118,118 @@ fn recurse(drv: *Driver, parent: *Device, alloc: std.mem.Allocator, node: *ns.Na
     }
 }
 
+inline fn process_irqlike(irqs: anytype, dev: *Device) !void {
+    for (irqs.irqs()) |vec| {
+        const irq_res = try io.resources.resource_pool.create();
+        errdefer irq_res.deinit();
+        irq_res._ = .{
+            .interrupt = .{
+                .vector = vec,
+            },
+        };
+        dev.props.transient_resources.append(irq_res);
+        log.debug("IRQ resource for vector {x}", .{vec});
+    }
+}
+
+inline fn process_addrlike(addr: anytype, dev: *Device) !void {
+    switch (addr.common.typ) {
+        .memory => {
+            const addr_res = try io.resources.resource_pool.create();
+            const attr = addr.common.attribute.memory;
+            addr_res._ = .{
+                .memory = .{
+                    .start = @enumFromInt(addr.minimum),
+                    .length = addr.address_length,
+                    .caching = switch (attr.caching) {
+                        .cacheable => .cacheable,
+                        .non_cacheable => .uncached,
+                        .write_combining => .write_combining,
+                        .prefetchable => .prefetchable,
+                    },
+                },
+            };
+            dev.props.transient_resources.append(addr_res);
+            log.debug("Addrspace resource for memory range base {x} len {x}", .{addr.minimum, addr.address_length});
+        },
+        .bus => {
+            const addr_res = try io.resources.resource_pool.create();
+            addr_res._ = .{
+                .bus_numbers = .{
+                    .start = addr.minimum,
+                    .length = addr.address_length,
+                },
+            };
+            dev.props.transient_resources.append(addr_res);
+            log.debug("Addrspace resource for bus number range base {x} len {x}", .{addr.minimum, addr.address_length});
+        },
+        .io => {
+            const addr_res = try io.resources.resource_pool.create();
+            addr_res._ = .{
+                .ports = .{
+                    .start = @intCast(addr.minimum),
+                    .len = @intCast(addr.address_length),
+                },
+            };
+            dev.props.transient_resources.append(addr_res);
+            log.debug("Addrspace resource for io range base {x} len {x}", .{addr.minimum, addr.address_length});
+        },
+        _ => |t| {
+            log.warn("vendor specific address space type {x} for resource", .{@intFromEnum(t)});
+        },
+    }
+}
+
+inline fn process_resources(uacpi_resources: *uacpi.resources.Resources, dev: *Device) !void {
+    defer uacpi_resources.deinit();
+    var iterator = uacpi_resources.iterator();
+    while (iterator.next()) |res| {
+        switch (res) {
+            .io => |ports| {
+                const io_res = try io.resources.resource_pool.create();
+                io_res._ = .{
+                    .ports = .{
+                        .start = ports.minimum,
+                        .len = ports.length,
+                    },
+                };
+                log.debug("IO resource for ports base {x} len {x}", .{ ports.minimum, ports.length });
+                dev.props.transient_resources.append(io_res);
+            },
+            .irq => |irqs| {
+                try process_irqlike(irqs, dev);
+            },
+            .extended_irq => |irqs| {
+                try process_irqlike(irqs, dev);
+            },
+            .addr16 => |a| {
+                try process_addrlike(a, dev);
+            },
+            .addr32 => |a| {
+                try process_addrlike(a, dev);
+            },
+            .addr64 => |a| {
+                try process_addrlike(a, dev);
+            },
+            .fixed_mem32 => |mem| {
+                const mem_res: *io.resources.Resource = try io.resources.resource_pool.create();
+                mem_res._ = .{
+                    .memory = .{
+                        .start = @enumFromInt(mem.addr),
+                        .length = mem.length,
+                        .caching = .uncached,
+                    },
+                };
+                dev.props.transient_resources.append(mem_res);
+            },
+            else => {
+                log.debug("uacpi resource: {}", .{res});
+                log.warn("unimplemented resource type {s}", .{@tagName(res)});
+            },
+        }
+    }
+}
+
 noinline fn descend(drv: *Driver, parent: *Device, alloc: std.mem.Allocator, ns_node: *ns.NamespaceNode) !*Device {
     const dev: *Device = try alloc.create(Device);
     errdefer dev.deinit(alloc);
@@ -153,29 +265,8 @@ noinline fn descend(drv: *Driver, parent: *Device, alloc: std.mem.Allocator, ns_
             dev.props.compatible_ids = try info.cid.dupe(alloc);
         }
 
-        {
-            if (try uacpi.resources.get_current_resources(ns_node)) |uacpi_resources| {
-                defer uacpi_resources.deinit();
-                var iterator = uacpi_resources.iterator();
-                while (iterator.next()) |res| {
-                    log.debug("uacpi resource: {}", .{res});
-                    switch (res) {
-                        .io => |ports| {
-                            const io_res = try io.resources.resource_pool.create();
-                            io_res._ = .{
-                                .ports = .{
-                                    .start = ports.minimum,
-                                    .len = ports.length,
-                                },
-                            };
-                            dev.props.transient_resources.append(io_res);
-                        },
-                        else => {
-                            log.warn("unimplemented resource type {s}", .{@tagName(res)});
-                        },
-                    }
-                }
-            }
+        if (try uacpi.resources.get_current_resources(ns_node)) |uacpi_resources| {
+            try process_resources(uacpi_resources, dev);
         }
     }
     if (info.flags.has_adr) {

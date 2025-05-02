@@ -38,18 +38,28 @@ pub const Resource = struct {
         memory: struct {
             start: PhysAddr,
             length: usize,
+            caching: enum {
+                uncached,
+                cacheable,
+                write_combining,
+                prefetchable,
+            },
+        },
+        bus_numbers: struct {
+            start: u64,
+            length: u64,
         },
         interrupt: struct {
-            irql: hal.InterruptRequestPriority,
+            // irql: hal.InterruptRequestPriority,
             vector: u32,
         },
         msi: struct {
-            irql: hal.InterruptRequestPriority,
+            // irql: hal.InterruptRequestPriority,
             vector: u32,
             message_count: u4,
         },
         msix: struct {
-            irql: hal.InterruptRequestPriority,
+            // irql: hal.InterruptRequestPriority,
             vector: u8,
         },
     },

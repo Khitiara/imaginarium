@@ -73,7 +73,7 @@ pub const std_options: std.Options = .{
         // .{ .scope = .io, .level = .info },
         .{ .scope = .@"mm.init", .level = .info },
         // .{ .scope = .@"drv.acpi", .level = .info },
-        // .{ .scope = .@"drv.pci", .level = .info },
+        .{ .scope = .@"drv.pci", .level = .info },
         .{ .scope = .@"drv.acpi_proc", .level = .info },
     },
     .page_size_min = 4096,
