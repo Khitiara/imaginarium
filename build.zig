@@ -53,86 +53,70 @@ fn parseQemuGdbOption(v: ?[]const u8) QemuGdbOption {
 }
 
 const complex_img = @import("disk_image_step");
+const ImgInterface = complex_img.BuildInterface;
 
 fn add_img(b: *Build, arch: Target.Cpu.Arch, krnlstep: *Build.Step, elf: LazyPath, symbols: ?LazyPath) !struct { *Build.Step, LazyPath } {
-    switch (loader_protocol) {
-        .bootelf => {
-            const ldr_img = b.dependency("bootelf", .{}).namedWriteFiles("bootelf").getDirectory().path(b, "bootelf.bin");
-            const disk_image = DiskImage.create(b, .{
-                .basename = "drive.bin",
-            });
-            disk_image.append(ldr_img);
-            disk_image.append(elf);
-            disk_image.step.dependOn(krnlstep);
+    const limine = b.dependency("limine", .{});
 
-            b.getInstallStep().dependOn(&disk_image.step);
+    const builder = ImgInterface.init(b, b.dependencyFromBuildZig(complex_img, .{}));
 
-            const step = b.step("img", "create bootable disk image for the target");
-            utils.installFrom(b, &disk_image.step, step, disk_image.getOutput(), b.fmt("{s}/img", .{@tagName(arch)}), disk_image.basename);
+    var fs: ImgInterface.FileSystemBuilder = .init(b);
+    fs.copyFile(b.path("src/krnl/boot/limine.conf"), "/limine.conf");
+    fs.copyFile(elf, "/imaginarium.elf");
+    fs.copyFile(limine.path("limine-bios.sys"), "/limine-bios.sys");
 
-            const copyToTestDir = b.addUpdateSourceFiles();
-            copyToTestDir.step.dependOn(&disk_image.step);
-            copyToTestDir.step.dependOn(krnlstep);
-            copyToTestDir.addCopyFileToSource(disk_image.getOutput(), "test/drive.bin");
-            if (symbols) |d| {
-                copyToTestDir.addCopyFileToSource(d, "test/krnl.debug");
-            }
-            step.dependOn(&copyToTestDir.step);
-            return .{ step, disk_image.getOutput() };
-        },
-        .limine => {
-            const limine = b.dependency("limine", .{});
-
-            var fs: complex_img.FileSystemBuilder = .init(b);
-            fs.addFile(b.path("src/krnl/boot/limine.conf"), "limine.conf");
-            fs.addFile(elf, "imaginarium.elf");
-            fs.addFile(limine.path("limine-bios.sys"), "limine-bios.sys");
-
-            const fs_final = fs.finalize(.{ .format = .fat16, .label = "ROOTFS" });
-            const img_step = complex_img.initializeDisk(b.dependencyFromBuildZig(complex_img, .{}), 0x100_0000, .{
-                .mbr = .{
-                    .partitions = .{
-                        &.{ .size = 0x90_0000, .offset = 0x8000, .bootable = true, .type = .fat16, .data = .{ .fs = fs_final } },
-                        null,
-                        null,
-                        null,
+    const content: ImgInterface.Content = .{
+        .mbr_part_table = .{
+            .partitions = .{
+                &.{
+                    .type = .@"fat16-lba",
+                    .bootable = true,
+                    .size = null,
+                    .offset = 0x8000,
+                    .data = .{
+                        .vfat = .{
+                            .format = .fat16,
+                            .label = "ROOTFS",
+                            .tree = fs.finalize(),
+                        },
                     },
                 },
-            });
-            img_step.step.dependOn(krnlstep);
-
-            const limine_bin = b.addExecutable(.{
-                .name = "limine",
-                .target = b.resolveTargetQuery(.{}),
-                .optimize = .ReleaseSafe,
-            });
-            limine_bin.addCSourceFile(.{
-                .file = limine.path("limine.c"),
-                .flags = &.{"-std=c99"},
-            });
-            limine_bin.linkLibC();
-
-            const add_limine_to_image = b.addRunArtifact(limine_bin);
-            add_limine_to_image.step.dependOn(&img_step.step);
-            add_limine_to_image.addArg("bios-install");
-            add_limine_to_image.addFileArg(img_step.getImageFile());
-            add_limine_to_image.has_side_effects = true;
-
-            const step = b.step("img", "create bootable disk image for the target");
-            utils.installFrom(b, &add_limine_to_image.step, step, img_step.getImageFile(), b.fmt("{s}/img", .{@tagName(arch)}), "drive.bin");
-
-            const copyToTestDir = b.addUpdateSourceFiles();
-            copyToTestDir.step.dependOn(&img_step.step);
-            copyToTestDir.step.dependOn(&add_limine_to_image.step);
-            copyToTestDir.step.dependOn(krnlstep);
-            copyToTestDir.addCopyFileToSource(img_step.getImageFile(), "test/drive.bin");
-            if (symbols) |d| {
-                copyToTestDir.addCopyFileToSource(d, "test/krnl.debug");
-            }
-            step.dependOn(&copyToTestDir.step);
-            return .{ step, img_step.getImageFile() };
+                null,
+                null,
+                null,
+            },
         },
+    };
+    const img_file = builder.createDisk(0x90_0000, content);
+
+    const limine_bin = b.addExecutable(.{
+        .name = "limine",
+        .target = b.resolveTargetQuery(.{}),
+        .optimize = .ReleaseSafe,
+    });
+    limine_bin.addCSourceFile(.{
+        .file = limine.path("limine.c"),
+        .flags = &.{"-std=c99"},
+    });
+    limine_bin.linkLibC();
+
+    const add_limine_to_image = b.addRunArtifact(limine_bin);
+    add_limine_to_image.addArg("bios-install");
+    add_limine_to_image.addFileArg(img_file);
+    add_limine_to_image.has_side_effects = true;
+
+    const step = b.step("img", "create bootable disk image for the target");
+    utils.installFrom(b, &add_limine_to_image.step, step, img_file, b.fmt("{s}/img", .{@tagName(arch)}), "drive.bin");
+
+    const copyToTestDir = b.addUpdateSourceFiles();
+    copyToTestDir.step.dependOn(&add_limine_to_image.step);
+    copyToTestDir.step.dependOn(krnlstep);
+    copyToTestDir.addCopyFileToSource(img_file, "test/drive.bin");
+    if (symbols) |d| {
+        copyToTestDir.addCopyFileToSource(d, "test/krnl.debug");
     }
+    step.dependOn(&copyToTestDir.step);
+    return .{ step, img_file };
 }
 
 pub fn build(b: *Build) !void {

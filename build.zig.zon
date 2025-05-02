@@ -10,13 +10,16 @@
             .url = "git+https://github.com/limine-bootloader/limine?ref=v9.x-binary#c5df5d5cd1eb2a600cfa90628b243ffc7f849604",
             .hash = "12202b853547b15bee83729be72dca9eb3168172fdec54c581fc3c7330714798353d",
         },
-        .disk_image_step = .{ .path = "build/complex-disk-image/" },
         .chdrs = .{
             .url = "git+https://github.com/osdev0/freestnd-c-hdrs-0bsd.git?ref=trunk#a87c192f3eb66b0806740dc67325f9ad23fc2d0b",
             .hash = "122074a40c30a067efd5f97c79bf9696f95e6e5822f3da600361062035b4365b79ec",
         },
         .zuacpi = .{
             .path = "libs/zuacpi/",
+        },
+        .disk_image_step = .{
+            .url = "git+https://github.com/zig-osdev/disk-image-step?ref=main#f68f9c79f2c75f9221a714c1167a40e1498c38b1",
+            .hash = "dimmer-2.0.0-suxOkgUWAgBYnpg01cykNDYU2VJ8-zh86GJx6_f-48i9",
         },
     },
     .paths = .{
