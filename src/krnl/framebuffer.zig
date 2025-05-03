@@ -3,16 +3,26 @@ const arch = hal.arch;
 const std = @import("std");
 const cmn = @import("cmn");
 
+const mm = hal.mm;
+
+const boot = @import("boot/boot_info.zig");
+
 pub var fb_base: [*]Pixel = undefined;
 pub var fb_width: usize = undefined;
 pub var fb_height: usize = undefined;
 pub var fb_pitch: usize = undefined;
 
-pub fn init(fb_info: *const cmn.bootelf.FramebufferInfo) void {
-    fb_base = arch.ptr_from_physaddr(@TypeOf(fb_base), fb_info.base);
-    fb_width = fb_info.width;
-    fb_height = fb_info.height;
-    fb_pitch = @divExact(fb_info.pitch, 4);
+pub fn init() !void {
+    const fb_info = &boot.framebuffers[0];
+
+    if(fb_info.base == null) {
+        fb_info.base = (try mm.map_io(fb_info.phys_addr, fb_info.mode.height * fb_info.mode.pitch * fb_info.mode.bits_per_pixel / 8, .write_combine)).ptr;
+    }
+
+    fb_base = @alignCast(@ptrCast(fb_info.base orelse return));
+    fb_width = fb_info.mode.width;
+    fb_height = fb_info.mode.height;
+    fb_pitch = @divExact(fb_info.mode.pitch, 4);
 }
 
 pub const Pixel = packed struct(u32) {

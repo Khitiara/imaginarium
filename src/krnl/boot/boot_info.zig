@@ -55,7 +55,7 @@ pub const VideoMode = struct {
 
 pub const Framebuffer = struct {
     phys_addr: PhysAddr,
-    base: ?[*]volatile u8,
+    base: ?[*]u8,
     mode: VideoMode,
     edid: ?struct {
         size: u64,

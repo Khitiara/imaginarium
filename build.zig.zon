@@ -21,6 +21,10 @@
             .url = "git+https://github.com/zig-osdev/disk-image-step?ref=main#f68f9c79f2c75f9221a714c1167a40e1498c38b1",
             .hash = "dimmer-2.0.0-suxOkgUWAgBYnpg01cykNDYU2VJ8-zh86GJx6_f-48i9",
         },
+        .zigimg = .{
+            .url = "git+https://github.com/TUSF/zigimg?ref=0.14.0#7e098bf6be568cb8bd659397c2d5c291893095bc",
+            .hash = "zigimg-0.1.0-lly-O8QREQDj96arPVPqvkcjKQpmVijvw_6U6FuqhURQ",
+        },
     },
     .paths = .{
         "src/",

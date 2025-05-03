@@ -72,7 +72,7 @@ pub const std_options: std.Options = .{
     .log_scope_levels = &.{
         // .{ .scope = .io, .level = .info },
         .{ .scope = .@"mm.init", .level = .info },
-        // .{ .scope = .@"drv.acpi", .level = .info },
+        .{ .scope = .@"drv.acpi", .level = .info },
         .{ .scope = .@"drv.pci", .level = .info },
         .{ .scope = .@"drv.acpi_proc", .level = .info },
     },
@@ -145,14 +145,14 @@ noinline fn kmain() anyerror!noreturn {
     //     ldr_info.framebuffer.height,
     //     (ldr_info.framebuffer.pitch - ldr_info.framebuffer.width) / 4,
     // });
-    // fb.init(&ldr_info.framebuffer);
+    try fb.init();
     //
     // const f = @import("psf.zig").font;
     //
     // log.info("have a {d}x{d} font", .{ f.header.width, f.header.height });
     //
-    // font_rendering.init();
-    // font_rendering.write("This is a test!\n=-+asbasdedfgwrgrgsae");
+    font_rendering.init();
+    font_rendering.write("This is a test!\n=-+asbasdedfgwrgrgsae");
     // log.info("wrote to screen", .{});
 
     // log.debug("__isrs[0]: {*}: {*}", .{ &arch.x86_64.idt.__isrs[0], arch.x86_64.idt.__isrs[0] });

@@ -1,8 +1,9 @@
-const psf = @import("psf.zig");
-const font = psf.font;
 const fb = @import("framebuffer.zig");
 const std = @import("std");
 const util = @import("util");
+
+/// https://leickh.itch.io/monofont-10x16-png
+const font: struct { width: usize, height: usize, pixels: [128][16]std.StaticBitSet(10) } = @import("font");
 
 const copy_forwards = std.mem.copyForwards;
 
@@ -20,7 +21,7 @@ var chars_per_line: usize = 0;
 
 pub fn init() void {
     row_ptr = fb.fb_base;
-    chars_per_line = fb.fb_width / font.header.width;
+    chars_per_line = fb.fb_width / font.width;
     std.log.scoped(.render).info("{d} chars per line", .{chars_per_line});
 }
 
@@ -44,60 +45,39 @@ pub fn write(str: []const u8) void {
 fn pump() void {
     while (buf.readableLength() > 0) {
         var newline: bool = false;
-        switch (buf.peekItem(0)) {
+        switch (buf.readItem(0)) {
             '\r' => {
                 col = 0;
                 pixel_col = 0;
-                buf.discard(1);
             },
             '\n' => {
                 newline = true;
-                buf.discard(1);
             },
             '\t' => {
-                for (0..font.header.height) |r| {
-                    @memset(row_ptr[r * fb.fb_pitch + pixel_col ..][0 .. font.header.width * 4], bg_color);
+                for (0..font.height) |r| {
+                    @memset(row_ptr[r * fb.fb_pitch + pixel_col ..][0 .. font.width * 4], bg_color);
                 }
-                pixel_col += 4 * font.header.width;
+                pixel_col += 4 * font.width;
                 col += 4;
-                buf.discard(1);
             },
-            ' ' => {
-                for (0..font.header.height) |r| {
-                    @memset(row_ptr[r * fb.fb_pitch + pixel_col ..][0..font.header.width], bg_color);
+            else => |c| if (c < 128) {
+                const glyph = font.pixels[c];
+                for (0..font.height) |r| {
+                    @memcpy(row_ptr[r * fb.fb_pitch + pixel_col ..], &util.select(fb.Pixel, font.width, glyph[r], fg_color, bg_color));
                 }
                 col += 1;
-                pixel_col += font.header.width;
-                buf.discard(1);
-            },
-            else => if (font.get_glyph(buf.readableSlice(0))) |glyph_info| {
-                // font has a glyph for some prefix of our string buffer
-                const glyph, const discard = glyph_info;
-                for (glyph, 0..) |set, r| {
-                    @memcpy(row_ptr[r * fb.fb_pitch + pixel_col ..], &util.select(fb.Pixel, font.header.width, set, fg_color, bg_color));
-                }
-                col += 1;
-                pixel_col += font.header.width;
-                buf.discard(discard);
-            } else {
-                const g, _ = font.get_glyph(&.{ 0xef, 0xbf, 0xbd }).?;
-                for (g, 0..) |set, r| {
-                    @memcpy(row_ptr[r * fb.fb_pitch + pixel_col ..], &util.select(fb.Pixel, font.header.width, set, fg_color, bg_color));
-                }
-                col += 1;
-                pixel_col += font.header.width;
-                buf.discard(1);
+                pixel_col += font.width;
             },
         }
         if (newline or col > chars_per_line) {
-            row += font.header.height;
+            row += font.height;
             col = 0;
             pixel_col = 0;
             if (row >= fb.fb_height) {
-                copy_forwards(fb.Pixel, fb.fb_base[0 .. fb.fb_height * fb.fb_pitch], fb.fb_base[font.header.height * fb.fb_pitch .. fb.fb_height * fb.fb_pitch]);
-                row -= font.header.height;
+                copy_forwards(fb.Pixel, fb.fb_base[0 .. fb.fb_height * fb.fb_pitch], fb.fb_base[font.height * fb.fb_pitch .. fb.fb_height * fb.fb_pitch]);
+                row -= font.height;
             } else {
-                row_ptr = row_ptr[font.header.height * fb.fb_pitch ..];
+                row_ptr = row_ptr[font.height * fb.fb_pitch ..];
             }
         }
     }

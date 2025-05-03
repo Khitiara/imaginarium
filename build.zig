@@ -51,6 +51,23 @@ fn parseQemuGdbOption(v: ?[]const u8) QemuGdbOption {
     }
 }
 
+fn add_tools(b: *Build) *Build.Step.Compile {
+    const zigimg =  b.dependency("zigimg", .{
+        .target = b.resolveTargetQuery(.{}),
+        .optimize = .Debug,
+    });
+    const tools_module = b.createModule(.{
+        .target =  b.resolveTargetQuery(.{}),
+        .optimize = .Debug,
+        .root_source_file = b.path("src/tools/main.zig"),
+    });
+    tools_module.addImport("zigimg", zigimg.module("zigimg"));
+    return b.addExecutable(.{
+        .name = "imagtools",
+        .root_module = tools_module,
+    });
+}
+
 const complex_img = @import("disk_image_step");
 const ImgInterface = complex_img.BuildInterface;
 
@@ -168,8 +185,16 @@ pub fn build(b: *Build) !void {
         .root_source_file = b.path("src/cmn/common.zig"),
     });
     utils.name_module("cmn", common_module);
+    const tools = add_tools(b);
 
-    const krnlexe, const krnlstep, const elf, const debug = try add_krnl(b, arch, target, optimize);
+    // const aaa = b.step("aaa", "");
+    const fontgen = b.addRunArtifact(tools);
+    fontgen.addArg("font");
+    fontgen.addFileArg(b.path("monofont.png"));
+    const zon = fontgen.addOutputFileArg("font.zon");
+    // aaa.dependOn(&b.addInstallFile(zon, "aaa").step);
+
+    const krnlexe, const krnlstep, const elf, const debug = try add_krnl(b, arch, target, optimize, zon);
     // const stage2exe, const stage2step, const s2elf, const s2debug = try add_stage2(b, arch, target, optimize);
     // _ = stage2exe; // autofix
     // _ = stage2step; // autofix
@@ -263,5 +288,6 @@ pub fn build(b: *Build) !void {
 
     const noemit = b.step("buildnoemit", "");
     noemit.dependOn(&krnlexe.step);
+    noemit.dependOn(&tools.step);
     // noemit.dependOn(&stage2exe.step);
 }

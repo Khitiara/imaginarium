@@ -6,7 +6,7 @@ const LazyPath = Build.LazyPath;
 const utils = @import("util.zig");
 const nasm = @import("nasm.zig");
 
-pub fn add_krnl(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) !struct {
+pub fn add_krnl(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, zon: LazyPath) !struct {
     *std.Build.Step.Compile,
     *std.Build.Step,
     LazyPath,
@@ -41,6 +41,7 @@ pub fn add_krnl(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, 
     zuacpi_module.addIncludePath(headers.path("."));
 
     exe_module.addImport("zuacpi", zuacpi_module);
+    exe_module.addAnonymousImport("font", .{ .root_source_file = zon });
 
     utils.addImportFromTable(exe_module, "util");
     utils.addImportFromTable(exe_module, "config");
