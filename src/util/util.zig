@@ -6,6 +6,8 @@ pub const extern_address = @import("externs.zig").extern_address;
 pub const multi_bounded_array = @import("multi_bounded_array.zig");
 pub const MultiBoundedArray = multi_bounded_array.MultiBoundedArray;
 pub const MultiBoundedArrayAligned = multi_bounded_array.MultiBoundedArrayAligned;
+pub const MultiArray = multi_bounded_array.MultiArray;
+pub const MultiArrayAligned = multi_bounded_array.MultiArrayAligned;
 // pub const unwrapArgumentTuple = @import("unwrapArgumentTuple.zig");
 // pub const errMarshal = @import("errmarshal.zig");
 

@@ -55,6 +55,7 @@ pub fn add_krnl(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, 
         .use_llvm = true,
         .use_lld = true,
         .zig_lib_dir = b.path("zig-std/lib"),
+        // .linkage = .dynamic,
     });
     exe.build_id = .uuid;
     exe.pie = false;

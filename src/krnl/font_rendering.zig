@@ -42,10 +42,10 @@ pub fn write(str: []const u8) void {
     }
 }
 
-fn pump() void {
-    while (buf.readableLength() > 0) {
+pub fn pump() void {
+    while (buf.readItem()) |item| {
         var newline: bool = false;
-        switch (buf.readItem(0)) {
+        switch (item) {
             '\r' => {
                 col = 0;
                 pixel_col = 0;

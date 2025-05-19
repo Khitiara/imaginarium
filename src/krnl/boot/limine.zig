@@ -68,7 +68,7 @@ pub const File = extern struct {
     address: [*]u8,
     size: u64,
     path: [*:0]u8,
-    cmdline: [*:0]u8,
+    string: [*:0]u8,
     media_type: MediaType,
     unused: u32,
     tftp_ip: u32,
@@ -413,13 +413,14 @@ pub const KernelFileRequest = extern struct {
 
 // Module
 
-pub const InternalModuleFlags = enum(u64) {
-    required = 1 << 0,
+pub const InternalModuleFlags = packed struct(u64) {
+    required: bool,
+    _: u63 = 0,
 };
 
 pub const InternalModule = extern struct {
     path: [*:0]const u8,
-    cmdline: [*:0]const u8,
+    string: [*:0]const u8,
     flags: InternalModuleFlags,
 };
 
@@ -439,7 +440,7 @@ pub const ModuleRequest = extern struct {
     response: ?*ModuleResponse = null,
 
     // Request revision 1
-    internal_module_count: u64 = 0,
+    internal_modules_count: u64 = 0,
     internal_modules: ?[*]const *const InternalModule = null,
 };
 

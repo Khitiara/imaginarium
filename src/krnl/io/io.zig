@@ -196,7 +196,7 @@ noinline fn find_driver(device: *Device, alloc: std.mem.Allocator) !void {
                 for (drv.supported_devices.hardware_ids) |hid2| {
                     if (std.mem.eql(u8, hid2, hid)) {
                         if (drv.attach(device, alloc) catch |err| {
-                            debug.print_err_trace(log, "ATTACHING DRIVER", err, @errorReturnTrace());
+                            try debug.print_err_trace(log,"ATTACHING DRIVER", err, @errorReturnTrace());
                             continue;
                         }) {
                             if (device.props.transient_resources.length() != 0) {
@@ -226,7 +226,7 @@ noinline fn find_driver(device: *Device, alloc: std.mem.Allocator) !void {
                 for (drv.supported_devices.compatible_ids) |cid2| {
                     if (std.mem.eql(u8, cid2, cid1)) {
                         if (drv.attach(device, alloc) catch |err| {
-                            debug.print_err_trace(log, "ATTACHING DRIVER", err, @errorReturnTrace());
+                            try debug.print_err_trace( log, "ATTACHING DRIVER", err, @errorReturnTrace());
                             continue;
                         }) {
                             if (device.props.transient_resources.length() != 0) {

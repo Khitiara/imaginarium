@@ -233,7 +233,7 @@ fn alloc_block(size: usize) ?[*]u8 {
     defer lock.unlock_sti(iflg);
 
     const order = order_for(size);
-    if (order > roots.len) return null;
+    if (order >= roots.len) return null;
     const addr = alloc_pages_order(order) orelse return null;
 
     return @as([*]u8, @ptrFromInt(addr));

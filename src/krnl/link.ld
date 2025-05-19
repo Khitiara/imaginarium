@@ -2,13 +2,14 @@ ENTRY(__kstart)
 
 PHDRS
 {
-    none      PT_NULL FLAGS(0);
-    init      PT_LOAD FLAGS((1 << 2) | (1 << 1) | (1 << 0) /* Read | Write | Execute */);
-    text      PT_LOAD FLAGS((1 << 2) | (1 << 0) /* Readable | Executable */);
-    stk       PT_LOAD FLAGS((1 << 2) | (1 << 1) /* Readable | Writeable  */);
-    data      PT_LOAD FLAGS((1 << 2) | (1 << 1) /* Readable | Writeable  */);
-    rodata    PT_LOAD FLAGS((1 << 2)            /* Readable */);
-    /*tls       PT_TLS  FLAGS((1 << 2) | (1 << 1) );*/
+    none      PT_NULL    FLAGS(0);
+    init      PT_LOAD    FLAGS((1 << 2) | (1 << 1) | (1 << 0) /* Read | Write | Execute */);
+    text      PT_LOAD    FLAGS((1 << 2) | (1 << 0) /* Readable | Executable */);
+    stk       PT_LOAD    FLAGS((1 << 2) | (1 << 1) /* Readable | Writeable  */);
+    data      PT_LOAD    FLAGS((1 << 2) | (1 << 1) /* Readable | Writeable  */);
+    rodata    PT_LOAD    FLAGS((1 << 2)            /* Readable */);
+    dynamic   PT_DYNAMIC FLAGS((1 << 2)            /* Readable */);
+    meta      PT_NOTE;
 }
 
 
@@ -70,6 +71,7 @@ SECTIONS
 
     .rodata . : {
         *(.rodata*)
+	    *(.eh_frame)
     } :rodata
 
     . = ALIGN(4K);
@@ -85,20 +87,7 @@ SECTIONS
         . += 16;
     } :data
 
-/*
-    . = ALIGN(4K);
-    __tls_start__ = .;
-    __tls_data_start__ = .;
-    .tdata . : {
-        *(.tdata*)
-    } : tls
-    __tls_data_end__ = .;
-
-    .tbss (NOLOAD) : {
-        *(.tbss*)
-    } : tls
-    __tls_end__ = .;
- */
+    .dynamic : { *(.dynamic) } :data :dynamic
 
     . = ALIGN(4K);
 
@@ -111,5 +100,11 @@ SECTIONS
     __kernel_phys_end__ = . - __base__;
     __kernel_length__ = . - __kernel_begin__;
 
-    /DISCARD/ : { *(.eh_frame*) *(.comment*) *(.note*) }
+    .notes : {
+        *(.note*)
+    } : meta
+    .comments : {
+        *(.comment*)
+    } : meta
+/*    /DISCARD/ : { *(.comment*) *(.note*) }*/
 }

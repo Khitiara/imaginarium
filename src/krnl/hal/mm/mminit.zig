@@ -279,10 +279,10 @@ fn init_mm_early() linksection(".init") !void {
         \\[STAGE {d}]: kernel mapping is {x} pages ({x} pdes, {x} ppes) at base 177777_{o:0>3}_{o:0>3}_{o:0>3}_{o:0>3}_0000 (that's {x})
         \\    physical kernel base is {x}
     , .{
-        bootstrap_stage,                                                            krnl_ptes,
-        krnl_pdes,                                                                  krnl_ppes,
-        krnl_pxe_idx,                                                               krnl_ppe_idx_base,
-        krnl_pde_idx_base,                                                          krnl_pte_idx_base,
+        bootstrap_stage,                                                              krnl_ptes,
+        krnl_pdes,                                                                    krnl_ppes,
+        krnl_pxe_idx,                                                                 krnl_ppe_idx_base,
+        krnl_pde_idx_base,                                                            krnl_pte_idx_base,
         krnl_location.kernel_virt_addr_base & (~@as(usize, std.heap.pageSize() - 1)), krnl_location.kernel_phys_addr_base,
     });
 
@@ -550,6 +550,32 @@ fn bootstrap_init_pfmdb() linksection(".init") void {
     bootstrap_add_ptes_to_pfmdb();
 }
 
+fn map_loader_requests1() linksection(".init") void {
+    for (boot.remappings) |remapping| {
+        log.debug("[STAGE {d}]: Mapping bootloader request PPEs and PDEs from phys addr {x} to virt addr {x} (len {x})", .{ bootstrap_stage, remapping.addr, remapping.target, remapping.len });
+
+        const end = remapping.target + remapping.len;
+        late_bootstrap_map_ppes(remapping.target, end);
+        late_bootstrap_map_pdes(remapping.target, end);
+    }
+}
+
+fn map_loader_requests2() linksection(".init") void {
+    for (boot.remappings) |remapping| {
+        log.debug("[STAGE {d}]: Mapping bootloader request PTEs from phys addr {x} to virt addr {x} (len {x})", .{ bootstrap_stage, remapping.addr, remapping.target, remapping.len });
+
+        const end = remapping.target + remapping.len;
+        for (startend_to_slice(Pte, map.pte_from_addr(remapping.target), map.pte_from_addr(end)), remapping.addr.page().., pfmdb.pfm_db[remapping.addr.page()..]) |*e, pfi, *pfm| {
+            if (!e.unknown.present) {
+                const pg: Pfi = @intCast(pfi);
+                mm.valid_pte.valid.addr.pfi = pg;
+                e.* = mm.valid_pte;
+                pfm.set_mapped_primary(e);
+            }
+        }
+    }
+}
+
 noinline fn init_mm_impl() linksection(".init") !void {
     bootstrap_stage = 1;
     // do early page table things
@@ -584,9 +610,16 @@ noinline fn init_mm_impl() linksection(".init") !void {
     }
     log.info("[STAGE {d}]: PRCBs allocated", .{bootstrap_stage});
 
+    map_loader_requests1();
+    log.info("[STAGE {d}]: Bootloader requests PPEs and PDEs mapped", .{bootstrap_stage});
+
     bootstrap_init_pfmdb();
 
     bootstrap_stage = 4;
+
+    map_loader_requests2();
+    log.info("[STAGE {d}]: Bootloader requests PTEs mapped", .{bootstrap_stage});
+
     @import("pool.zig").expand_ppe();
     log.info("[STAGE {d}]: first nonpaged pool PPE created", .{bootstrap_stage});
 }

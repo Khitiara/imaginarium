@@ -16,9 +16,23 @@ pub export var mp_request: limine.SmpRequest linksection(".limine.mp") = .{
     .flags = .{ .x2apic = true },
 };
 
+pub export var exe_request: limine.KernelFileRequest linksection(".limine.exe") = .{};
+
+pub export var dbg_request: limine.ModuleRequest linksection(".limine.mods") = .{
+    .revision = 1,
+    .internal_modules_count = 1,
+    .internal_modules = &.{
+        &.{
+            .path = "/krnl.dbg",
+            .string = "dbg",
+            .flags = .{ .required = false },
+        },
+    },
+};
+
 pub fn fix_optimizations() void {
     const doNotOptimizeAway = @import("std").mem.doNotOptimizeAway;
-    inline for(comptime @import("std").meta.declarations(@This())) |decl| {
+    inline for (comptime @import("std").meta.declarations(@This())) |decl| {
         doNotOptimizeAway(&@field(@This(), decl.name));
     }
 }

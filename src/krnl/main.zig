@@ -19,6 +19,7 @@ const smp = @import("smp.zig");
 
 const zuacpi = @import("zuacpi");
 
+const limine_reqs = @import("boot/limine_requests.zig");
 const log = std.log.default;
 
 pub const tty: std.io.tty.Config = .no_color;
@@ -56,6 +57,10 @@ pub const os = struct {
     pub const heap = struct {
         pub const page_allocator = hal.mm.pool.pool_page_allocator;
     };
+    pub const io = struct {
+        pub fn getStdErrHandle() void {}
+        pub fn getStdOutHandle() void {}
+    };
 };
 
 pub const zuacpi_options: zuacpi.Options = .{
@@ -63,6 +68,24 @@ pub const zuacpi_options: zuacpi.Options = .{
 };
 
 pub const panic = std.debug.FullPanic(debug.panic);
+
+const boot = @import("boot/boot_info.zig");
+
+pub fn mapSelfExe(gpa: std.mem.Allocator) error{MissingDebugInfo}![]align(4096) const u8 {
+    _ = gpa;
+    const krnl = boot.remappings[0];
+    return @as([*]align(4096) const u8, @ptrFromInt(krnl.target))[0..krnl.len];
+}
+
+pub fn mapExternalDebug(gpa: std.mem.Allocator) error{MissingDebugInfo}![]align(4096) const u8 {
+    _ = gpa;
+    if (boot.remappings.len <= 1) {
+        return error.MissingDebugInfo;
+    }
+
+    const dbg = boot.remappings[1];
+    return @as([*]align(4096) const u8, @ptrFromInt(dbg.target))[0..dbg.len];
+}
 
 pub const std_options: std.Options = .{
     .logFn = logFn,
@@ -78,6 +101,7 @@ pub const std_options: std.Options = .{
     },
     .page_size_min = 4096,
     .page_size_max = 4096,
+    .debug_stacktrace_mode = .slim,
 };
 
 /// the true entry point is __kstart and is exported by global asm in `hal/arch/{arch}/init.zig`
@@ -94,13 +118,17 @@ fn kstart2_bootelf(ldr_info: *bootelf.BootelfData) callconv(arch.cc) noreturn {
 
 fn kstart3() callconv(arch.cc) noreturn {
     kmain() catch |e| {
-        debug.print_err_trace(log, "uncaught error", e, @errorReturnTrace());
+        debug.print_err_trace(log, "uncaught error", e, @errorReturnTrace()) catch {};
         panic.unwrapError(e);
     };
 }
 
 comptime {
     @export(&kstart3, .{ .name = "__kstart2" });
+}
+
+comptime {
+    _ = @import("log.zig").global_ring;
 }
 
 pub fn nanoTimestamp() i128 {
@@ -172,9 +200,7 @@ noinline fn kmain() anyerror!noreturn {
     // log.info("{}", .{@import("builtin").target});
 
     puts("STOP");
-    while (true) {
-        asm volatile ("hlt");
-    }
+    @panic("Testing trace");
 }
 
 fn power_button_handler(_: ?*anyopaque) callconv(arch.cc) uacpi.InterruptRet {

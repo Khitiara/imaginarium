@@ -53,7 +53,7 @@ fn unhandled_interrupt(frame: *idt.InterruptFrame(u64)) callconv(.SysV) noreturn
         trace.index = trace.instruction_addresses.len;
     }
 
-    @import("../../debug.zig").print_stack_trace(log, frame.rip, &trace);
+    @import("../../debug.zig").print_stack_trace( frame.rip, &trace) catch {};
     @panic("UNHANDLED EXCEPTION");
 }
 

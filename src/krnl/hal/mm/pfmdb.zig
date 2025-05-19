@@ -177,7 +177,7 @@ pub const PfmList = struct {
     }
 
     fn remove_internal(self: *PfmList, pfi: Pfi) void {
-        self.count -= 1;
+        self.count -|= 1;
         const pfm = &pfm_db[pfi];
 
         pfm._0.lock.lock_unsafe();

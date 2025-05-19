@@ -52,12 +52,12 @@ fn parseQemuGdbOption(v: ?[]const u8) QemuGdbOption {
 }
 
 fn add_tools(b: *Build) *Build.Step.Compile {
-    const zigimg =  b.dependency("zigimg", .{
+    const zigimg = b.dependency("zigimg", .{
         .target = b.resolveTargetQuery(.{}),
         .optimize = .Debug,
     });
     const tools_module = b.createModule(.{
-        .target =  b.resolveTargetQuery(.{}),
+        .target = b.resolveTargetQuery(.{}),
         .optimize = .Debug,
         .root_source_file = b.path("src/tools/main.zig"),
     });
@@ -79,6 +79,9 @@ fn add_img(b: *Build, arch: Target.Cpu.Arch, krnlstep: *Build.Step, elf: LazyPat
     var fs: ImgInterface.FileSystemBuilder = .init(b);
     fs.copyFile(b.path("src/krnl/boot/limine.conf"), "/limine.conf");
     fs.copyFile(elf, "/imaginarium.elf");
+    if(symbols) |d| {
+        fs.copyFile(d, "/krnl.dbg");
+    }
     fs.copyFile(limine.path("limine-bios.sys"), "/limine-bios.sys");
 
     const content: ImgInterface.Content = .{
@@ -145,6 +148,10 @@ pub fn build(b: *Build) !void {
     };
     try target_features(&selected_target);
     const target = b.resolveTargetQuery(selected_target);
+    selected_target.dynamic_linker = .init("IMAG:PREKERNEL");
+    selected_target.os_tag = .other;
+    const krnltgt = b.resolveTargetQuery(selected_target);
+
     const optimize = b.standardOptimizeOption(.{});
 
     const max_ioapics = b.option(u32, "max-ioapics", "maximum number of ioapics supported (default 5)") orelse 5;
@@ -194,12 +201,12 @@ pub fn build(b: *Build) !void {
     const zon = fontgen.addOutputFileArg("font.zon");
     // aaa.dependOn(&b.addInstallFile(zon, "aaa").step);
 
-    const krnlexe, const krnlstep, const elf, const debug = try add_krnl(b, arch, target, optimize, zon);
-    // const stage2exe, const stage2step, const s2elf, const s2debug = try add_stage2(b, arch, target, optimize);
-    // _ = stage2exe; // autofix
-    // _ = stage2step; // autofix
-    // _ = s2elf; // autofix
-    // _ = s2debug; // autofix
+    const krnlexe, const krnlstep, const elf, const debug = try add_krnl(b, arch, krnltgt, optimize, zon);
+    const stage2exe, const stage2step, const s2elf, const s2debug = try add_stage2(b, arch, target, optimize);
+    _ = stage2exe; // autofix
+    _ = stage2step; // autofix
+    _ = s2elf; // autofix
+    _ = s2debug; // autofix
     const imgstep, const imgFile = try add_img(b, arch, krnlstep, elf, debug);
 
     var cpu_flags = try std.ArrayList([]const u8).initCapacity(b.allocator, 12);

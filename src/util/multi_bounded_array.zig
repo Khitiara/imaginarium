@@ -40,11 +40,11 @@ pub fn MultiBoundedArrayAligned(
             .@"union" => |u| struct {
                 pub const Bare =
                     @Type(.{ .Union = .{
-                    .layout = u.layout,
-                    .tag_type = null,
-                    .fields = u.fields,
-                    .decls = &.{},
-                } });
+                        .layout = u.layout,
+                        .tag_type = null,
+                        .fields = u.fields,
+                        .decls = &.{},
+                    } });
                 pub const Tag =
                     u.tag_type orelse @compileError("MultiArrayList does not support untagged unions");
                 tags: Tag,
@@ -221,6 +221,112 @@ pub fn MultiBoundedArrayAligned(
         pub fn popOrNull(self: *Self) ?T {
             if (self.len == 0) return null;
             return self.pop();
+        }
+    };
+}
+
+pub fn MultiArray(comptime T: type, comptime len: usize) type {
+    return MultiArrayAligned(T, @alignOf(T), len);
+}
+
+pub fn MultiArrayAligned(
+    comptime T: type,
+    comptime alignment: u29,
+    comptime length: usize,
+) type {
+    return struct {
+        const Self = @This();
+
+        const Elem = switch (@typeInfo(T)) {
+            .@"struct" => T,
+            .@"union" => |u| struct {
+                pub const Bare =
+                    @Type(.{ .Union = .{
+                        .layout = u.layout,
+                        .tag_type = null,
+                        .fields = u.fields,
+                        .decls = &.{},
+                    } });
+                pub const Tag =
+                    u.tag_type orelse @compileError("MultiArrayList does not support untagged unions");
+                tags: Tag,
+                data: Bare,
+
+                pub fn fromT(outer: T) @This() {
+                    const tag = meta.activeTag(outer);
+                    return .{
+                        .tags = tag,
+                        .data = switch (tag) {
+                            inline else => |t| @unionInit(Bare, @tagName(t), @field(outer, @tagName(t))),
+                        },
+                    };
+                }
+                pub fn toT(tag: Tag, bare: Bare) T {
+                    return switch (tag) {
+                        inline else => |t| @unionInit(T, @tagName(t), @field(bare, @tagName(t))),
+                    };
+                }
+            },
+            else => @compileError("MultiArrayList only supports structs and tagged unions"),
+        };
+
+        pub const Field = meta.FieldEnum(Elem);
+        const fields: []const builtin.Type.StructField = meta.fields(Elem);
+
+        pub const len = length;
+
+        const Buffers = blk: {
+            var flds: [fields.len]builtin.Type.StructField = undefined;
+            for (fields, 0..) |f, i| {
+                flds[i] = .{
+                    .name = f.name,
+                    .type = [length]f.type,
+                    .default_value_ptr = null,
+                    .is_comptime = false,
+                    .alignment = alignment,
+                };
+            }
+            break :blk @Type(.{
+                .@"struct" = .{
+                    .layout = .auto,
+                    .fields = &flds,
+                    .is_tuple = false,
+                    .decls = &.{},
+                },
+            });
+        };
+
+        bufs: Buffers = undefined,
+
+        pub fn items(self: *Self, comptime field: Field) []meta.FieldType(Elem, field) {
+            const F = meta.FieldType(Elem, field);
+            if (len == 0) {
+                return &[_]F{};
+            }
+            return (&@field(self.bufs, @tagName(field)))[0..self.len];
+        }
+
+        pub fn set(self: *Self, index: usize, elem: T) void {
+            const e = switch (@typeInfo(T)) {
+                .@"struct" => elem,
+                .@"union" => Elem.fromT(elem),
+                else => unreachable,
+            };
+            inline for (fields, 0..) |field_info, i| {
+                self.items(@as(Field, @enumFromInt(i)))[index] = @field(e, field_info.name);
+            }
+        }
+
+        pub fn get(self: *const Self, index: usize) T {
+            var result: Elem = undefined;
+            inline for (fields, 0..) |field_info, i| {
+                @field(result, field_info.name) = self.items(@as(Field, @enumFromInt(i)))[index];
+            }
+            return switch (@typeInfo(T)) {
+                .Struct => result,
+                .Union => Elem.toT(result.tags, result.data),
+                else => unreachable,
+            };
         }
     };
 }

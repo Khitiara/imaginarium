@@ -73,6 +73,14 @@ pub var cpus: []limine.SmpInfo = undefined;
 var system_info_buffer: [2 * 4096]u8 = undefined;
 var system_info_alloc: std.heap.FixedBufferAllocator = .init(&system_info_buffer);
 
+pub const BootloaderRemapping = struct {
+    addr: PhysAddr,
+    target: usize,
+    len: usize,
+};
+
+pub var remappings: []BootloaderRemapping = undefined;
+
 pub noinline fn dupe_bootloader_data() !void {
     limine_reqs.fix_optimizations();
     const alloc = system_info_alloc.allocator();
@@ -118,5 +126,23 @@ pub noinline fn dupe_bootloader_data() !void {
         for (mp_resp.cpus(), 0..) |cpu, i| {
             cpus[i] = cpu.*;
         }
+    }
+
+    const dbg_file = if (limine_reqs.dbg_request.response) |modules_resp| if (modules_resp.module_count >= 1) modules_resp.modules()[0] else null else null;
+    remappings = try alloc.alloc(BootloaderRemapping, if (dbg_file != null) 2 else 1);
+    const krnl_file = limine_reqs.exe_request.response.?.kernel_file;
+    remappings[0] = .{
+        .addr = @enumFromInt(@intFromPtr(krnl_file.address) - hhdm_addr),
+        .target = 0xFFFF_F000_0000_0000,
+        .len = krnl_file.size,
+    };
+    if (dbg_file) |f| {
+        remappings[1] = .{
+            .addr = @enumFromInt(@intFromPtr(f.address) - hhdm_addr),
+            .target = 0xFFFF_F400_0000_0000,
+            .len = f.size,
+        };
+    } else {
+        std.log.info("No debug file provided by limine", .{});
     }
 }
