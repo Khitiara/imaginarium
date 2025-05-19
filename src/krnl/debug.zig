@@ -12,17 +12,32 @@ inline fn fixup_stack_addr(a: usize) usize {
 
 pub fn print_stack_trace(ip: ?usize, trace: *std.builtin.StackTrace) !void {
     const writer = SerialWriter.writer();
-    const debug_info = try std.debug.getSelfDebugInfo();
-    if (ip) |rip| {
-        try std.debug.printSourceAtAddress(debug_info, writer, rip -| 1, .no_color);
+    {
+        if (ip) |rip| {
+            try writer.print("    at {x:16}\n", .{rip});
+        }
+        var frame_index: usize = 0;
+        var frames_left: usize = @min(trace.index, trace.instruction_addresses.len);
+        while (frames_left != 0) : ({
+            frames_left -= 1;
+            frame_index = (frame_index + 1) % trace.instruction_addresses.len;
+        }) {
+            try writer.print("    at {x:16}\n", .{trace.instruction_addresses[frame_index] -| 1});
+        }
     }
-    var frame_index: usize = 0;
-    var frames_left: usize = @min(trace.index, trace.instruction_addresses.len);
-    while (frames_left != 0) : ({
-        frames_left -= 1;
-        frame_index = (frame_index + 1) % trace.instruction_addresses.len;
-    }) {
-        try std.debug.printSourceAtAddress(debug_info, writer, trace.instruction_addresses[frame_index] -| 1, .no_color);
+    {
+        const debug_info = try std.debug.getSelfDebugInfo();
+        if (ip) |rip| {
+            try std.debug.printSourceAtAddress(debug_info, writer, rip -| 1, .no_color);
+        }
+        var frame_index: usize = 0;
+        var frames_left: usize = @min(trace.index, trace.instruction_addresses.len);
+        while (frames_left != 0) : ({
+            frames_left -= 1;
+            frame_index = (frame_index + 1) % trace.instruction_addresses.len;
+        }) {
+            try std.debug.printSourceAtAddress(debug_info, writer, trace.instruction_addresses[frame_index] -| 1, .no_color);
+        }
     }
 }
 
