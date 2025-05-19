@@ -38,7 +38,7 @@ const Root = struct {
 };
 
 const base_root_shift = 12;
-const roots_count = 10;
+const roots_count = 12;
 
 var roots = b: {
     var sizes: [roots_count]usize = [_]usize{0} ** roots_count;
@@ -141,40 +141,44 @@ pub noinline fn expand_ppe() void {
 noinline fn expand() ?usize {
     std.log.debug("expanding nonpaged pool!", .{});
     if (next_ppe - map.ppe_base >= ovflw_ppe) {
+        std.log.err("nonpaged pool overflow", .{});
         return null;
     }
 
-    defer next_pde += 1;
+    const pdes_per_high_root = 1 << (roots_count - 10);
+    defer next_pde += pdes_per_high_root;
 
-    // std.log.debug("A   {o}", .{mm.fmt_paging_addr(@intFromPtr(next_ppe))});
+    for (0..pdes_per_high_root) |i| {
+        // std.log.debug("A   {o}", .{mm.fmt_paging_addr(@intFromPtr(next_ppe))});
 
-    var pfi = pfmdb.alloc_page_undefined() catch |e| std.debug.panic("out of memory for nonpaged pool expansion! {}", .{e});
+        var pfi = pfmdb.alloc_page_undefined() catch |e| std.debug.panic("out of memory for nonpaged pool expansion! {}", .{e});
 
-    mm.valid_pte.valid.addr.pfi = pfi;
-    next_pde[0] = mm.valid_pte;
-    pfmdb.pfm_db[pfi].set_mapped_primary(&next_pde[0]);
-
-    const pt_pg = map.addr_from_pte(&next_pde[0]);
-
-    // std.log.debug("AA  {o} - {x}", .{mm.fmt_paging_addr(@intFromPtr(pd_pg)), pfi});
-
-    @memset(pt_pg, 0);
-    const pt: pte.PageTable = @ptrCast(pt_pg);
-
-    for (0..0x200) |ptei| {
-        // std.log.debug("AAAA {o} {o} {o}", .{next_ppe - map.ppe_base, pdei, ptei});
-        pfi = pfmdb.alloc_page_undefined() catch |e| std.debug.panic("out of memory for nonpaged pool expansion! {}", .{e});
         mm.valid_pte.valid.addr.pfi = pfi;
-        pt[ptei] = mm.valid_pte;
-        pfmdb.pfm_db[pfi].set_mapped_primary(&pt[ptei]);
+        next_pde[i] = mm.valid_pte;
+        pfmdb.pfm_db[pfi].set_mapped_primary(&next_pde[i]);
 
-        const pg = map.addr_from_pte(&pt[ptei]);
-        @memset(pg, 0);
-    }
+        const pt_pg = map.addr_from_pte(&next_pde[i]);
 
-    pde_idx, const ovflw = @addWithOverflow(pde_idx, 1);
-    if (ovflw == 1) {
-        expand_ppe();
+        // std.log.debug("AA  {o} - {x}", .{mm.fmt_paging_addr(@intFromPtr(pd_pg)), pfi});
+
+        @memset(pt_pg, 0);
+        const pt: pte.PageTable = @ptrCast(pt_pg);
+
+        for (0..0x200) |ptei| {
+            // std.log.debug("AAAA {o} {o} {o}", .{next_ppe - map.ppe_base, pdei, ptei});
+            pfi = pfmdb.alloc_page_undefined() catch |e| std.debug.panic("out of memory for nonpaged pool expansion! {}", .{e});
+            mm.valid_pte.valid.addr.pfi = pfi;
+            pt[ptei] = mm.valid_pte;
+            pfmdb.pfm_db[pfi].set_mapped_primary(&pt[ptei]);
+
+            const pg = map.addr_from_pte(&pt[ptei]);
+            @memset(pg, 0);
+        }
+
+        pde_idx, const ovflw = @addWithOverflow(pde_idx, 1);
+        if (ovflw == 1) {
+            expand_ppe();
+        }
     }
 
     return @intFromPtr(map.addr_from_pde(&next_pde[0]));
@@ -233,6 +237,8 @@ fn alloc_block(size: usize) ?[*]u8 {
     defer lock.unlock_sti(iflg);
 
     const order = order_for(size);
+    // std.log.debug("alloc of block size {x}, order {d}", .{ size, order });
+
     if (order >= roots.len) return null;
     const addr = alloc_pages_order(order) orelse return null;
 

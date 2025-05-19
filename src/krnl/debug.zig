@@ -13,11 +13,15 @@ inline fn fixup_stack_addr(a: usize) usize {
 pub fn print_stack_trace(ip: ?usize, trace: *std.builtin.StackTrace) !void {
     const writer = SerialWriter.writer();
     const debug_info = try std.debug.getSelfDebugInfo();
-    if (ip) |rip| {
-        try std.debug.printSourceAtAddress(debug_info, writer, rip -| 1, .no_color);
-    }
     var frame_index: usize = 0;
     var frames_left: usize = @min(trace.index, trace.instruction_addresses.len);
+
+    if (ip) |rip| {
+        if (frames_left > 0 and trace.instruction_addresses[frame_index] -| 1 != rip -| 1) {
+            try std.debug.printSourceAtAddress(debug_info, writer, rip -| 1, .no_color);
+        }
+    }
+
     while (frames_left != 0) : ({
         frames_left -= 1;
         frame_index = (frame_index + 1) % trace.instruction_addresses.len;

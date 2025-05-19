@@ -83,8 +83,6 @@ pub fn mapExternalDebug(gpa: std.mem.Allocator) error{MissingDebugInfo}![]align(
         return error.MissingDebugInfo;
     }
 
-    log.debug("WHEE", .{});
-
     const dbg = boot.remappings[1];
     return @as([*]align(4096) const u8, @ptrFromInt(dbg.target))[0..dbg.len];
 }
