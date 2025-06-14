@@ -30,6 +30,9 @@ pub export var dbg_request: limine.ModuleRequest linksection(".limine.mods") = .
     },
 };
 
+pub export var info_request: limine.BootloaderInfoRequest linksection(".limine.info") = .{};
+pub export var fwtype_request: limine.FirmwareTypeRequest linksection(".limine.fwtyp") = .{};
+
 pub fn fix_optimizations() void {
     const doNotOptimizeAway = @import("std").mem.doNotOptimizeAway;
     inline for (comptime @import("std").meta.declarations(@This())) |decl| {

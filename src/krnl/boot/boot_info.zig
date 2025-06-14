@@ -7,6 +7,8 @@ const PhysAddr = types.PhysAddr;
 const std = @import("std");
 const util = @import("util");
 
+const log = std.log.scoped(.boot);
+
 pub const memory_map = @import("memory_map.zig");
 
 pub fn hhdm_base() [*]align(4096) u8 {
@@ -83,6 +85,14 @@ pub var remappings: []BootloaderRemapping = undefined;
 
 pub noinline fn dupe_bootloader_data() !void {
     limine_reqs.fix_optimizations();
+
+    var b: [16]u8 = @splat(0);
+    log.info("LIMINE Boot Protocol, loaded by {s} v{s} in {s} mode", .{
+        limine_reqs.info_request.response.?.name,
+        limine_reqs.info_request.response.?.version,
+        std.enums.tagName(limine.FirmwareType, limine_reqs.fwtype_request.response.?.firmware_type) orelse std.fmt.bufPrint(&b, "{x}", .{@intFromEnum(limine_reqs.fwtype_request.response.?.firmware_type)}) catch unreachable,
+    });
+
     const alloc = system_info_alloc.allocator();
     {
         const raw_mm = get_raw_memory_map();
@@ -143,6 +153,6 @@ pub noinline fn dupe_bootloader_data() !void {
             .len = f.size,
         };
     } else {
-        std.log.info("No debug file provided by limine", .{});
+        log.info("No debug file provided by limine", .{});
     }
 }

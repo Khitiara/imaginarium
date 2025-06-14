@@ -71,20 +71,57 @@ fn add_tools(b: *Build) *Build.Step.Compile {
 const complex_img = @import("disk_image_step");
 const ImgInterface = complex_img.BuildInterface;
 
-fn add_img(b: *Build, arch: Target.Cpu.Arch, krnlstep: *Build.Step, elf: LazyPath, symbols: ?LazyPath) !struct { *Build.Step, LazyPath } {
-    const limine = b.dependency("limine", .{});
+fn add_img(b: *Build, arch: Target.Cpu.Arch, krnlstep: *Build.Step, elf: LazyPath, symbols: ?LazyPath) !struct { *Build.Step, LazyPath, bool } {
+    const limine = b.dependency("zig_limine_install", .{ .target = b.resolveTargetQuery(.{}), .optimize = .ReleaseSafe });
+
+    // const limine_files = limine.namedLazyPath("limine-bios.sys")
+
+    const efi: bool = b.option(bool, "efi", "Use EFI boot? Implies -Dgpt") orelse false;
+    const gpt: bool = b.option(bool, "gpt", "Use GPT partitioning") orelse efi;
+
+    if (efi and !gpt) {
+        std.log.err("Cannot EFI boot without GPT partitioning", .{});
+        b.invalid_user_input = true;
+        @panic("");
+    }
 
     const builder = ImgInterface.init(b, b.dependencyFromBuildZig(complex_img, .{}));
 
     var fs: ImgInterface.FileSystemBuilder = .init(b);
     fs.copyFile(b.path("src/krnl/boot/limine.conf"), "/limine.conf");
     fs.copyFile(elf, "/imaginarium.elf");
-    if(symbols) |d| {
+    if (symbols) |d| {
         fs.copyFile(d, "/krnl.dbg");
     }
-    fs.copyFile(limine.path("limine-bios.sys"), "/limine-bios.sys");
+    fs.copyFile(limine.namedLazyPath("limine-bios.sys"), "/limine-bios.sys");
+    if (efi) {
+        fs.mkdir("/EFI");
+        fs.mkdir("/EFI/BOOT");
+        fs.copyFile(limine.namedLazyPath("limine").path(b, "BOOTX64.EFI"), "/EFI/BOOT/BOOTX64.EFI");
+    }
 
-    const content: ImgInterface.Content = .{
+    const content: ImgInterface.Content = if (gpt) .{ .gpt_part_table = .{ .partitions = &.{
+        .{
+            .type = .{ .guid = "21686148-6449-6E6F-744E-656564454649".* },
+            .name = "\"Legacy bootloader\"",
+            .size = 0x8000,
+            .offset = 0x800,
+            .data = .empty,
+        },
+        .{
+            .type = .{ .name = .@"efi-system" },
+            .name = "\"EFI System Partition\"",
+            .offset = 0x8800,
+            .size = 0x210_0000,
+            .data = .{
+                .vfat = .{
+                    .format = .fat32,
+                    .label = "ROOTFS",
+                    .tree = fs.finalize(),
+                },
+            },
+        },
+    } } } else .{
         .mbr_part_table = .{
             .partitions = .{
                 &.{
@@ -106,36 +143,31 @@ fn add_img(b: *Build, arch: Target.Cpu.Arch, krnlstep: *Build.Step, elf: LazyPat
             },
         },
     };
-    const img_file = builder.createDisk(0x90_0000, content);
+    const img_file = builder.createDisk(0x212_0000, content);
 
-    const limine_bin = b.addExecutable(.{
-        .name = "limine",
-        .target = b.resolveTargetQuery(.{}),
-        .optimize = .ReleaseSafe,
-    });
-    limine_bin.addCSourceFile(.{
-        .file = limine.path("limine.c"),
-        .flags = &.{"-std=c99"},
-    });
-    limine_bin.linkLibC();
+    const limine_bin = limine.artifact("limine-install");
 
     const add_limine_to_image = b.addRunArtifact(limine_bin);
-    add_limine_to_image.addArg("bios-install");
+    add_limine_to_image.addArg("-i");
     add_limine_to_image.addFileArg(img_file);
-    add_limine_to_image.has_side_effects = true;
+    add_limine_to_image.addArg("-o");
+    const img2 = add_limine_to_image.addOutputFileArg("image.bin");
+    if (gpt) {
+        add_limine_to_image.addArgs(&.{ "-p", "1" });
+    }
 
     const step = b.step("img", "create bootable disk image for the target");
-    utils.installFrom(b, &add_limine_to_image.step, step, img_file, b.fmt("{s}/img", .{@tagName(arch)}), "drive.bin");
+    utils.installFrom(b, &add_limine_to_image.step, step, img2, b.fmt("{s}/img", .{@tagName(arch)}), "drive.bin");
 
     const copyToTestDir = b.addUpdateSourceFiles();
     copyToTestDir.step.dependOn(&add_limine_to_image.step);
     copyToTestDir.step.dependOn(krnlstep);
-    copyToTestDir.addCopyFileToSource(img_file, "test/drive.bin");
+    copyToTestDir.addCopyFileToSource(img2, "test/drive.bin");
     if (symbols) |d| {
         copyToTestDir.addCopyFileToSource(d, "test/krnl.debug");
     }
     step.dependOn(&copyToTestDir.step);
-    return .{ step, img_file };
+    return .{ step, img2, efi };
 }
 
 pub fn build(b: *Build) !void {
@@ -207,15 +239,29 @@ pub fn build(b: *Build) !void {
     _ = stage2step; // autofix
     _ = s2elf; // autofix
     _ = s2debug; // autofix
-    const imgstep, const imgFile = try add_img(b, arch, krnlstep, elf, debug);
+    const imgstep, const imgFile, const efi = try add_img(b, arch, krnlstep, elf, debug);
 
     var cpu_flags = try std.ArrayList([]const u8).initCapacity(b.allocator, 12);
     cpu_flags.appendSliceAssumeCapacity(&.{ "qemu64", "+invtsc", "+pdpe1gb", "+rdrand", "+arat", "+rdseed", "+hypervisor" });
 
     const qemu = b.addSystemCommand(&.{
         b.fmt("qemu-system-{s}", .{@tagName(arch)}),
-        "-drive",
     });
+
+    if (efi) {
+        const ovmf = b.lazyDependency("ovmf", .{}) orelse return;
+        const copy = b.addWriteFiles();
+        const code = copy.addCopyFile(ovmf.path("ovmf-code-x86_64.fd"), "ovmf-code.fd");
+        // const vars = copy.addCopyFile(ovmf.path( "ovmf-vars-x86_64.fd"), "ovmf-vars.fd");
+        qemu.step.dependOn(&copy.step);
+
+        qemu.addArg("-drive");
+        qemu.addPrefixedFileArg("if=pflash,unit=0,format=raw,readonly=on,file=", code);
+        // qemu.addArg("-drive");
+        // qemu.addPrefixedFileArg("if=pflash,unit=1,format=raw,file=", vars);
+    }
+
+    qemu.addArg("-drive");
     qemu.addPrefixedFileArg("id=bootdisk,format=raw,if=none,file=", imgFile);
 
     if (b.option(bool, "qemu-no-accel", "disable native accel for qemu") != true) {

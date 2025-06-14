@@ -539,3 +539,22 @@ pub const DeviceTreeBlobRequest = extern struct {
     revision: u64 = 0,
     response: ?*DeviceTreeBlobResponse = null,
 };
+
+pub const FirmwareType =enum(u64) {
+    x86_bios = 0,
+    uefi32 = 1,
+    uefi64 = 2,
+    sbi = 3,
+    _
+};
+
+pub const FirmwareTypeResponse = extern struct {
+    revision: u64,
+    firmware_type: FirmwareType,
+};
+
+pub const FirmwareTypeRequest = extern struct {
+        id: [4]u64 = magic(0x8c2f75d90bef28a8, 0x7045a4688eac00c3 ),
+    revision: u64 = 0,
+    response: ?*FirmwareTypeResponse = null,
+};

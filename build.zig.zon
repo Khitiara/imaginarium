@@ -6,10 +6,6 @@
         .zuid = .{
             .path = "libs/zuid/",
         },
-        .limine = .{
-            .url = "git+https://github.com/limine-bootloader/limine?ref=v9.x-binary#c5df5d5cd1eb2a600cfa90628b243ffc7f849604",
-            .hash = "12202b853547b15bee83729be72dca9eb3168172fdec54c581fc3c7330714798353d",
-        },
         .chdrs = .{
             .url = "git+https://github.com/osdev0/freestnd-c-hdrs-0bsd.git?ref=trunk#a87c192f3eb66b0806740dc67325f9ad23fc2d0b",
             .hash = "122074a40c30a067efd5f97c79bf9696f95e6e5822f3da600361062035b4365b79ec",
@@ -18,12 +14,21 @@
             .path = "libs/zuacpi/",
         },
         .disk_image_step = .{
-            .url = "git+https://github.com/zig-osdev/disk-image-step?ref=main#f68f9c79f2c75f9221a714c1167a40e1498c38b1",
-            .hash = "dimmer-2.0.0-suxOkgUWAgBYnpg01cykNDYU2VJ8-zh86GJx6_f-48i9",
+            .url = "git+https://github.com/bnuuydev/disk-image-step?ref=gpt#56eab320039e7ecc8df4fc079708f3efe7c8aef2",
+            .hash = "dimmer-2.0.0-suxOkqhPAgBgec6WiZziek2Hyg9CcQDEiULIEXAHCPgE",
         },
         .zigimg = .{
             .url = "git+https://github.com/TUSF/zigimg?ref=0.14.0#7e098bf6be568cb8bd659397c2d5c291893095bc",
             .hash = "zigimg-0.1.0-lly-O8QREQDj96arPVPqvkcjKQpmVijvw_6U6FuqhURQ",
+        },
+        .zig_limine_install = .{
+            .url = "git+https://github.com/zig-osdev/zig-limine-install?ref=main#bb910c524525f0be568905fe028630ef65a905b3",
+            .hash = "zig_limine_install-0.0.0-vFWELZAUAABFVnKxToTab-B8VWxgy9S3B2Mnpq2aBFwp",
+        },
+        .ovmf = .{
+            .url = "https://github.com/osdev0/edk2-ovmf-nightly/releases/download/nightly-2025-06-14/edk2-ovmf.tar.xz",
+            .hash = "N-V-__8AAAAAVAFlVQwLye_IhivhaSQf5400URtaLZXg1e3S",
+            .lazy = true,
         },
     },
     .paths = .{
