@@ -25,7 +25,7 @@ pub fn add_krnl(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, 
         .error_tracing = true,
         // .single_threaded = true,
         .red_zone = false,
-        // .dwarf_format = .@"64";
+        // .dwarf_format = .@"64",
     });
 
     // exe_module.addAssemblyFile(b.path("src/krnl/hal/arch/ap_trampoline.S"));

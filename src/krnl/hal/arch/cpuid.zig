@@ -373,8 +373,8 @@ pub inline fn CpuidOutputType(comptime leaf: Leaf, comptime subleaf: Subleaf(lea
             sub_features: SvmSubFeatures,
         },
         .hypervisor_vendor => extern struct {
-            _: u32 = 0,
-            vendor_id: [6]u8 align(4),
+            eax: u32 = 0,
+            vendor_id: [12]u8 align(4),
         },
         .hypervisor_frequencies => extern struct {
             tsc_freq_khz: u32,

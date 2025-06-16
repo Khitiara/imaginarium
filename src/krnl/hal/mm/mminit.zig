@@ -229,6 +229,7 @@ fn init_mm_early() linksection(".init") !void {
     const lvl4_table_pfi = bootstrap_alloc_page();
     log.debug("new lvl4 table at pfi {x}", .{lvl4_table_pfi});
     const lvl4_tbl: pte.PageTable = @ptrCast(&hhdm[lvl4_table_pfi]);
+    lvl4_tbl.* = @splat(.zero);
 
     // recursive page tables.
     // took me a hot minute to understand how this actually works and its

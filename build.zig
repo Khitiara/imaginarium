@@ -94,7 +94,7 @@ fn add_img(b: *Build, arch: Target.Cpu.Arch, krnlstep: *Build.Step, elf: LazyPat
         fs.copyFile(d, "/krnl.dbg");
     }
     fs.copyFile(limine.namedLazyPath("limine-bios.sys"), "/limine-bios.sys");
-    if (efi) {
+    {
         fs.mkdir("/EFI");
         fs.mkdir("/EFI/BOOT");
         fs.copyFile(limine.namedLazyPath("limine").path(b, "BOOTX64.EFI"), "/EFI/BOOT/BOOTX64.EFI");
@@ -105,13 +105,13 @@ fn add_img(b: *Build, arch: Target.Cpu.Arch, krnlstep: *Build.Step, elf: LazyPat
             .type = .{ .guid = "21686148-6449-6E6F-744E-656564454649".* },
             .name = "\"Legacy bootloader\"",
             .size = 0x8000,
-            .offset = 0x800,
+            .offset = 0x5000,
             .data = .empty,
         },
         .{
             .type = .{ .name = .@"efi-system" },
             .name = "\"EFI System Partition\"",
-            .offset = 0x8800,
+            .offset = 0xD000,
             .size = 0x210_0000,
             .data = .{
                 .vfat = .{
@@ -248,17 +248,18 @@ pub fn build(b: *Build) !void {
         b.fmt("qemu-system-{s}", .{@tagName(arch)}),
     });
 
+    // the version of OVMF we get doesnt have CSM so we can only use it when EFI booting.
     if (efi) {
         const ovmf = b.lazyDependency("ovmf", .{}) orelse return;
         const copy = b.addWriteFiles();
         const code = copy.addCopyFile(ovmf.path("ovmf-code-x86_64.fd"), "ovmf-code.fd");
-        // const vars = copy.addCopyFile(ovmf.path( "ovmf-vars-x86_64.fd"), "ovmf-vars.fd");
+        const vars = copy.addCopyFile(ovmf.path( "ovmf-vars-x86_64.fd"), "ovmf-vars.fd");
         qemu.step.dependOn(&copy.step);
 
         qemu.addArg("-drive");
         qemu.addPrefixedFileArg("if=pflash,unit=0,format=raw,readonly=on,file=", code);
-        // qemu.addArg("-drive");
-        // qemu.addPrefixedFileArg("if=pflash,unit=1,format=raw,file=", vars);
+        qemu.addArg("-drive");
+        qemu.addPrefixedFileArg("if=pflash,unit=1,format=raw,file=", vars);
     }
 
     qemu.addArg("-drive");
@@ -297,6 +298,8 @@ pub fn build(b: *Build) !void {
         // "file,id=bios-logs,path=aaabios.txt",
         // "-device",
         // "isa-debugcon,iobase=0x402,chardev=bios-logs",
+        // "-serial",
+        // "stdio",
     });
 
     qemu.setCwd(b.path("test"));
