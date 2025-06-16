@@ -199,8 +199,9 @@ noinline fn kmain() anyerror!noreturn {
 
     // log.info("{}", .{@import("builtin").target});
 
-    puts("STOP");
-    @panic("Testing trace");
+    puts("STOP\n");
+
+    while(true) {}
 }
 
 fn power_button_handler(_: ?*anyopaque) callconv(arch.cc) uacpi.InterruptRet {

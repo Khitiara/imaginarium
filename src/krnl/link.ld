@@ -10,6 +10,7 @@ PHDRS
     rodata    PT_LOAD    FLAGS((1 << 2)            /* Readable */);
     dynamic   PT_DYNAMIC FLAGS((1 << 2)            /* Readable */);
     meta      PT_NOTE;
+    frame     PT_GNU_EH_FRAME;
 }
 
 
@@ -73,6 +74,9 @@ SECTIONS
         *(.rodata*)
 	    *(.eh_frame)
     } :rodata
+
+    .eh_frame_hdr : { *(.eh_frame_hdr) } :rodata :frame
+    .eh_frame : { KEEP(*(.eh_frame)) } :rodata
 
     . = ALIGN(4K);
     .data . : {

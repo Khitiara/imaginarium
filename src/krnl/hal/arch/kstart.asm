@@ -2,7 +2,7 @@ section .init
 extern __bootstrap_stack_top__
 extern __kstart2
 
-global __kstart
+global __kstart:function
 __kstart:
     cli
     lea rsp, __bootstrap_stack_top__

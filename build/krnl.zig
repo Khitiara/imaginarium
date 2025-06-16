@@ -60,6 +60,7 @@ pub fn add_krnl(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, 
     exe.build_id = .uuid;
     exe.pie = false;
     exe.entry = .disabled;
+    exe.link_eh_frame_hdr = true;
 
     exe.setLinkerScript(b.path("src/krnl/link.ld"));
 
