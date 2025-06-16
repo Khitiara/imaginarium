@@ -180,7 +180,7 @@ noinline fn kmain() anyerror!noreturn {
     // log.info("have a {d}x{d} font", .{ f.header.width, f.header.height });
     //
     font_rendering.init();
-    font_rendering.write("This is a test!\n=-+asbasdedfgwrgrgsae");
+    font_rendering.write("This is a test!\n=-+asbasdedfgwrgrgsae\nSphinx of black quartz, hear my vow.");
     // log.info("wrote to screen", .{});
 
     // log.debug("__isrs[0]: {*}: {*}", .{ &arch.x86_64.idt.__isrs[0], arch.x86_64.idt.__isrs[0] });
