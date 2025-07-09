@@ -100,28 +100,32 @@ fn add_img(b: *Build, arch: Target.Cpu.Arch, krnlstep: *Build.Step, elf: LazyPat
         fs.copyFile(limine.namedLazyPath("limine").path(b, "BOOTX64.EFI"), "/EFI/BOOT/BOOTX64.EFI");
     }
 
-    const content: ImgInterface.Content = if (gpt) .{ .gpt_part_table = .{ .partitions = &.{
-        .{
-            .type = .{ .guid = "21686148-6449-6E6F-744E-656564454649".* },
-            .name = "\"Legacy bootloader\"",
-            .size = 0x8000,
-            .offset = 0x5000,
-            .data = .empty,
-        },
-        .{
-            .type = .{ .name = .@"efi-system" },
-            .name = "\"EFI System Partition\"",
-            .offset = 0xD000,
-            .size = 0x210_0000,
-            .data = .{
-                .vfat = .{
-                    .format = .fat32,
-                    .label = "ROOTFS",
-                    .tree = fs.finalize(),
+    const content: ImgInterface.Content = if (gpt) .{
+        .gpt_part_table = .{
+            .partitions = &.{
+                .{
+                    .type = .{ .name = .@"bios-boot" },
+                    .name = "\"Legacy bootloader\"",
+                    .size = 0x8000,
+                    .offset = 0x5000,
+                    .data = .empty,
+                },
+                .{
+                    .type = .{ .name = .@"efi-system" },
+                    .name = "\"EFI System Partition\"",
+                    .offset = 0xD000,
+                    .size = 0x210_0000,
+                    .data = .{
+                        .vfat = .{
+                            .format = .fat32,
+                            .label = "ROOTFS",
+                            .tree = fs.finalize(),
+                        },
+                    },
                 },
             },
         },
-    } } } else .{
+    } else .{
         .mbr_part_table = .{
             .partitions = .{
                 &.{
@@ -253,7 +257,7 @@ pub fn build(b: *Build) !void {
         const ovmf = b.lazyDependency("ovmf", .{}) orelse return;
         const copy = b.addWriteFiles();
         const code = copy.addCopyFile(ovmf.path("ovmf-code-x86_64.fd"), "ovmf-code.fd");
-        const vars = copy.addCopyFile(ovmf.path( "ovmf-vars-x86_64.fd"), "ovmf-vars.fd");
+        const vars = copy.addCopyFile(ovmf.path("ovmf-vars-x86_64.fd"), "ovmf-vars.fd");
         qemu.step.dependOn(&copy.step);
 
         qemu.addArg("-drive");

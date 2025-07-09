@@ -14,8 +14,8 @@
             .path = "libs/zuacpi/",
         },
         .disk_image_step = .{
-            .url = "git+https://github.com/bnuuydev/disk-image-step?ref=gpt#a968bba9ad71345c5c73c496b4a18bf9c5443c61",
-            .hash = "dimmer-2.0.0-suxOkgFSAgDRQJUr2nON9tBr60WjVTApD90Mv0NmCR6V",
+            .url = "git+https://github.com/zig-osdev/disk-image-step?ref=main#481e0cef4d95ff02143bcf341e0e736fe48cdc35",
+            .hash = "dimmer-2.0.0-suxOkkpTAgCSq6i6S_hy-8uzQs2y4dUNdIUNuUcocPMR",
         },
         .zigimg = .{
             .url = "git+https://github.com/TUSF/zigimg?ref=0.14.0#7e098bf6be568cb8bd659397c2d5c291893095bc",
