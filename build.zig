@@ -105,14 +105,14 @@ fn add_img(b: *Build, arch: Target.Cpu.Arch, krnlstep: *Build.Step, elf: LazyPat
             .partitions = &.{
                 .{
                     .type = .{ .name = .@"bios-boot" },
-                    .name = "\"Legacy bootloader\"",
-                    .size = 0x8000,
+                    .name = "Legacy bootloader",
                     .offset = 0x5000,
+                    .size = 0x8000,
                     .data = .empty,
                 },
                 .{
                     .type = .{ .name = .@"efi-system" },
-                    .name = "\"EFI System Partition\"",
+                    .name = "EFI System Partition",
                     .offset = 0xD000,
                     .size = 0x210_0000,
                     .data = .{
