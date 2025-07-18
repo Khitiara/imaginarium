@@ -52,6 +52,7 @@ pub fn delay_unsafe(cycles: u64) void {
 
 comptime {
     _ = idt;
+    _ = init;
 }
 
 pub const Flags = types.Flags;

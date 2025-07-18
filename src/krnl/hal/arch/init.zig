@@ -21,6 +21,20 @@ const zuacpi = @import("../acpi/zuacpi.zig");
 const hypervisor = @import("../hypervisor.zig");
 const boot_info = @import("../../boot/boot_info.zig");
 
+export fn __kstart() callconv(.naked) noreturn {
+    asm volatile (
+        \\ .cfi_undefined %%rip
+        \\ cli
+        \\ leaq __bootstrap_stack_top__, %rsp
+        \\ pushq $0
+        \\ pushq $0
+        \\ xorq %rbp, %rbp
+        \\ callq %[kstart:P]
+        :
+        : [kstart] "X" (&@import("root").kstart),
+    );
+}
+
 pub fn platform_init() !void {
     log.info("loading bootloader-provided system info", .{});
     try boot_info.dupe_bootloader_data();

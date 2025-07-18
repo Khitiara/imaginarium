@@ -104,19 +104,7 @@ pub const std_options: std.Options = .{
     .debug_stacktrace_mode = .slim,
 };
 
-/// the true entry point is __kstart and is exported by global asm in `hal/arch/{arch}/init.zig`
-/// __kstart is responsible for stack setup and jumps unconditionally into __kstart2
-/// __kstart2 is responsible for calling main and handling any zig errors returned from there
-/// as well as entering the final infinite loop if everything worked successfully
-fn kstart2_bootelf(ldr_info: *bootelf.BootelfData) callconv(arch.cc) noreturn {
-    const bootelf_magic_check = ldr_info.magic == bootelf.magic;
-    std.debug.assert(bootelf_magic_check);
-    @import("boot/boot_info.zig").bootelf_data = ldr_info;
-
-    kstart3();
-}
-
-fn kstart3() callconv(arch.cc) noreturn {
+pub fn kstart() callconv(arch.cc) noreturn {
     kmain() catch |e| {
         debug.print_err_trace(log, "uncaught error", e, @errorReturnTrace()) catch {};
         panic.unwrapError(e);
@@ -124,11 +112,8 @@ fn kstart3() callconv(arch.cc) noreturn {
 }
 
 comptime {
-    @export(&kstart3, .{ .name = "__kstart2" });
-}
-
-comptime {
     _ = @import("log.zig").global_ring;
+    _ = arch;
 }
 
 pub fn nanoTimestamp() i128 {

@@ -28,11 +28,6 @@ pub fn add_krnl(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, 
         // .dwarf_format = .@"64",
     });
 
-    // exe_module.addAssemblyFile(b.path("src/krnl/hal/arch/ap_trampoline.S"));
-    // exe_module.addAssemblyFile(b.path("src/krnl/hal/arch/kstart.S"));
-
-    exe_module.addObjectFile(nasm.buildAsmFile(b, b.path("src/krnl/hal/arch/kstart.asm"), "kstart.o"));
-
     const zuacpi = b.dependency("zuacpi", .{ .log_level = .info, .override_arch_helpers = true });
 
     const zuacpi_module = zuacpi.module("zuacpi");
