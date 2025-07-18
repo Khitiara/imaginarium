@@ -186,7 +186,7 @@ noinline fn kmain() anyerror!noreturn {
 
     puts("STOP\n");
 
-    while(true) {}
+    while (true) {}
 }
 
 fn power_button_handler(_: ?*anyopaque) callconv(arch.cc) uacpi.InterruptRet {

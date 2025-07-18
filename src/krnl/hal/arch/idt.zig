@@ -267,8 +267,8 @@ comptime {
     ;
 
     const fake_isr: []const u8 =
-        \\  .global __isr_spoof__;
-        \\  .type __isr_spoof__, @function;
+        \\  .global __isr__spoof__;
+        \\  .type __isr__spoof__, @function;
         \\  __isr__spoof__:
         \\      pushq   %rdi # push the handler address. this will be right above the frame
         \\      movq    %ss, %rdi
