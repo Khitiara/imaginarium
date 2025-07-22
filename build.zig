@@ -7,11 +7,94 @@ const LazyPath = Build.LazyPath;
 const utils = @import("build/util.zig");
 const add_krnl = @import("build/krnl.zig").add_krnl;
 const add_stage2 = @import("build/ldr.zig").add_stage2;
+//
+// pub const Machine = enum {
+//     q35,
+//     virt,
+// };
+//
+// pub const Cpu = enum {
+//     qemu64,
+//     @"cortex-a35",
+// };
+
+pub const ImaginariumTarget = struct {
+    query: ImaginariumTargetQuery,
+    target: Build.ResolvedTarget,
+    efi: bool,
+    gpt: bool,
+    // machine: Machine,
+    // cpu: Cpu,
+};
+
+pub const ImaginariumTargetQuery = enum {
+    @"x86_64-q35-efi-gpt",
+    @"x86_64-q35-bios-gpt",
+    @"x86_64-q35-bios-mbr",
+    @"aarch64-virt-efi-gpt",
+
+    pub fn deconstruct(tgt: ImaginariumTargetQuery) struct {
+        arch: Target.Cpu.Arch,
+        efi: bool,
+        gpt: bool,
+        // machine: Machine,
+        // cpu: Cpu,
+    } {
+        return switch (tgt) {
+            .@"x86_64-q35-efi-gpt" => .{
+                .arch = .x86_64,
+                .efi = true,
+                .gpt = true,
+                // .machine = .q35,
+                // .cpu = .qemu64,
+            },
+            .@"x86_64-q35-bios-gpt" => .{
+                .arch = .x86_64,
+                .efi = false,
+                .gpt = true,
+                // .machine = .q35,
+                // .cpu = .qemu64,
+            },
+            .@"x86_64-q35-bios-mbr" => .{
+                .arch = .x86_64,
+                .efi = false,
+                .gpt = false,
+                // .machine = .q35,
+                // .cpu = .qemu64,
+            },
+            .@"aarch64-virt-efi-gpt" => .{
+                .arch = .aarch64,
+                .efi = true,
+                .gpt = true,
+                // .machine = .virt,
+                // .cpu = .@"cortex-a35",
+            },
+        };
+    }
+
+    pub fn target(tgt: ImaginariumTargetQuery, b: *Build) !ImaginariumTarget {
+        const decon = tgt.deconstruct();
+        var query: Target.Query = .{
+            .cpu_arch = decon.arch,
+            .abi = .none,
+            .os_tag = .other,
+        };
+        try target_features(&query);
+        return .{
+            .query = tgt,
+            .target = b.resolveTargetQuery(query),
+            .efi = decon.efi,
+            .gpt = decon.gpt,
+            // .machine = decon.machine,
+            // .cpu = decon.cpu,
+        };
+    }
+};
 
 fn target_features(query: *Target.Query) !void {
-    query.cpu_model = .{ .explicit = std.Target.Cpu.Model.generic(query.cpu_arch.?) };
     switch (query.cpu_arch.?) {
         .x86_64 => {
+            query.cpu_model = .{ .explicit = &Target.x86.cpu.x86_64 };
             const Features = std.Target.x86.Feature;
             // zig needs floats of some sort, but we dont want to use simd in kernel
             query.cpu_features_add.addFeature(@intFromEnum(Features.soft_float));
@@ -23,6 +106,11 @@ fn target_features(query: *Target.Query) !void {
             query.cpu_features_sub.addFeature(@intFromEnum(Features.sse2));
             query.cpu_features_sub.addFeature(@intFromEnum(Features.avx));
             query.cpu_features_sub.addFeature(@intFromEnum(Features.avx2));
+        },
+        .aarch64 => {
+            query.cpu_model = .{ .explicit = &Target.aarch64.cpu.cortex_a35 };
+            const Features = std.Target.aarch64.Feature;
+            query.cpu_features_add.addFeature(@intFromEnum(Features.v8a));
         },
         else => return error.invalid_imaginarium_arch,
     }
@@ -71,19 +159,10 @@ fn add_tools(b: *Build) *Build.Step.Compile {
 const complex_img = @import("disk_image_step");
 const ImgInterface = complex_img.BuildInterface;
 
-fn add_img(b: *Build, arch: Target.Cpu.Arch, krnlstep: *Build.Step, elf: LazyPath, symbols: ?LazyPath) !struct { *Build.Step, LazyPath, bool } {
+fn add_img(b: *Build, arch: Target.Cpu.Arch, krnlstep: *Build.Step, elf: LazyPath, symbols: ?LazyPath, tgt: ImaginariumTarget) !struct { *Build.Step, LazyPath } {
     const limine = b.dependency("zig_limine_install", .{ .target = b.resolveTargetQuery(.{}), .optimize = .ReleaseSafe });
 
     // const limine_files = limine.namedLazyPath("limine-bios.sys")
-
-    const efi: bool = b.option(bool, "efi", "Use EFI boot? Implies -Dgpt") orelse false;
-    const gpt: bool = b.option(bool, "gpt", "Use GPT partitioning") orelse efi;
-
-    if (efi and !gpt) {
-        std.log.err("Cannot EFI boot without GPT partitioning", .{});
-        b.invalid_user_input = true;
-        @panic("");
-    }
 
     const builder = ImgInterface.init(b, b.dependencyFromBuildZig(complex_img, .{}));
 
@@ -98,9 +177,10 @@ fn add_img(b: *Build, arch: Target.Cpu.Arch, krnlstep: *Build.Step, elf: LazyPat
         fs.mkdir("/EFI");
         fs.mkdir("/EFI/BOOT");
         fs.copyFile(limine.namedLazyPath("limine").path(b, "BOOTX64.EFI"), "/EFI/BOOT/BOOTX64.EFI");
+        fs.copyFile(limine.namedLazyPath("limine").path(b, "BOOTAA64.EFI"), "/EFI/BOOT/BOOTAA64.EFI");
     }
 
-    const content: ImgInterface.Content = if (gpt) .{
+    const content: ImgInterface.Content = if (tgt.gpt) .{
         .gpt_part_table = .{
             .partitions = &.{
                 .{
@@ -156,7 +236,7 @@ fn add_img(b: *Build, arch: Target.Cpu.Arch, krnlstep: *Build.Step, elf: LazyPat
     add_limine_to_image.addFileArg(img_file);
     add_limine_to_image.addArg("-o");
     const img2 = add_limine_to_image.addOutputFileArg("image.bin");
-    if (gpt) {
+    if (tgt.gpt) {
         add_limine_to_image.addArgs(&.{ "-p", "1" });
     }
 
@@ -171,22 +251,20 @@ fn add_img(b: *Build, arch: Target.Cpu.Arch, krnlstep: *Build.Step, elf: LazyPat
         copyToTestDir.addCopyFileToSource(d, "test/krnl.debug");
     }
     step.dependOn(&copyToTestDir.step);
-    return .{ step, img2, efi };
+    return .{ step, img2 };
 }
 
 pub fn build(b: *Build) !void {
     utils.init(b);
-    const arch = b.option(Target.Cpu.Arch, "arch", "The CPU architecture to build for") orelse .x86_64;
-    var selected_target: Target.Query = .{
-        .abi = .none,
-        .os_tag = .freestanding,
-        .cpu_arch = arch,
+    const query: ImaginariumTargetQuery = b.option(ImaginariumTargetQuery, "target", "The OS target") orelse switch (b.graph.host.result.cpu.arch) {
+        .aarch64 => .@"aarch64-virt-efi-gpt",
+        else => .@"x86_64-q35-efi-gpt",
     };
-    try target_features(&selected_target);
-    const target = b.resolveTargetQuery(selected_target);
-    selected_target.dynamic_linker = .init("IMAG:PREKERNEL");
-    selected_target.os_tag = .other;
-    const krnltgt = b.resolveTargetQuery(selected_target);
+    const tgt = try query.target(b);
+    const target = tgt.target;
+    // selected_target.dynamic_linker = .init("IMAG:PREKERNEL");
+    // selected_target.os_tag = .other;
+    const krnltgt = tgt.target;
 
     const optimize = b.standardOptimizeOption(.{});
 
@@ -236,28 +314,37 @@ pub fn build(b: *Build) !void {
     fontgen.addFileArg(b.path("monofont.png"));
     const zon = fontgen.addOutputFileArg("font.zon");
     // aaa.dependOn(&b.addInstallFile(zon, "aaa").step);
+    //
+    const arch = target.result.cpu.arch;
 
-    const krnlexe, const krnlstep, const elf, const debug = try add_krnl(b, arch, krnltgt, optimize, zon);
-    const stage2exe, const stage2step, const s2elf, const s2debug = try add_stage2(b, arch, target, optimize);
+    const krnlexe, const krnlstep, const elf, const debug = try add_krnl(b, krnltgt, optimize, zon);
+    const stage2exe, const stage2step, const s2elf, const s2debug = try add_stage2(b, target, optimize);
     _ = stage2exe; // autofix
     _ = stage2step; // autofix
     _ = s2elf; // autofix
     _ = s2debug; // autofix
-    const imgstep, const imgFile, const efi = try add_img(b, arch, krnlstep, elf, debug);
+    const imgstep, const imgFile = try add_img(b, arch, krnlstep, elf, debug, tgt);
 
     var cpu_flags = try std.ArrayList([]const u8).initCapacity(b.allocator, 12);
-    cpu_flags.appendSliceAssumeCapacity(&.{ "qemu64", "+invtsc", "+pdpe1gb", "+rdrand", "+arat", "+rdseed", "+hypervisor" });
+    switch (query) {
+        .@"x86_64-q35-bios-gpt", .@"x86_64-q35-bios-mbr", .@"x86_64-q35-efi-gpt" => {
+            cpu_flags.appendSliceAssumeCapacity(&.{ "qemu64", "+invtsc", "+pdpe1gb", "+rdrand", "+arat", "+rdseed", "+hypervisor" });
+        },
+        .@"aarch64-virt-efi-gpt" => {
+            cpu_flags.appendAssumeCapacity("cortex-a35");
+        },
+    }
 
     const qemu = b.addSystemCommand(&.{
         b.fmt("qemu-system-{s}", .{@tagName(arch)}),
     });
 
     // the version of OVMF we get doesnt have CSM so we can only use it when EFI booting.
-    if (efi) {
+    if (tgt.efi) {
         const ovmf = b.lazyDependency("ovmf", .{}) orelse return;
         const copy = b.addWriteFiles();
-        const code = copy.addCopyFile(ovmf.path("ovmf-code-x86_64.fd"), "ovmf-code.fd");
-        const vars = copy.addCopyFile(ovmf.path("ovmf-vars-x86_64.fd"), "ovmf-vars.fd");
+        const code = copy.addCopyFile(ovmf.path(b.fmt("ovmf-code-{s}.fd", .{@tagName(arch)})), "ovmf-code.fd");
+        const vars = copy.addCopyFile(ovmf.path(b.fmt("ovmf-vars-{s}.fd", .{@tagName(arch)})), "ovmf-vars.fd");
         qemu.step.dependOn(&copy.step);
 
         qemu.addArg("-drive");
@@ -269,13 +356,15 @@ pub fn build(b: *Build) !void {
     qemu.addArg("-drive");
     qemu.addPrefixedFileArg("id=bootdisk,format=raw,if=none,file=", imgFile);
 
-    if (b.option(bool, "qemu-no-accel", "disable native accel for qemu") != true) {
+    if (b.graph.host.result.cpu.arch == arch and b.option(bool, "qemu-no-accel", "disable native accel for qemu") != true) {
         switch (b.graph.host.result.os.tag) {
             .windows => qemu.addArgs(&.{ "-accel", "whpx" }),
             .linux => {
                 // cpu_flags.items[0] = "host";
                 qemu.addArgs(&.{ "-accel", "kvm" });
-                cpu_flags.appendAssumeCapacity("+x2apic");
+                if (arch == .x86_64) {
+                    cpu_flags.appendAssumeCapacity("+x2apic");
+                }
                 // cpu_flags.appendAssumeCapacity("migratable=off");
             },
             .macos => qemu.addArgs(&.{ "-accel", "hvf" }),
@@ -291,7 +380,10 @@ pub fn build(b: *Build) !void {
         // "-smp",
         // "4,cores=4",
         "-M",
-        "type=q35,smm=off,hpet=on", // q35 has HPET by default afaik but better safe than sorry
+        switch (query) {
+            .@"x86_64-q35-bios-gpt", .@"x86_64-q35-bios-mbr", .@"x86_64-q35-efi-gpt" => "type=q35,smm=off,hpet=on", // q35 has HPET by default afaik but better safe than sorry
+            .@"aarch64-virt-efi-gpt" => "type=virt,acpi=on",
+        },
         "-cpu",
         try std.mem.join(b.allocator, ",", try cpu_flags.toOwnedSlice()),
         "-m",

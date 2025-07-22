@@ -32,7 +32,7 @@ fn re_query(arch: Target.Cpu.Arch) !Target.Query {
     return query;
 }
 
-pub fn add_stage2(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) !struct {
+pub fn add_stage2(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) !struct {
     *std.Build.Step.Compile,
     *std.Build.Step,
     LazyPath,
@@ -88,7 +88,7 @@ pub fn add_stage2(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget
         .extract_to_separate_file = true,
     });
 
-    const ldroutdir = b.fmt("{s}/ldr/", .{@tagName(arch)});
+    const ldroutdir = b.fmt("{s}/ldr/", .{@tagName(target.result.cpu.arch)});
     utils.installFrom(b, &objcopy.step, ldrstep, objcopy.getOutput(), ldroutdir, b.dupe(exe_name));
     // installFrom(b, &exe.step, ldrstep, ir, "agony", "something.ir");
     if (objcopy.getOutputSeparatedDebug()) |dbg| {

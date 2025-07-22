@@ -6,7 +6,7 @@ const LazyPath = Build.LazyPath;
 const utils = @import("util.zig");
 const nasm = @import("nasm.zig");
 
-pub fn add_krnl(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, zon: LazyPath) !struct {
+pub fn add_krnl(b: *Build, target: Build.ResolvedTarget, optimize: std.builtin.OptimizeMode, zon: LazyPath) !struct {
     *std.Build.Step.Compile,
     *std.Build.Step,
     LazyPath,
@@ -18,7 +18,11 @@ pub fn add_krnl(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, 
         .root_source_file = b.path("src/krnl/main.zig"),
         .target = target,
         .optimize = optimize,
-        .code_model = .kernel,
+        .code_model = switch (target.result.cpu.arch) {
+            .x86_64 => .kernel,
+            .aarch64 => .large,
+            else => unreachable,
+        },
         .pic = false,
         .strip = false,
         .omit_frame_pointer = false,
@@ -73,7 +77,7 @@ pub fn add_krnl(b: *Build, arch: Target.Cpu.Arch, target: Build.ResolvedTarget, 
         .extract_to_separate_file = true,
     });
 
-    const krnloutdir = b.fmt("{s}/krnl/", .{@tagName(arch)});
+    const krnloutdir = b.fmt("{s}/krnl/", .{@tagName(target.result.cpu.arch)});
     utils.installFrom(b, &objcopy.step, krnlstep, objcopy.getOutput(), krnloutdir, b.dupe(exe_name));
     // installFrom(b, &exe.step, krnlstep, ir, "agony", "something.ir");
     if (objcopy.getOutputSeparatedDebug()) |dbg| {
