@@ -262,6 +262,10 @@ const X86SmpRequestFlags = packed struct(u64) {
     _: u63 = 0,
 };
 
+const NoFlags = packed struct(u64) {
+    _: u64 = 0,
+};
+
 const X86SmpResponse = extern struct {
     revision: u64,
     flags: u32,
@@ -333,8 +337,8 @@ pub const SmpFlags = switch (arch) {
 
 pub const SmpRequestFlags = switch (arch) {
     .x86_64 => X86SmpRequestFlags,
-    .aarch64 => u64,
-    .riscv64 => u64,
+    .aarch64 => NoFlags,
+    .riscv64 => NoFlags,
 };
 
 pub const SmpResponse = switch (arch) {

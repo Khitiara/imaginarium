@@ -13,7 +13,10 @@ pub export var paging_mode_req: limine.PagingModeRequest linksection(".limine.pa
 };
 
 pub export var mp_request: limine.SmpRequest linksection(".limine.mp") = .{
-    .flags = .{ .x2apic = true },
+    .flags = switch (@import("builtin").cpu.arch) {
+        .x86_64 => .{ .x2apic = true },
+        else => .{},
+    },
 };
 
 pub export var exe_request: limine.KernelFileRequest linksection(".limine.exe") = .{};

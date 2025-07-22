@@ -4,6 +4,7 @@ const builtin = @import("builtin");
 pub const cc: std.builtin.CallingConvention = switch (builtin.target.cpu.arch) {
     .x86 => .{ .x86_sysv = .{} },
     .x86_64 => .{ .x86_64_sysv = .{} },
+    .aarch64 => .{ .aarch64_aapcs = .{} },
     else => |a| @compileError(std.fmt.comptimePrint("Unsupported imaginarium architecture {s}", .{@tagName(a)})),
 };
 
