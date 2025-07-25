@@ -1,6 +1,6 @@
 const util = @import("util");
 
-const apic = @import("../apic/apic.zig");
+const apic = @import("../arch/x86_64/apic/apic.zig");
 const log = @import("acpi.zig").log;
 const std = @import("std");
 const mm = @import("../mm/mm.zig");

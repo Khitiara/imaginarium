@@ -41,7 +41,7 @@ pub const Exception = enum(u8) {
 
 pub const Interrupt = packed union {
     exception: Exception,
-    vector: @import("../hal.zig").InterruptVector,
+    vector: @import("../../hal.zig").InterruptVector,
     int: u8,
 
     pub fn has_error_code(self: Interrupt) bool {
@@ -366,7 +366,7 @@ pub fn is_vector_free(vector: u8) bool {
     return !vectors.isSet(vector);
 }
 
-const hal = @import("../hal.zig");
+const hal = @import("../../hal.zig");
 const InterruptRequestPriority = hal.InterruptRequestPriority;
 const SpinLock = hal.SpinLock;
 const InterruptVector = hal.InterruptVector;

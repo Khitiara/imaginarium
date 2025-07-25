@@ -40,7 +40,7 @@ const pfmdb = @import("pfmdb.zig");
 const cmn = @import("cmn");
 const boot = @import("../../boot/boot_info.zig");
 const map = @import("map.zig");
-const arch = @import("../arch/arch.zig");
+const arch = @import("../hal.zig").arch;
 const mm = @import("mm.zig");
 
 const PhysAddr = cmn.types.PhysAddr;

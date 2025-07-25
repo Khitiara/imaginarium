@@ -1,4 +1,4 @@
-const cpuid = @import("arch/cpuid.zig");
+const cpuid = @import("arch/x86_64/cpuid.zig");
 const SvmInfo = cpuid.CpuidOutputType(.svm, {});
 const std = @import("std");
 const log = std.log.scoped(.hypervisor);

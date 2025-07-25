@@ -2,7 +2,7 @@ const util = @import("util");
 const Dpc = @This();
 const std = @import("std");
 const smp = @import("../smp.zig");
-const apic = @import("../hal/apic/apic.zig");
+const apic = @import("../hal/arch/x86_64/apic/apic.zig");
 const collections = @import("collections");
 
 pub const Priority = util.PriorityEnum(3);

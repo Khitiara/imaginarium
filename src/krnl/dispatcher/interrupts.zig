@@ -4,7 +4,7 @@ const util = @import("util");
 const hal = @import("../hal/hal.zig");
 const smp = @import("../smp.zig");
 const arch = hal.arch;
-const apic = hal.apic;
+const apic = arch.apic;
 const InterruptRequestPriority = hal.InterruptRequestPriority;
 const InterruptVector = hal.InterruptVector;
 const lcb = smp.lcb;
@@ -32,19 +32,19 @@ pub inline fn handle_interrupt(comptime eoi: bool, comptime handler: fn (*arch.S
                 lcb.*.frame = null;
             }
             if (comptime eoi) {
-                hal.apic.eoi();
+                hal.arch.apic.eoi();
             }
         }
     }.func;
 }
 
 pub noinline fn enter_scheduling() void {
-    hal.apic.send_ipi(.{
+    apic.send_ipi(.{
         .vector = @bitCast(dispatch_vector),
         .delivery = .fixed,
         .shorthand = .self,
         .dest_mode = .physical,
-        .dest = hal.apic.get_lapic_id(),
+        .dest = apic.get_lapic_id(),
         .trigger_mode = .edge,
     });
 }

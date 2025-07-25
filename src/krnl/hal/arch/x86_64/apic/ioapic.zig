@@ -4,7 +4,7 @@ pub var ioapics_count: u8 = 0;
 const apic = @import("apic.zig");
 const std = @import("std");
 const log = std.log.scoped(.ioapic);
-const hal = @import("../hal.zig");
+const hal = @import("../../../hal.zig");
 
 fn read_ioapic(base: [*]volatile u32, reg: u32) u32 {
     base[0] = reg;
@@ -70,8 +70,8 @@ fn ioapic_by_gsi_comp(_: void, lhs: IOApic, rhs: IOApic) bool {
 
 // var gsi_map: std.AutoArrayHashMap(u32, u8) = undefined;
 
-const QueuedSpinLock = @import("../QueuedSpinLock.zig");
-const smp = @import("../../smp.zig");
+const QueuedSpinLock = @import("../../../QueuedSpinLock.zig");
+const smp = @import("../../../../smp.zig");
 var ioapic_lock: QueuedSpinLock = .{};
 
 pub fn redirect_irq(gsi: u32, redirection: IoRedTblEntry) !void {

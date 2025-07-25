@@ -1,6 +1,6 @@
 const std = @import("std");
 const assert = std.debug.assert;
-const cpuid = @import("../arch/cpuid.zig");
+const cpuid = @import("../cpuid.zig");
 pub const x2apic = @import("x2apic.zig");
 pub const ioapic = @import("ioapic.zig");
 

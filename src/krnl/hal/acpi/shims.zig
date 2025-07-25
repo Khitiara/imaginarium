@@ -9,9 +9,9 @@ const mcfg = @import("mcfg.zig");
 const log = std.log.scoped(.uacpi);
 
 const hal = @import("../hal.zig");
-const apic = hal.apic;
-const ioapic = apic.ioapic;
 const arch = hal.arch;
+const apic = arch.apic;
+const ioapic = apic.ioapic;
 const serial = arch.serial;
 const uacpi_allocator = hal.mm.pool.pool_allocator;
 const PhysAddr = types.PhysAddr;

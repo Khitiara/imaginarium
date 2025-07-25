@@ -1,7 +1,7 @@
 const std = @import("std");
 const util = @import("util");
 const acpi = @import("acpi.zig");
-const arch = @import("../arch/arch.zig");
+const arch = @import("../hal.zig").arch;
 const mm = @import("../mm/mm.zig");
 
 const hpet = @import("../hpet/hpet.zig");

@@ -9,17 +9,17 @@ const control_registers = @import("ctrl_registers.zig");
 const std = @import("std");
 const cmn = @import("cmn");
 const types = cmn.types;
-const hal = @import("../hal.zig");
+const hal = @import("../../hal.zig");
 
-const acpi = @import("../acpi/acpi.zig");
+const acpi = @import("../../acpi/acpi.zig");
 
 var acpi_early_table_buffer: [4096 * 2]u8 linksection(".init") = undefined;
 
 const log = std.log.scoped(.init);
-const apic = @import("../apic/apic.zig");
-const zuacpi = @import("../acpi/zuacpi.zig");
-const hypervisor = @import("../hypervisor.zig");
-const boot_info = @import("../../boot/boot_info.zig");
+const apic = @import("apic/apic.zig");
+const zuacpi = @import("../../acpi/zuacpi.zig");
+const hypervisor = @import("../../hypervisor.zig");
+const boot_info = @import("../../../boot/boot_info.zig");
 
 export fn __kstart() callconv(.naked) noreturn {
     asm volatile (
@@ -55,7 +55,7 @@ pub fn platform_init() !void {
 
     idt.enable();
     log.info("interrupts enabled", .{});
-    try @import("../../dispatcher/interrupts.zig").init_dispatch_interrupts();
+    try @import("../../../dispatcher/interrupts.zig").init_dispatch_interrupts();
     log.info("dispatcher interrupt handlers added", .{});
     try zuacpi.early_tables(hal.mm.pool.pool_page_allocator);
     log.info("acpi early table access setup", .{});
@@ -68,7 +68,7 @@ pub fn platform_init() !void {
 pub fn late_init() !void {
     try zuacpi.init();
     log.info("loaded acpi sdt", .{});
-    try @import("../../io/interrupts.zig").init();
+    try @import("../../../io/interrupts.zig").init();
     apic.ioapic.process_isa_redirections();
     try zuacpi.load_namespace();
     log.info("loaded acpi namespace", .{});

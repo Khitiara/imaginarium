@@ -1,10 +1,13 @@
 const std = @import("std");
 
 pub const acpi = @import("acpi/acpi.zig");
-pub const arch = @import("arch/arch.zig");
+pub const arch = switch (@import("builtin").cpu.arch) {
+    .x86_64 => @import("arch/x86_64/arch.zig"),
+    .aarch64 => @import("arch/aarch64/arch.zig"),
+    else => unreachable,
+};
 pub const pci = @import("pci/pci.zig");
 pub const mm = @import("mm/mm.zig");
-pub const apic = @import("apic/apic.zig");
 pub const SpinLock = @import("spin_lock.zig").SpinLock;
 pub const QueuedSpinLock = @import("QueuedSpinLock.zig");
 

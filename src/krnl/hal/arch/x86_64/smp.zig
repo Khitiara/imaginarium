@@ -1,7 +1,7 @@
 const msr = @import("msr.zig");
 const util = @import("util");
 const crs = @import("ctrl_registers.zig");
-const apic = @import("../apic/apic.zig");
+const apic = @import("apic/apic.zig");
 const std = @import("std");
 
 const ext = util.extern_address;
@@ -10,11 +10,11 @@ const pause = std.atomic.spinLoopHint;
 
 export var __bsp_start_spinlock_flag: u8 = 0;
 
-const hal = @import("../hal.zig");
+const hal = @import("../../hal.zig");
 const arch = @import("arch.zig");
 const delay_unsafe = arch.delay_unsafe;
 
-const ksmp = @import("../../smp.zig");
+const ksmp = @import("../../../smp.zig");
 
 var ap_stacks: []*[8 << 20]u8 = undefined;
 

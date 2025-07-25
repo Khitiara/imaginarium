@@ -12,7 +12,7 @@ const log = std.log.scoped(.@"drv.acpi_proc");
 const QueuedSpinLock = @import("../../hal/QueuedSpinLock.zig");
 
 const smp = @import("../../smp.zig");
-const apic = @import("../../hal/apic/apic.zig");
+const apic = @import("../../hal/arch/x86_64/apic/apic.zig");
 
 drv: Driver,
 

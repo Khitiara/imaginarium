@@ -9,7 +9,7 @@ const pte = @import("pte.zig");
 pub const paging = @import("paging.zig");
 
 const std = @import("std");
-const arch = @import("../arch/arch.zig");
+const arch = @import("../hal.zig").arch;
 const Pfi = @import("pfmdb.zig").Pfi;
 const cmn = @import("cmn");
 const PhysAddr = cmn.types.PhysAddr;

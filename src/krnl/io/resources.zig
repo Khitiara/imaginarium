@@ -12,7 +12,6 @@ const io = @import("io.zig");
 const queue = @import("collections").queue;
 const PhysAddr = @import("cmn").types.PhysAddr;
 
-const apic = @import("../hal/apic/apic.zig");
 const hal = @import("../hal/hal.zig");
 
 const std = @import("std");

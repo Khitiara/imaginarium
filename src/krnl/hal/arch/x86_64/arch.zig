@@ -11,14 +11,14 @@ pub const rand = @import("rand.zig");
 pub const smp = @import("smp.zig");
 pub const time = @import("time.zig");
 pub const init = @import("init.zig");
+pub const apic = @import("apic/apic.zig");
 
 const std = @import("std");
 const cmn = @import("cmn");
 const types = cmn.types;
-const hal = @import("../hal.zig");
+const hal = @import("../../hal.zig");
 
-const acpi = @import("../acpi/acpi.zig");
-const apic = @import("../apic/apic.zig");
+const acpi = @import("../../acpi/acpi.zig");
 
 pub const cc: @import("std").builtin.CallingConvention = types.cc;
 

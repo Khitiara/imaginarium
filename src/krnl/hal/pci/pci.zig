@@ -1,4 +1,4 @@
-const arch = @import("../arch/arch.zig");
+const arch = @import("../hal.zig").arch;
 const serial = arch.serial;
 
 const std = @import("std");

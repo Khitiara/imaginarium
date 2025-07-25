@@ -5,7 +5,7 @@ const madt = acpi.madt;
 const mcfg = acpi.mcfg;
 const hpet = acpi.hpet;
 
-const arch = @import("../arch/arch.zig");
+const arch = @import("../hal.zig").arch;
 const std = @import("std");
 const log = std.log.scoped(.acpi);
 
@@ -52,7 +52,7 @@ pub fn load_namespace() !void {
     log.info("ACPI namespace parsed", .{});
 }
 
-const ioapic = @import("../apic/ioapic.zig");
+const ioapic = arch.apic.ioapic;
 
 pub fn initialize_namespace() !void {
     try uacpi.namespace_initialize();

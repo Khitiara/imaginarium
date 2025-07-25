@@ -5,7 +5,7 @@ var computed_tsc_freq_khz: ?u64 = null;
 
 const cpuid = @import("cpuid.zig");
 const std = @import("std");
-const hypervisor = @import("../hypervisor.zig");
+const hypervisor = @import("../../hypervisor.zig");
 
 const log = std.log.scoped(.time);
 

@@ -112,7 +112,6 @@ pub fn kstart() callconv(arch.cc) noreturn {
 }
 
 comptime {
-    _ = @import("log.zig").global_ring;
     _ = arch;
 }
 
@@ -142,7 +141,7 @@ noinline fn kmain() anyerror!noreturn {
     try @import("objects/ob.zig").init(hal.mm.pool.pool_allocator);
     try @import("io/io.zig").init(hal.mm.pool.pool_allocator);
 
-    const current_apic_id = hal.apic.get_lapic_id();
+    const current_apic_id = hal.arch.apic.get_lapic_id();
 
     log.info("local apic id {d}", .{current_apic_id});
 
